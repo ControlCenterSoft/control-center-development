@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"control-center/internal/orchestration/change"
+	orchestrationconfig "control-center/internal/orchestration/config"
 	orchestrationapi "control-center/internal/orchestration/httpapi"
 	"control-center/internal/orchestration/job"
 	"control-center/internal/orchestration/policy"
@@ -75,6 +76,12 @@ func (s *OrchestrationState) CreateRevision(ctx context.Context, createdBy, key,
 	if createdBy == "" || key == "" || fingerprint == "" || !json.Valid(content) || now.IsZero() {
 		return orchestrationapi.PersistedRevision{}, errors.New("complete revision persistence request is required")
 	}
+	canonical, err := orchestrationconfig.NewRevision("pending", 1, now, content)
+	if err != nil {
+		return orchestrationapi.PersistedRevision{}, err
+	}
+	canonicalContent := json.RawMessage(canonical.Content())
+	digest := canonical.Digest()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return orchestrationapi.PersistedRevision{}, err
@@ -91,7 +98,6 @@ func (s *OrchestrationState) CreateRevision(ctx context.Context, createdBy, key,
 		}
 		return existing, tx.Commit()
 	}
-	digest := "sha256:" + fingerprint
 	if existing, found, err := revisionByDigest(ctx, tx, digest); err != nil {
 		return orchestrationapi.PersistedRevision{}, err
 	} else if found {
@@ -108,7 +114,7 @@ func (s *OrchestrationState) CreateRevision(ctx context.Context, createdBy, key,
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence),0)+1 FROM cc_config_revisions`).Scan(&sequence); err != nil {
 		return orchestrationapi.PersistedRevision{}, err
 	}
-	revision := orchestrationapi.PersistedRevision{ID: "rev-" + randomHex(12), Sequence: sequence, Digest: digest, Content: append(json.RawMessage(nil), content...), CreatedAt: now.UTC(), CreatedBy: createdBy, IdempotencyKey: key, Fingerprint: fingerprint}
+	revision := orchestrationapi.PersistedRevision{ID: "rev-" + randomHex(12), Sequence: sequence, Digest: digest, Content: canonicalContent, CreatedAt: now.UTC(), CreatedBy: createdBy, IdempotencyKey: key, Fingerprint: fingerprint}
 	_, err = tx.ExecContext(ctx, `INSERT INTO cc_config_revisions(id,sequence,digest,content,created_at,created_by) VALUES ($1,$2,$3,$4::jsonb,$5,$6)`, revision.ID, int64(revision.Sequence), revision.Digest, string(revision.Content), revision.CreatedAt, revision.CreatedBy)
 	if err != nil {
 		return orchestrationapi.PersistedRevision{}, err
