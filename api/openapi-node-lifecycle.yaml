@@ -1,0 +1,296 @@
+openapi: 3.1.0
+info:
+  title: Control Center Node Lifecycle API fragment
+  version: 0.4.0
+  description: >-
+    Versioned, fail-closed contract for node lifecycle reads and atomic
+    compare-and-swap transitions. READY is the API name for the ACTIVE
+    architecture state after enrollment and readiness verification.
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+paths:
+  /api/v1/nodes/{nodeId}/lifecycle:
+    get:
+      operationId: getNodeLifecycle
+      summary: Read the current lifecycle object
+      parameters:
+        - $ref: '#/components/parameters/NodeId'
+      responses:
+        '200':
+          description: Current versioned node lifecycle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeLifecycle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/nodes/{nodeId}/lifecycle/transitions:
+    post:
+      operationId: transitionNodeLifecycle
+      summary: Apply one guarded lifecycle transition
+      description: >-
+        The server validates the precondition and transition in the same
+        transaction that allocates a new resource_version and writes the
+        successor. A desired transition advances generation exactly once; an
+        observation transition preserves generation.
+      parameters:
+        - $ref: '#/components/parameters/NodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleTransitionRequest'
+      responses:
+        '200':
+          description: Persisted lifecycle successor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeLifecycle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale precondition or forbidden state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Malformed state, reason or transition evidence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: cc_session
+  parameters:
+    NodeId:
+      name: nodeId
+      in: path
+      required: true
+      description: Stable Node ID; it must equal object_id in the lifecycle object.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$'
+  responses:
+    NotFound:
+      description: Node lifecycle does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    LifecycleState:
+      type: string
+      enum:
+        - discovered
+        - enrolling
+        - ready
+        - degraded
+        - draining
+        - maintenance
+        - updating
+        - replacing
+        - removing
+        - offline
+        - recovering
+        - retired
+    LifecycleTransitionType:
+      type: string
+      description: >-
+        desired changes operator intent and generation; observation records
+        progress or health without changing generation.
+      enum: [desired, observation]
+    LifecycleEvidenceCheck:
+      type: string
+      enum:
+        - enrollment-authorized
+        - identity-verified
+        - readiness-passed
+        - maintenance-preflight-passed
+        - scheduling-disabled
+        - scheduling-enabled
+        - drain-complete
+        - no-active-jobs
+        - no-active-placements
+        - stateful-workloads-safe
+        - operation-approved
+        - operation-cancelled
+        - rollback-verified
+        - update-verified
+        - replacement-node-ready
+        - state-synchronized
+        - switchover-verified
+        - replacement-health-verified
+        - removal-approved
+        - removal-verified
+        - recovery-started
+        - recovery-verified
+        - retirement-approved
+        - no-managed-state
+    ObjectPrecondition:
+      type: object
+      additionalProperties: false
+      required: [object_id, resource_version]
+      properties:
+        object_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$'
+        resource_version:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^\S+$'
+          description: Opaque token; clients must not parse or order it.
+        generation:
+          type: integer
+          format: int64
+          minimum: 1
+    TransitionEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        passed_checks:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/LifecycleEvidenceCheck'
+    LifecycleTransitionRequest:
+      type: object
+      additionalProperties: false
+      required: [to, type, precondition, evidence]
+      properties:
+        to:
+          $ref: '#/components/schemas/LifecycleState'
+        type:
+          $ref: '#/components/schemas/LifecycleTransitionType'
+        reason:
+          type: string
+          maxLength: 512
+          description: Required for degraded, offline, recovering and retired.
+        precondition:
+          $ref: '#/components/schemas/ObjectPrecondition'
+        evidence:
+          $ref: '#/components/schemas/TransitionEvidence'
+      allOf:
+        - if:
+            properties:
+              to:
+                enum: [degraded, offline, recovering, retired]
+          then:
+            required: [reason]
+            properties:
+              reason:
+                minLength: 1
+        - if:
+            properties:
+              to:
+                not:
+                  enum: [degraded, offline, recovering, retired]
+          then:
+            properties:
+              reason:
+                maxLength: 0
+    NodeLifecycle:
+      type: object
+      additionalProperties: false
+      required:
+        - object_id
+        - scope_id
+        - owner_scope
+        - generation
+        - resource_version
+        - created_at
+        - updated_at
+        - state
+        - state_changed_at
+      properties:
+        object_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$'
+          description: Stable physical Node ID.
+        scope_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$'
+        owner_scope:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$'
+        generation:
+          type: integer
+          format: int64
+          minimum: 1
+        resource_version:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^\S+$'
+          description: Opaque storage or synchronization version.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        state:
+          $ref: '#/components/schemas/LifecycleState'
+        state_changed_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          maxLength: 512
+      allOf:
+        - if:
+            properties:
+              state:
+                enum: [degraded, offline, recovering, retired]
+          then:
+            required: [reason]
+            properties:
+              reason:
+                minLength: 1
+        - if:
+            properties:
+              state:
+                not:
+                  enum: [degraded, offline, recovering, retired]
+          then:
+            properties:
+              reason:
+                maxLength: 0
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum:
+            - node_lifecycle_not_found
+            - invalid_node_lifecycle
+            - precondition_required
+            - precondition_failed
+            - invalid_transition
+            - invalid_transition_evidence
+        message:
+          type: string

@@ -241,6 +241,8 @@ Workload type должен различать как минимум STATELESS, S
 
 Новый Market workload не считается production-ready без Update, Backup/Restore, Health, Capacity и failure-path tests.
 
+Исполняемый контракт полей, правил валидации, явной активации и консервативной миграции v1→v2 зафиксирован в [`docs/MARKET_MANIFEST_V2_RU.md`](docs/MARKET_MANIFEST_V2_RU.md) и [`api/openapi-market-manifest-v2.yaml`](api/openapi-market-manifest-v2.yaml).
+
 ## 15. Обязательные корпоративные модули Market
 
 Помимо уже существующих направлений Directory Services, DNS/DHCP, PXE, Automation, Inventory, File Services и Monitoring в целевой Market входят:

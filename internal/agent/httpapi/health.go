@@ -88,11 +88,14 @@ func healthJSONPost(handler func(http.ResponseWriter, *json.Decoder)) http.Handl
 
 func ensureAgentEOF(decoder *json.Decoder) error {
 	var extra any
-	if err := decoder.Decode(&extra); errors.Is(err, io.EOF) {
+	err := decoder.Decode(&extra)
+	if errors.Is(err, io.EOF) {
 		return nil
-	} else {
-		return err
 	}
+	if err == nil {
+		return errors.New("trailing JSON value")
+	}
+	return err
 }
 
 func writeAgentJSON(w http.ResponseWriter, status int, value any) {

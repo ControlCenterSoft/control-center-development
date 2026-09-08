@@ -159,7 +159,9 @@ func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		path == "/api/v1/agent/nodes" ||
 		strings.HasPrefix(path, "/api/v1/agent/nodes/") ||
 		path == "/api/v1/market/manifests" ||
-		strings.HasPrefix(path, "/api/v1/market/manifests/") {
+		strings.HasPrefix(path, "/api/v1/market/manifests/") ||
+		path == "/api/v2/market/manifests" ||
+		strings.HasPrefix(path, "/api/v2/market/manifests/") {
 		if h.product != nil {
 			h.product.ServeHTTP(w, r)
 			return

@@ -41,6 +41,12 @@ func TestProductMarketReadRBAC(t *testing.T) {
 	if result := productRequest(t, fixture, "viewer", http.MethodGet, "/api/v1/market/manifests", ""); result.Code != http.StatusOK {
 		t.Fatalf("viewer market status=%d body=%s", result.Code, result.Body.String())
 	}
+	if result := productRequest(t, fixture, "unbound", http.MethodGet, "/api/v2/market/manifests", ""); result.Code != http.StatusForbidden {
+		t.Fatalf("unbound market v2 status=%d body=%s", result.Code, result.Body.String())
+	}
+	if result := productRequest(t, fixture, "viewer", http.MethodGet, "/api/v2/market/manifests", ""); result.Code != http.StatusOK {
+		t.Fatalf("viewer market v2 status=%d body=%s", result.Code, result.Body.String())
+	}
 }
 
 func TestOperatorCanUseAutomationAndPXEPlanning(t *testing.T) {
@@ -65,5 +71,13 @@ func TestAdministratorRetainsProductAccess(t *testing.T) {
 	result := productRequest(t, fixture, "admin", http.MethodGet, "/api/v1/market/manifests/directory-services", "")
 	if result.Code != http.StatusOK {
 		t.Fatalf("administrator market status=%d body=%s", result.Code, result.Body.String())
+	}
+}
+
+func TestAdministratorCanReadMarketManifestV2(t *testing.T) {
+	fixture := newResourceAuthFixture(t)
+	result := productRequest(t, fixture, "admin", http.MethodGet, "/api/v2/market/manifests/directory-services", "")
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"schema_version":"market.manifest/v2"`) {
+		t.Fatalf("administrator market v2 status=%d body=%s", result.Code, result.Body.String())
 	}
 }

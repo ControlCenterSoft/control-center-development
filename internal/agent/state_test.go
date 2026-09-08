@@ -37,3 +37,15 @@ func TestMemoryRegistryRejectsUnknownHeartbeat(t *testing.T) {
 		t.Fatalf("expected unknown node, got %v", err)
 	}
 }
+
+func TestMemoryRegistryRejectsV2UntilRichPersistenceIsAvailable(t *testing.T) {
+	registry := NewMemoryRegistry()
+	request := validV2Enrollment()
+	_, err := registry.Enroll(request)
+	if !errors.Is(err, ErrEnrollmentPersistenceUnsupported) {
+		t.Fatalf("error = %v, want ErrEnrollmentPersistenceUnsupported", err)
+	}
+	if items := registry.List(); len(items) != 0 {
+		t.Fatalf("v2 enrollment was partially persisted: %#v", items)
+	}
+}

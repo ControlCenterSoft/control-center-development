@@ -31,3 +31,47 @@ func TestStateHandlerEnrollmentHeartbeatAndQuery(t *testing.T) {
 		t.Fatalf("get status=%d body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestStateHandlerRejectsUnpersistedOrTrailingFields(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "v2 enrollment field",
+			path: "/api/v1/agent/enrollments",
+			body: `{"node_id":"node-1","hostname":"host1","roles":["worker"]}`,
+		},
+		{
+			name: "enrollment trailing value",
+			path: "/api/v1/agent/enrollments",
+			body: `{"node_id":"node-1","hostname":"host1"} {}`,
+		},
+		{
+			name: "heartbeat unknown field",
+			path: "/api/v1/agent/heartbeats",
+			body: `{"node_id":"node-1","seen_at":"2026-09-08T18:00:00Z","ignored":true}`,
+		},
+		{
+			name: "heartbeat trailing value",
+			path: "/api/v1/agent/heartbeats",
+			body: `{"node_id":"node-1","seen_at":"2026-09-08T18:00:00Z"} {}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler := StateHandler(agent.NewMemoryRegistry())
+			request := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
