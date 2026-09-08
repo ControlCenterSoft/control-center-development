@@ -12,19 +12,44 @@ import (
 	"control-center/internal/inventory"
 	inventoryapi "control-center/internal/inventory/httpapi"
 	marketapi "control-center/internal/market/httpapi"
+	"control-center/internal/nodelifecycle"
+	lifecycleapi "control-center/internal/nodelifecycle/httpapi"
 	nodesapi "control-center/internal/nodes/httpapi"
 	pxeapi "control-center/internal/pxe/httpapi"
 )
 
-func newProductHandler(identity *identityapi.Server) http.Handler {
+type productHandlerConfig struct {
+	lifecycleProjection nodelifecycle.Projection
+}
+
+type productHandlerOption func(*productHandlerConfig)
+
+func withNodeLifecycleProjection(projection nodelifecycle.Projection) productHandlerOption {
+	return func(config *productHandlerConfig) {
+		if projection != nil {
+			config.lifecycleProjection = projection
+		}
+	}
+}
+
+func newProductHandler(identity *identityapi.Server, options ...productHandlerOption) http.Handler {
 	mux := http.NewServeMux()
 	guard := func(permission rbac.Permission, handler http.Handler) http.Handler {
 		return identity.Authenticate(identity.Require(permission, rbac.GlobalScope())(handler))
 	}
+	config := productHandlerConfig{lifecycleProjection: nodelifecycle.NewEmptyMemoryProjection()}
+	for _, option := range options {
+		if option != nil {
+			option(&config)
+		}
+	}
 	agentState := agentapi.StateHandler(agent.NewMemoryRegistry())
 	inventoryState := inventoryapi.StateHandler(inventory.NewMemoryRegistry())
+	lifecycleState := lifecycleapi.New(config.lifecycleProjection)
 
 	mux.Handle("/api/v1/nodes/enrollment/plan", guard(rbac.PermissionNodeEnrollmentPlan, nodesapi.New()))
+	mux.Handle("/api/v1/nodes/{nodeID}/lifecycle", guard(rbac.PermissionNodeLifecycleRead, lifecycleState))
+	mux.Handle("/api/v1/nodes/{nodeID}/lifecycle/transitions/plan", guard(rbac.PermissionNodeLifecyclePlan, lifecycleState))
 	mux.Handle("/api/v1/automation/plan", guard(rbac.PermissionAutomationPlan, automationapi.New()))
 	mux.Handle("/api/v1/pxe/plan", guard(rbac.PermissionPXEPlan, pxeapi.New()))
 	marketHandler := guard(rbac.PermissionMarketRead, marketapi.New())

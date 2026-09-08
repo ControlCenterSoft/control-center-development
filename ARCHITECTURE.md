@@ -202,6 +202,8 @@ Recovery Manager покрывает восстановление Node, Service, 
 
 Для PostgreSQL целевой backup provider — pgBackRest или совместимый provider через abstraction. Stateful Market-модули обязаны иметь собственный Recovery Adapter.
 
+Типизированные контракты метаданных RecoveryPoint/Backup/Restore, evidence, provider и fencing зафиксированы в [`docs/RECOVERY_METADATA_CONTRACTS_RU.md`](docs/RECOVERY_METADATA_CONTRACTS_RU.md) и [`api/openapi-recovery-metadata.yaml`](api/openapi-recovery-metadata.yaml). Контракты не запускают backup/restore и не выполняют инфраструктурные изменения.
+
 ## 13. Network & Security Manager
 
 Сетевые интерфейсы и зоны — часть Core. Узел может иметь WAN, LAN, MANAGEMENT, DMZ, CLUSTER, STORAGE, BACKUP и иные интерфейсы/VLAN.

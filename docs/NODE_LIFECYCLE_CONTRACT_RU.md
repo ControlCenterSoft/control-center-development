@@ -119,4 +119,4 @@
 
 Существующие enrollment/heartbeat и inventory объекты 0.3.x остаются читаемыми. Адаптер миграции должен создавать новый lifecycle-объект детерминированно, начиная с `DISCOVERED` и поколения `1`, а затем применять только подтверждённые переходы. Он не имеет права выводить `RETIRED`, `MAINTENANCE` или завершённый Drain только по отсутствию heartbeat.
 
-До появления полного persistence/API adapter данный пакет является контрактной границей 0.4. Транзакционное хранение, RBAC/Audit, HTTP handler, durable Change/Job, получение evidence от реальных подсистем и восстановление после рестарта входят в последующую интеграцию Node Lifecycle Manager.
+Read-only HTTP-проекция и endpoint проверки плана описаны в `NODE_LIFECYCLE_API_RU.md`. Они не выполняют переход и не изменяют хост. Транзакционное хранение, scope-aware RBAC/Audit, durable Change/Job, получение evidence от реальных подсистем и восстановление после рестарта входят в последующую интеграцию Node Lifecycle Manager.

@@ -71,19 +71,51 @@ type EnrollmentPreconditions struct {
 	Checks []EnrollmentPrecondition `json:"checks"`
 }
 
-var metricUnits = map[CapacityMetric]CapacityUnit{
-	MetricCPUUtilization:       UnitPercent,
-	MetricMemoryUsed:           UnitBytes,
-	MetricStorageUsed:          UnitBytes,
-	MetricStorageIOPS:          UnitOperationsPerSecond,
-	MetricStorageLatency:       UnitMilliseconds,
-	MetricStorageQueueDepth:    UnitCount,
-	MetricNetworkThroughput:    UnitBitsPerSecond,
-	MetricNetworkLatency:       UnitMilliseconds,
-	MetricNetworkPacketLoss:    UnitPercent,
-	MetricDatabaseLatency:      UnitMilliseconds,
-	MetricDatabaseTransactions: UnitTransactionsPerSecond,
-	MetricServiceQueueDepth:    UnitCount,
+type CapacityTargetKind string
+
+const (
+	CapacityTargetNode     CapacityTargetKind = "node"
+	CapacityTargetStorage  CapacityTargetKind = "storage"
+	CapacityTargetNetwork  CapacityTargetKind = "network-interface"
+	CapacityTargetDatabase CapacityTargetKind = "database"
+	CapacityTargetService  CapacityTargetKind = "service"
+)
+
+// CapacityMetricDefinition is the single source of truth shared by Agent
+// observations and generic Capacity contracts. Maximum is an input safety
+// bound, not a product capacity claim.
+type CapacityMetricDefinition struct {
+	Unit       CapacityUnit
+	TargetKind CapacityTargetKind
+	Maximum    float64
+}
+
+var capacityMetricDefinitions = map[CapacityMetric]CapacityMetricDefinition{
+	MetricCPUUtilization:       {Unit: UnitPercent, TargetKind: CapacityTargetNode, Maximum: 100},
+	MetricMemoryUsed:           {Unit: UnitBytes, TargetKind: CapacityTargetNode, Maximum: 1e21},
+	MetricStorageUsed:          {Unit: UnitBytes, TargetKind: CapacityTargetStorage, Maximum: 1e21},
+	MetricStorageIOPS:          {Unit: UnitOperationsPerSecond, TargetKind: CapacityTargetStorage, Maximum: 1e21},
+	MetricStorageLatency:       {Unit: UnitMilliseconds, TargetKind: CapacityTargetStorage, Maximum: 1e21},
+	MetricStorageQueueDepth:    {Unit: UnitCount, TargetKind: CapacityTargetStorage, Maximum: 1e21},
+	MetricNetworkThroughput:    {Unit: UnitBitsPerSecond, TargetKind: CapacityTargetNetwork, Maximum: 1e21},
+	MetricNetworkLatency:       {Unit: UnitMilliseconds, TargetKind: CapacityTargetNetwork, Maximum: 1e21},
+	MetricNetworkPacketLoss:    {Unit: UnitPercent, TargetKind: CapacityTargetNetwork, Maximum: 100},
+	MetricDatabaseLatency:      {Unit: UnitMilliseconds, TargetKind: CapacityTargetDatabase, Maximum: 1e21},
+	MetricDatabaseTransactions: {Unit: UnitTransactionsPerSecond, TargetKind: CapacityTargetDatabase, Maximum: 1e21},
+	MetricServiceQueueDepth:    {Unit: UnitCount, TargetKind: CapacityTargetService, Maximum: 1e21},
+}
+
+// DefinitionForCapacityMetric returns the canonical semantics for a metric.
+func DefinitionForCapacityMetric(metric CapacityMetric) (CapacityMetricDefinition, bool) {
+	definition, exists := capacityMetricDefinitions[metric]
+	return definition, exists
+}
+
+// ValidCapacityMetricValue applies the canonical finite/non-negative safety
+// bound. More specific inventory checks remain the caller's responsibility.
+func ValidCapacityMetricValue(metric CapacityMetric, value float64) bool {
+	definition, exists := DefinitionForCapacityMetric(metric)
+	return exists && !math.IsNaN(value) && !math.IsInf(value, 0) && value >= 0 && value <= definition.Maximum
 }
 
 func normalizeCapacityObservations(
@@ -112,8 +144,8 @@ func normalizeCapacityObservations(
 		observation.Unit = CapacityUnit(strings.ToLower(strings.TrimSpace(string(observation.Unit))))
 		observation.Evidence = ObservationEvidence(strings.ToLower(strings.TrimSpace(string(observation.Evidence))))
 		observation.TargetID = strings.TrimSpace(observation.TargetID)
-		expectedUnit, exists := metricUnits[observation.Metric]
-		if !exists || observation.Unit != expectedUnit {
+		definition, exists := DefinitionForCapacityMetric(observation.Metric)
+		if !exists || observation.Unit != definition.Unit {
 			return nil, invalidEnrollment("capacity metric %q has unsupported unit %q", observation.Metric, observation.Unit)
 		}
 		switch observation.Evidence {
@@ -121,11 +153,8 @@ func normalizeCapacityObservations(
 		default:
 			return nil, invalidEnrollment("capacity metric %q has unsupported evidence %q", observation.Metric, observation.Evidence)
 		}
-		if math.IsNaN(observation.Value) || math.IsInf(observation.Value, 0) || observation.Value < 0 || observation.Value > 1e21 {
+		if !ValidCapacityMetricValue(observation.Metric, observation.Value) {
 			return nil, invalidEnrollment("capacity metric %q value is outside supported bounds", observation.Metric)
-		}
-		if (observation.Metric == MetricCPUUtilization || observation.Metric == MetricNetworkPacketLoss) && observation.Value > 100 {
-			return nil, invalidEnrollment("capacity metric %q percent must not exceed 100", observation.Metric)
 		}
 		if observation.ObservedAt.IsZero() || observation.ObservedAt.After(collectedAt.Add(5*time.Minute)) {
 			return nil, invalidEnrollment("capacity metric %q observed_at is invalid", observation.Metric)
