@@ -63,7 +63,7 @@ func ReconcileHandler() http.Handler {
 				Sources:  item.Sources,
 			})
 		}
-		writeInventoryJSON(w, map[string]any{"items": items, "count": len(items)})
+		writeInventoryJSON(w, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 	})
 }
 
@@ -83,7 +83,7 @@ func FreshnessHandler() http.Handler {
 			time.Duration(input.StaleAfterSeconds)*time.Second,
 			time.Duration(input.ExpireAfterSeconds)*time.Second,
 		)
-		writeInventoryJSON(w, map[string]any{"state": state})
+		writeInventoryJSON(w, http.StatusOK, map[string]any{"state": state})
 	})
 }
 
@@ -114,7 +114,8 @@ func ensureInventoryEOF(decoder *json.Decoder) error {
 	}
 }
 
-func writeInventoryJSON(w http.ResponseWriter, value any) {
+func writeInventoryJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }

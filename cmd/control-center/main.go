@@ -143,12 +143,21 @@ func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		path == "/api/v1/pxe/plan" ||
 		path == "/api/v1/domain/provider/resolve" ||
 		path == "/api/v1/domain/lifecycle/plan" ||
+		path == "/api/v1/domain/join/validate" ||
+		path == "/api/v1/domain/readiness/evaluate" ||
 		path == "/api/v1/inventory/normalize" ||
 		path == "/api/v1/inventory/reconcile" ||
 		path == "/api/v1/inventory/freshness" ||
+		path == "/api/v1/inventory/observations" ||
+		path == "/api/v1/inventory/devices" ||
+		strings.HasPrefix(path, "/api/v1/inventory/devices/") ||
 		path == "/api/v1/agent/enrollment/normalize" ||
 		path == "/api/v1/agent/heartbeat/evaluate" ||
 		path == "/api/v1/agent/lease/evaluate" ||
+		path == "/api/v1/agent/enrollments" ||
+		path == "/api/v1/agent/heartbeats" ||
+		path == "/api/v1/agent/nodes" ||
+		strings.HasPrefix(path, "/api/v1/agent/nodes/") ||
 		path == "/api/v1/market/manifests" ||
 		strings.HasPrefix(path, "/api/v1/market/manifests/") {
 		if h.product != nil {
