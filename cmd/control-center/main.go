@@ -65,9 +65,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initialize orchestration: %w", err)
 	}
+	product := newProductHandler(identity)
 	server := &http.Server{
-		Addr:              cfg.ListenAddress,
-		Handler:           splitHandler{core: api.Handler(), identity: commonMiddleware(identity), orchestration: orchestration.Handler()},
+		Addr: cfg.ListenAddress,
+		Handler: splitHandler{
+			core:          api.Handler(),
+			identity:      commonMiddleware(identity),
+			orchestration: orchestration.Handler(),
+			product:       commonMiddleware(product),
+		},
 		ReadTimeout:       cfg.ReadTimeout,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
 		WriteTimeout:      cfg.WriteTimeout,
@@ -113,6 +119,7 @@ type splitHandler struct {
 	core          http.Handler
 	identity      http.Handler
 	orchestration http.Handler
+	product       http.Handler
 }
 
 func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +138,16 @@ func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		strings.HasPrefix(path, "/api/v1/jobs/") {
 		h.orchestration.ServeHTTP(w, r)
 		return
+	}
+	if path == "/api/v1/nodes/enrollment/plan" ||
+		path == "/api/v1/automation/plan" ||
+		path == "/api/v1/pxe/plan" ||
+		path == "/api/v1/market/manifests" ||
+		strings.HasPrefix(path, "/api/v1/market/manifests/") {
+		if h.product != nil {
+			h.product.ServeHTTP(w, r)
+			return
+		}
 	}
 	h.core.ServeHTTP(w, r)
 }
