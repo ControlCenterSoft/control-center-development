@@ -21,11 +21,11 @@ type heartbeatRequest struct {
 }
 
 type leaseRequest struct {
-	NodeID              string    `json:"node_id"`
-	LastHeartbeat       time.Time `json:"last_heartbeat"`
-	Now                 time.Time `json:"now"`
-	TTLSeconds          int64     `json:"ttl_seconds"`
-	GraceSeconds        int64     `json:"grace_seconds"`
+	NodeID        string    `json:"node_id"`
+	LastHeartbeat time.Time `json:"last_heartbeat"`
+	Now           time.Time `json:"now"`
+	TTLSeconds    int64     `json:"ttl_seconds"`
+	GraceSeconds  int64     `json:"grace_seconds"`
 }
 
 func HeartbeatHandler() http.Handler {
