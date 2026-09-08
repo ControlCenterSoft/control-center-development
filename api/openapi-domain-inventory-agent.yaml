@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Control Center Domain, Inventory and Agent API fragment
+  version: 0.3.0
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+paths:
+  /api/v1/domain/provider/resolve:
+    post:
+      operationId: resolveDomainProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainProviderRequest'
+      responses:
+        '200':
+          description: Compatible provider selected
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [provider]
+                properties:
+                  provider: { type: string, enum: [samba-ad-dc, freeipa] }
+        '422': { description: Requested provider is incompatible with requirements }
+  /api/v1/inventory/normalize:
+    post:
+      operationId: normalizeInventoryDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Device'
+      responses:
+        '200':
+          description: Canonical inventory device
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+        '422': { description: Invalid device identity or platform }
+  /api/v1/agent/enrollment/normalize:
+    post:
+      operationId: normalizeAgentEnrollment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentEnrollment'
+      responses:
+        '200':
+          description: Canonical agent enrollment request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnrollment' }
+        '422': { description: Invalid enrollment request }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: cc_session
+  schemas:
+    DomainProviderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        preferred: { type: string, enum: [auto, samba-ad-dc, freeipa] }
+        requirements:
+          type: object
+          additionalProperties: false
+          properties:
+            WindowsDomainJoin: { type: boolean }
+            GroupPolicy: { type: boolean }
+    Device:
+      type: object
+      additionalProperties: false
+      required: [hostname, platform]
+      properties:
+        hostname: { type: string, minLength: 1 }
+        platform: { type: string, enum: [windows, linux, android, other] }
+        machine_id: { type: string }
+        serial: { type: string }
+        addresses: { type: array, items: { type: string } }
+        tags: { type: array, items: { type: string } }
+    AgentEnrollment:
+      type: object
+      additionalProperties: false
+      required: [node_id, hostname]
+      properties:
+        node_id: { type: string, minLength: 1 }
+        hostname: { type: string, minLength: 1 }
+        capabilities: { type: array, items: { type: string } }
