@@ -15,7 +15,6 @@ type DirectoryJoinRequest struct {
 // ValidateDirectoryJoin enforces provider/platform compatibility.
 func ValidateDirectoryJoin(request DirectoryJoinRequest) error {
 	platform := strings.ToLower(strings.TrimSpace(request.Platform))
-	provider := strings.ToLower(strings.TrimSpace(request.Provider))
 	domainName := strings.TrimSpace(request.DomainName)
 
 	if domainName == "" {
@@ -24,11 +23,12 @@ func ValidateDirectoryJoin(request DirectoryJoinRequest) error {
 	if platform != "windows" && platform != "linux" {
 		return fmt.Errorf("unsupported platform %q", request.Platform)
 	}
-	if provider != "samba-ad" && provider != "freeipa" {
+	provider, ok := canonicalProvider(Provider(request.Provider))
+	if !ok || provider == ProviderAuto {
 		return fmt.Errorf("unsupported provider %q", request.Provider)
 	}
-	if platform == "windows" && provider != "samba-ad" {
-		return fmt.Errorf("windows domain join requires samba-ad")
+	if platform == "windows" && provider != ProviderSamba {
+		return fmt.Errorf("windows domain join requires %s", ProviderSamba)
 	}
 	return nil
 }
