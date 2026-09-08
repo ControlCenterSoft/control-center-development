@@ -1,8 +1,14 @@
 package buildinfo
 
+// Эти значения заменяются во время сборки через -ldflags. Значения по умолчанию делают
+// локальные development-сборки явными и воспроизводимыми.
 var (
-	// Version — версия релиза. Может быть переопределена во время сборки.
-	Version = "dev"
-	// Revision — неизменяемая ревизия исходного кода. Может быть переопределена во время сборки.
-	Revision = "unknown"
+	Version   = "0.3.0"
+	Commit    = "unknown"
+	BuildTime = "unknown"
+)
+
+const (
+	ProductName = "control-center"
+	APIVersion  = "v1"
 )
