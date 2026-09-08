@@ -37,6 +37,7 @@ func newResourceAuthFixture(t *testing.T) resourceAuthFixture {
 	}
 	for _, user := range []auth.User{
 		{ID: "admin-1", Username: "admin", DisplayName: "Administrator", PasswordHash: passwordHash, Enabled: true, CreatedAt: time.Now().UTC()},
+		{ID: "operator-1", Username: "operator", DisplayName: "Operator", PasswordHash: passwordHash, Enabled: true, CreatedAt: time.Now().UTC()},
 		{ID: "viewer-1", Username: "viewer", DisplayName: "Viewer", PasswordHash: passwordHash, Enabled: true, CreatedAt: time.Now().UTC()},
 		{ID: "unbound-1", Username: "unbound", DisplayName: "Unbound", PasswordHash: passwordHash, Enabled: true, CreatedAt: time.Now().UTC()},
 	} {
@@ -57,6 +58,7 @@ func newResourceAuthFixture(t *testing.T) resourceAuthFixture {
 	}
 	for _, binding := range []rbac.Binding{
 		{SubjectID: "admin-1", RoleName: "administrator", Scope: rbac.GlobalScope()},
+		{SubjectID: "operator-1", RoleName: "operator", Scope: rbac.GlobalScope()},
 		{SubjectID: "viewer-1", RoleName: "viewer", Scope: rbac.GlobalScope()},
 	} {
 		if err := authorizer.Bind(binding); err != nil {
@@ -86,8 +88,9 @@ func newResourceAuthFixture(t *testing.T) resourceAuthFixture {
 		registry,
 		coreapi.WithResourceGuard(resourceGuard),
 	)
+	product := newProductHandler(identity)
 
-	return resourceAuthFixture{handler: splitHandler{core: core.Handler(), identity: identity}}
+	return resourceAuthFixture{handler: splitHandler{core: core.Handler(), identity: identity, product: product}}
 }
 
 func (f resourceAuthFixture) login(t *testing.T, username string) *http.Cookie {
