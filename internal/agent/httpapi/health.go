@@ -44,7 +44,7 @@ func HeartbeatHandler() http.Handler {
 			time.Duration(input.DelayedAfterSeconds)*time.Second,
 			time.Duration(input.OfflineAfterSeconds)*time.Second,
 		)
-		writeAgentJSON(w, map[string]any{"state": state})
+		writeAgentJSON(w, http.StatusOK, map[string]any{"state": state})
 	})
 }
 
@@ -64,7 +64,7 @@ func LeaseHandler() http.Handler {
 			http.Error(w, "invalid lease", http.StatusUnprocessableEntity)
 			return
 		}
-		writeAgentJSON(w, map[string]any{"state": state})
+		writeAgentJSON(w, http.StatusOK, map[string]any{"state": state})
 	})
 }
 
@@ -95,7 +95,8 @@ func ensureAgentEOF(decoder *json.Decoder) error {
 	}
 }
 
-func writeAgentJSON(w http.ResponseWriter, value any) {
+func writeAgentJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
