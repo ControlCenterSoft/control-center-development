@@ -1,42 +1,64 @@
 # Control Center
 
-Control Center is a centralized infrastructure-management platform built around a typed, auditable execution model.
+Control Center — централизованная платформа управления инфраструктурой с типизированной, проверяемой и аудируемой моделью исполнения.
 
-Current development baseline: **0.3.0**.
+Текущий кодовый baseline: **0.3.0**. Номер версии изменяется только отдельным релизным процессом после реализации и тестирования.
 
-## Core capabilities in the current baseline
+## Источник истины разработки
 
-- HTTP/JSON API and health/readiness endpoints;
-- local identity and session management;
+Нормативным источником истины для текущей разработки является ветка `main` этого репозитория: `ControlCenterSoft/control-center-development`.
+
+Перед продолжением разработки необходимо читать:
+
+1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
+2. [`ROADMAP.md`](ROADMAP.md) — правильная последовательность внедрения и первый незакрытый архитектурный этап;
+3. [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог уже принятых требований.
+
+Правило: команда «продолжай разработку» должна сначала сверять актуальный `main`, активные PR и первый незакрытый этап `ROADMAP.md`, а затем реализовывать следующий совместимый Task Packet.
+
+`ControlCenterSoft/control-center-stable` — стабильный релизный канал. `ControlCenterSoft/control-center` — публичный сайт/витрина. Эти репозитории не являются архитектурным source of truth продукта.
+
+Google Drive содержит подробную продуктовую/эксплуатационную документацию и должен быть синхронизирован с этими нормативными файлами. Выявленное противоречие между реализацией и документацией должно быть устранено до развития конфликтующего контракта.
+
+## Возможности текущего baseline
+
+- HTTP/JSON API и health/readiness endpoints;
+- локальная identity/session модель;
 - deny-by-default RBAC;
-- append-oriented audit chain;
+- append-oriented audit;
 - PostgreSQL-backed durable state;
 - immutable configuration revisions;
 - policy/risk/approval-aware Changes;
-- durable Jobs with leases, retries and idempotency;
+- durable Jobs с leases, retries и idempotency;
 - allowlisted typed Worker actions;
-- resource state and health model;
-- containerized non-root runtime.
+- resource state/health;
+- Agent enrollment/heartbeat foundations;
+- Inventory/Market/PXE/Automation/Domain/Integration foundations;
+- non-root runtime.
 
-## Development model
+Целевая распределённая ролевая, кластерная, Capacity, Lifecycle/Recovery, Network/Edge и Enterprise Market архитектура описана в нормативных документах выше и внедряется поэтапно, а не одним несовместимым скачком.
 
-Development proceeds in parallel branches. Every branch is validated by public GitHub-hosted CI using standard runners. Pull requests are expected to pass format, vet, race tests, unit/integration tests and build gates before merge.
+## Модель разработки
 
-No credentials, private infrastructure topology, production data or private deployment endpoints belong in this repository.
+Разработка ведётся параллельно, но общие контракты Identity/RBAC/State/Jobs/Agent/Market/Network/Recovery не должны иметь независимых несовместимых реализаций в разных ветках.
 
-## Local checks
+Pull request должен оставлять `main` зелёным и проходить предусмотренные форматирование, vet/race, unit/integration/security/failure/build gates.
+
+В репозитории запрещены credentials, приватная топология инфраструктуры, production data, приватные deployment endpoints и секреты.
+
+## Локальная проверка
 
 ```bash
 make ci
 ```
 
-## Local build
+## Локальная сборка
 
 ```bash
 make build
 ./bin/control-center
 ```
 
-## First sign-in
+## Первый вход
 
-On an empty installation, Control Center creates the local user `admin` with the one-time password `admin`. The first session can only inspect its session state, change the password, or sign out. A new password must satisfy the normal password policy (currently at least 12 characters). Starting an upgraded version never replaces an existing user's password or restores the first-login credential.
+На пустой установке Control Center создаёт локального пользователя `admin` с одноразовым начальным паролем `admin`. Первая сессия позволяет только проверить состояние сессии, сменить пароль или выйти. До смены пароля обычная работа запрещена. Обновление установленной системы никогда не заменяет существующий пароль пользователя и не восстанавливает начальный credential.
