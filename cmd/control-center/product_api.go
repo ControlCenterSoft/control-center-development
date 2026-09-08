@@ -3,9 +3,12 @@ package main
 import (
 	"net/http"
 
+	agentapi "control-center/internal/agent/httpapi"
 	automationapi "control-center/internal/automation/httpapi"
+	domainapi "control-center/internal/domain/httpapi"
 	identityapi "control-center/internal/identity/httpapi"
 	"control-center/internal/identity/rbac"
+	inventoryapi "control-center/internal/inventory/httpapi"
 	marketapi "control-center/internal/market/httpapi"
 	nodesapi "control-center/internal/nodes/httpapi"
 	pxeapi "control-center/internal/pxe/httpapi"
@@ -23,5 +26,8 @@ func newProductHandler(identity *identityapi.Server) http.Handler {
 	marketHandler := guard(rbac.PermissionMarketRead, marketapi.New())
 	mux.Handle("/api/v1/market/manifests", marketHandler)
 	mux.Handle("/api/v1/market/manifests/", marketHandler)
+	mux.Handle("/api/v1/domain/provider/resolve", guard(rbac.PermissionDomainProviderResolve, domainapi.ProviderHandler()))
+	mux.Handle("/api/v1/inventory/normalize", guard(rbac.PermissionInventoryNormalize, inventoryapi.NormalizeHandler()))
+	mux.Handle("/api/v1/agent/enrollment/normalize", guard(rbac.PermissionAgentEnrollmentNormalize, agentapi.EnrollmentHandler()))
 	return mux
 }
