@@ -31,10 +31,10 @@ type reconciledPayload struct {
 }
 
 type freshnessRequest struct {
-	ObservedAt        time.Time `json:"observed_at"`
-	Now               time.Time `json:"now"`
-	StaleAfterSeconds int64     `json:"stale_after_seconds"`
-	ExpireAfterSeconds int64    `json:"expire_after_seconds"`
+	ObservedAt         time.Time `json:"observed_at"`
+	Now                time.Time `json:"now"`
+	StaleAfterSeconds  int64     `json:"stale_after_seconds"`
+	ExpireAfterSeconds int64     `json:"expire_after_seconds"`
 }
 
 func ReconcileHandler() http.Handler {
@@ -59,8 +59,8 @@ func ReconcileHandler() http.Handler {
 		for _, item := range result {
 			items = append(items, reconciledPayload{
 				DeviceID: item.DeviceID,
-				Latest: observationPayload{DeviceID: item.Latest.DeviceID, Source: item.Latest.Source, Hostname: item.Latest.Hostname, SeenAt: item.Latest.SeenAt},
-				Sources: item.Sources,
+				Latest:   observationPayload{DeviceID: item.Latest.DeviceID, Source: item.Latest.Source, Hostname: item.Latest.Hostname, SeenAt: item.Latest.SeenAt},
+				Sources:  item.Sources,
 			})
 		}
 		writeInventoryJSON(w, map[string]any{"items": items, "count": len(items)})
