@@ -36,8 +36,10 @@ func TestPostgresStateSurvivesAdapterRestart(t *testing.T) {
 	}
 	defer db.Close()
 	var migrationPresent bool
-	if err := db.QueryRowContext(ctx, `SELECT to_regclass('cc_jobs') IS NOT NULL AND to_regclass('cc_local_users') IS NOT NULL`).Scan(&migrationPresent); err != nil || !migrationPresent {
-		t.Fatalf("database must be migrated through 0004 before integration tests: present=%v err=%v", migrationPresent, err)
+	if err := db.QueryRowContext(ctx, `SELECT to_regclass('cc_jobs') IS NOT NULL
+        AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cc_local_users' AND column_name='password_change_required')
+        AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cc_auth_sessions' AND column_name='credential_version')`).Scan(&migrationPresent); err != nil || !migrationPresent {
+		t.Fatalf("database must be migrated through 0005 before integration tests: present=%v err=%v", migrationPresent, err)
 	}
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -47,23 +49,45 @@ func TestPostgresStateSurvivesAdapterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	username := "integration-" + suffix
-	userID, err := BootstrapAdmin(ctx, db, username, passwordHash, time.Now().UTC())
+	userID, created, err := BootstrapAdmin(ctx, db, username, passwordHash, time.Now().UTC())
+	if err != nil || !created {
+		t.Fatalf("initial bootstrap created=%v err=%v", created, err)
+	}
+	differentHash, err := hasher.Hash("a-different-integration-password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondID, err := BootstrapAdmin(ctx, db, username, passwordHash, time.Now().UTC())
-	if err != nil || secondID != userID {
-		t.Fatalf("idempotent bootstrap id=%q second=%q err=%v", userID, secondID, err)
+	secondID, createdAgain, err := BootstrapAdmin(ctx, db, username, differentHash, time.Now().UTC())
+	if err != nil || createdAgain || secondID != userID {
+		t.Fatalf("idempotent bootstrap id=%q second=%q created=%v err=%v", userID, secondID, createdAgain, err)
 	}
 	identities, _ := NewIdentityStore(db)
-	if _, err := identities.FindUserByUsername(ctx, username); err != nil {
+	bootstrappedUser, err := identities.FindUserByUsername(ctx, username)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if bootstrappedUser.PasswordHash != passwordHash || !bootstrappedUser.PasswordChangeRequired {
+		t.Fatal("repeat bootstrap replaced credentials or removed first-login requirement")
+	}
+	passwordChangedAt := time.Now().UTC().Add(time.Second).Truncate(time.Microsecond)
+	if err := identities.ChangePasswordAndRevokeSessions(ctx, userID, passwordHash, differentHash, passwordChangedAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, createdAfterChange, err := BootstrapAdmin(ctx, db, username, passwordHash, time.Now().UTC()); err != nil || createdAfterChange {
+		t.Fatalf("post-change bootstrap created=%v err=%v", createdAfterChange, err)
+	}
+	preservedUser, err := identities.FindUserByUsername(ctx, username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preservedUser.PasswordHash != differentHash || preservedUser.PasswordChangeRequired || !preservedUser.PasswordChangedAt.Equal(passwordChangedAt) {
+		t.Fatal("restart bootstrap reset the selected password or its state")
 	}
 	if !NewAuthorizer(db).Allowed(userID, rbac.PermissionChangesWrite, rbac.GlobalScope()) {
 		t.Fatal("persisted administrator binding did not authorize")
 	}
-	session := auth.Session{ID: deterministicUUID("session:" + suffix), UserID: userID, TokenDigest: hexDigest("token:" + suffix), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour), SourceIP: "127.0.0.1", UserAgent: "integration-test"}
-	if err := identities.CreateSession(ctx, session); err != nil {
+	session := auth.Session{ID: deterministicUUID("session:" + suffix), UserID: userID, TokenDigest: hexDigest("token:" + suffix), CredentialVersion: passwordChangedAt, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour), SourceIP: "127.0.0.1", UserAgent: "integration-test"}
+	if err := identities.CreateSession(ctx, session, differentHash); err != nil {
 		t.Fatal(err)
 	}
 	restartedIdentities, _ := NewIdentityStore(db)

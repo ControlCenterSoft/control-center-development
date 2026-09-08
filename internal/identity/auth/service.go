@@ -64,8 +64,8 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (IssuedSession, e
 	if err != nil {
 		return IssuedSession{}, err
 	}
-	session := Session{ID: randomID(), UserID: user.ID, TokenDigest: digestToken(token), CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), SourceIP: input.SourceIP, UserAgent: truncate(input.UserAgent, 512)}
-	if err := s.sessions.CreateSession(ctx, session); err != nil {
+	session := Session{ID: randomID(), UserID: user.ID, TokenDigest: digestToken(token), CredentialVersion: user.PasswordChangedAt, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), SourceIP: input.SourceIP, UserAgent: truncate(input.UserAgent, 512)}
+	if err := s.sessions.CreateSession(ctx, session, user.PasswordHash); err != nil {
 		return IssuedSession{}, fmt.Errorf("create session: %w", err)
 	}
 	if err := s.audit.Append(ctx, audit.Event{Action: "auth.login", Outcome: "success", ActorID: user.ID, SourceIP: input.SourceIP, Details: map[string]any{"session_id": session.ID}}); err != nil {
@@ -73,7 +73,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (IssuedSession, e
 		return IssuedSession{}, ErrAuditUnavailable
 	}
 	_ = s.users.SetLastLogin(ctx, user.ID, now)
-	return IssuedSession{Token: token, Session: session.View(), Identity: user.Identity()}, nil
+	return IssuedSession{Token: token, Session: session.View(), Identity: user.Identity(), PasswordChangeRequired: user.PasswordChangeRequired}, nil
 }
 func (s *Service) Authenticate(ctx context.Context, token string) (AuthenticatedSession, error) {
 	digest, ok := validatedTokenDigest(token)
@@ -88,7 +88,46 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated
 	if err != nil || !user.Enabled {
 		return AuthenticatedSession{}, ErrUnauthenticated
 	}
-	return AuthenticatedSession{Session: session.View(), Identity: user.Identity()}, nil
+	if !session.CredentialVersion.Equal(user.PasswordChangedAt) {
+		return AuthenticatedSession{}, ErrUnauthenticated
+	}
+	return AuthenticatedSession{Session: session.View(), Identity: user.Identity(), PasswordChangeRequired: user.PasswordChangeRequired}, nil
+}
+
+func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput) error {
+	user, err := s.users.FindUserByID(ctx, input.UserID)
+	if err != nil || !user.Enabled {
+		return ErrUnauthenticated
+	}
+	valid, verifyErr := s.hasher.Verify(input.CurrentPassword, user.PasswordHash)
+	if verifyErr != nil || !valid {
+		_ = s.audit.Append(ctx, audit.Event{Action: "auth.password_change", Outcome: "denied", ActorID: user.ID, SourceIP: input.SourceIP, Details: map[string]any{"reason": "invalid_current_password"}})
+		return ErrInvalidCurrentPassword
+	}
+	same, verifyErr := s.hasher.Verify(input.NewPassword, user.PasswordHash)
+	if verifyErr != nil {
+		return fmt.Errorf("verify password reuse: %w", verifyErr)
+	}
+	if same {
+		_ = s.audit.Append(ctx, audit.Event{Action: "auth.password_change", Outcome: "denied", ActorID: user.ID, SourceIP: input.SourceIP, Details: map[string]any{"reason": "password_reuse"}})
+		return ErrPasswordPolicy
+	}
+	newHash, err := s.hasher.Hash(input.NewPassword)
+	if err != nil {
+		_ = s.audit.Append(ctx, audit.Event{Action: "auth.password_change", Outcome: "denied", ActorID: user.ID, SourceIP: input.SourceIP, Details: map[string]any{"reason": "password_policy"}})
+		return fmt.Errorf("%w: %v", ErrPasswordPolicy, err)
+	}
+	now := s.now().UTC()
+	if err := s.users.ChangePasswordAndRevokeSessions(ctx, user.ID, user.PasswordHash, newHash, now); err != nil {
+		if errors.Is(err, ErrConflict) {
+			return ErrConflict
+		}
+		return fmt.Errorf("change password: %w", err)
+	}
+	if err := s.audit.Append(ctx, audit.Event{Action: "auth.password_change", Outcome: "success", ActorID: user.ID, SourceIP: input.SourceIP}); err != nil {
+		return ErrAuditUnavailable
+	}
+	return nil
 }
 func (s *Service) Logout(ctx context.Context, token, sourceIP string) error {
 	digest, ok := validatedTokenDigest(token)

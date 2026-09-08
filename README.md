@@ -36,3 +36,7 @@ make ci
 make build
 ./bin/control-center
 ```
+
+## First sign-in
+
+On an empty installation, Control Center creates the local user `admin` with the one-time password `admin`. The first session can only inspect its session state, change the password, or sign out. A new password must satisfy the normal password policy (currently at least 12 characters). Starting an upgraded version never replaces an existing user's password or restores the first-login credential.

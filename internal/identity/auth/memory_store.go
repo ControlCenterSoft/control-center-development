@@ -66,10 +66,37 @@ func (s *MemoryStore) SetLastLogin(_ context.Context, id string, at time.Time) e
 	s.usersByID[id] = user
 	return nil
 }
-func (s *MemoryStore) CreateSession(_ context.Context, session Session) error {
+func (s *MemoryStore) ChangePasswordAndRevokeSessions(_ context.Context, id, expectedHash, newHash string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	user, exists := s.usersByID[id]
+	if !exists {
+		return ErrNotFound
+	}
+	if user.PasswordHash != expectedHash {
+		return ErrConflict
+	}
+	at = at.UTC()
+	user.PasswordHash = newHash
+	user.PasswordChangeRequired = false
+	user.PasswordChangedAt = at
+	s.usersByID[id] = user
+	for digest, session := range s.sessionsByDigest {
+		if session.UserID == id && session.RevokedAt == nil {
+			session.RevokedAt = &at
+			s.sessionsByDigest[digest] = session
+		}
+	}
+	return nil
+}
+func (s *MemoryStore) CreateSession(_ context.Context, session Session, expectedPasswordHash string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if session.ID == "" || session.TokenDigest == "" || session.UserID == "" {
+		return ErrConflict
+	}
+	user, exists := s.usersByID[session.UserID]
+	if !exists || user.PasswordHash != expectedPasswordHash {
 		return ErrConflict
 	}
 	if _, exists := s.sessionsByDigest[session.TokenDigest]; exists {

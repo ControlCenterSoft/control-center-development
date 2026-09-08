@@ -56,11 +56,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	s.mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	s.mux.Handle("GET /api/v1/auth/session", s.Authenticate(http.HandlerFunc(s.session)))
-	s.mux.Handle("GET /api/v1/identity/self", s.Authenticate(http.HandlerFunc(s.identitySelf)))
+	s.mux.Handle("POST /api/v1/auth/password", s.Authenticate(http.HandlerFunc(s.changePassword)))
+	s.mux.Handle("GET /api/v1/identity/self", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.identitySelf))))
 	s.mux.Handle("GET /api/v1/system/overview", s.Authenticate(s.Require(rbac.PermissionOverviewRead, rbac.GlobalScope())(http.HandlerFunc(s.overviewAPI))))
 
 	s.mux.HandleFunc("GET /login", s.webLogin)
 	s.mux.HandleFunc("POST /web/login", s.webLoginSubmit)
+	s.mux.Handle("GET /password/change", s.Authenticate(http.HandlerFunc(s.webPasswordChange)))
+	s.mux.Handle("POST /web/password/change", s.Authenticate(http.HandlerFunc(s.webPasswordChangeSubmit)))
 	s.mux.Handle("GET /overview", s.Authenticate(s.Require(rbac.PermissionOverviewRead, rbac.GlobalScope())(http.HandlerFunc(s.webOverview))))
 	s.mux.HandleFunc("POST /web/logout", s.webLogout)
 }
@@ -78,9 +81,10 @@ type contextKey int
 const principalKey contextKey = iota
 
 type Principal struct {
-	Token    string
-	Session  auth.SessionView
-	Identity auth.Identity
+	Token                  string
+	Session                auth.SessionView
+	Identity               auth.Identity
+	PasswordChangeRequired bool
 }
 
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
@@ -96,7 +100,7 @@ func (s *Server) Authenticate(next http.Handler) http.Handler {
 			writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
 			return
 		}
-		principal := Principal{Token: token, Session: authenticated.Session, Identity: authenticated.Identity}
+		principal := Principal{Token: token, Session: authenticated.Session, Identity: authenticated.Identity, PasswordChangeRequired: authenticated.PasswordChangeRequired}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, principal)))
 	})
 }
@@ -107,6 +111,9 @@ func (s *Server) Require(permission rbac.Permission, scope rbac.Scope) func(http
 			principal, ok := PrincipalFromContext(r.Context())
 			if !ok {
 				writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+				return
+			}
+			if s.rejectPasswordChangeRequired(w, r, principal) {
 				return
 			}
 			if !s.authorizer.Allowed(principal.Identity.ID, permission, scope) {
@@ -120,6 +127,32 @@ func (s *Server) Require(permission rbac.Permission, scope rbac.Scope) func(http
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func (s *Server) RequirePasswordCurrent(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := PrincipalFromContext(r.Context())
+		if !ok {
+			writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+			return
+		}
+		if s.rejectPasswordChangeRequired(w, r, principal) {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) rejectPasswordChangeRequired(w http.ResponseWriter, r *http.Request, principal Principal) bool {
+	if !principal.PasswordChangeRequired {
+		return false
+	}
+	_ = s.audit.Append(r.Context(), audit.Event{
+		Action: "authorization.check", Outcome: "denied", ActorID: principal.Identity.ID,
+		SourceIP: remoteIP(r), Details: map[string]any{"reason": "password_change_required"},
+	})
+	writeError(w, r, http.StatusForbidden, "password_change_required", "Password change is required")
+	return true
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +180,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, issued.Token, issued.Session.ExpiresAt)
-	writeJSON(w, http.StatusOK, map[string]any{"session": issued.Session, "identity": issued.Identity})
+	writeJSON(w, http.StatusOK, map[string]any{"session": issued.Session, "identity": issued.Identity, "password_change_required": issued.PasswordChangeRequired})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +191,42 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 	principal, _ := PrincipalFromContext(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"session": principal.Session})
+	writeJSON(w, http.StatusOK, map[string]any{"session": principal.Session, "password_change_required": principal.PasswordChangeRequired})
+}
+
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(strings.ToLower(contentType), "application/json") {
+		writeError(w, r, http.StatusUnsupportedMediaType, "json_required", "Content-Type application/json is required")
+		return
+	}
+	var input struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "Invalid request")
+		return
+	}
+	principal, _ := PrincipalFromContext(r.Context())
+	err := s.auth.ChangePassword(r.Context(), auth.ChangePasswordInput{
+		UserID: principal.Identity.ID, CurrentPassword: input.CurrentPassword,
+		NewPassword: input.NewPassword, SourceIP: remoteIP(r),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrInvalidCurrentPassword):
+			writeError(w, r, http.StatusUnauthorized, "invalid_current_password", "Current password is invalid")
+		case errors.Is(err, auth.ErrPasswordPolicy):
+			writeError(w, r, http.StatusUnprocessableEntity, "password_policy_violation", "New password does not satisfy password policy")
+		case errors.Is(err, auth.ErrConflict):
+			writeError(w, r, http.StatusConflict, "credentials_changed", "Credentials changed; sign in again")
+		default:
+			writeError(w, r, http.StatusServiceUnavailable, "password_change_unavailable", "Password change is temporarily unavailable")
+		}
+		return
+	}
+	s.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) identitySelf(w http.ResponseWriter, r *http.Request) {
@@ -247,6 +315,16 @@ var overviewTemplate = template.Must(template.New("overview").Parse(`<!doctype h
 <body><main><h1>Control Center</h1><div class="card"><h2>Обзор</h2><p>Система готова. Версия {{.Version}}.</p><p>Пользователь: {{.Identity.DisplayName}} ({{.Identity.Username}})</p></div>
 <form method="post" action="/web/logout"><button type="submit">Выйти</button></form></main></body></html>`))
 
+var passwordChangeTemplate = template.Must(template.New("password-change").Parse(`<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Control Center — Смена пароля</title><style>body{font-family:system-ui;max-width:28rem;margin:8vh auto;padding:1rem}label,input,button{display:block;width:100%;box-sizing:border-box;margin:.6rem 0;padding:.7rem}</style></head>
+<body><main><h1>Смените пароль</h1><p>До смены первоначального пароля остальные функции Control Center недоступны.</p>
+<form method="post" action="/web/password/change">
+<label>Текущий пароль<input type="password" name="current_password" autocomplete="current-password" required maxlength="1024"></label>
+<label>Новый пароль<input type="password" name="new_password" autocomplete="new-password" required minlength="12" maxlength="1024"></label>
+<button type="submit">Сменить пароль</button></form>
+<form method="post" action="/web/logout"><button type="submit">Выйти</button></form></main></body></html>`))
+
 func (s *Server) webLogin(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -268,7 +346,41 @@ func (s *Server) webLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, issued.Token, issued.Session.ExpiresAt)
+	if issued.PasswordChangeRequired {
+		http.Redirect(w, r, "/password/change", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/overview", http.StatusSeeOther)
+}
+
+func (s *Server) webPasswordChange(w http.ResponseWriter, r *http.Request) {
+	principal, _ := PrincipalFromContext(r.Context())
+	if !principal.PasswordChangeRequired {
+		http.Redirect(w, r, "/overview", http.StatusSeeOther)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = passwordChangeTemplate.Execute(w, nil)
+}
+
+func (s *Server) webPasswordChangeSubmit(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Некорректный запрос", http.StatusBadRequest)
+		return
+	}
+	principal, _ := PrincipalFromContext(r.Context())
+	err := s.auth.ChangePassword(r.Context(), auth.ChangePasswordInput{
+		UserID: principal.Identity.ID, CurrentPassword: r.FormValue("current_password"),
+		NewPassword: r.FormValue("new_password"), SourceIP: remoteIP(r),
+	})
+	if err != nil {
+		http.Error(w, "Не удалось сменить пароль. Проверьте текущий пароль и требования к новому паролю.", http.StatusBadRequest)
+		return
+	}
+	s.clearSessionCookie(w)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func (s *Server) webOverview(w http.ResponseWriter, r *http.Request) {

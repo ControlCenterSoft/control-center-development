@@ -7,21 +7,25 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid username or password")
-	ErrUnauthenticated    = errors.New("authentication required")
-	ErrNotFound           = errors.New("not found")
-	ErrConflict           = errors.New("already exists")
-	ErrAuditUnavailable   = errors.New("security audit unavailable")
+	ErrInvalidCredentials     = errors.New("invalid username or password")
+	ErrUnauthenticated        = errors.New("authentication required")
+	ErrNotFound               = errors.New("not found")
+	ErrConflict               = errors.New("already exists")
+	ErrAuditUnavailable       = errors.New("security audit unavailable")
+	ErrInvalidCurrentPassword = errors.New("invalid current password")
+	ErrPasswordPolicy         = errors.New("password does not satisfy policy")
 )
 
 type User struct {
-	ID           string
-	Username     string
-	DisplayName  string
-	PasswordHash string
-	Enabled      bool
-	CreatedAt    time.Time
-	LastLoginAt  *time.Time
+	ID                     string
+	Username               string
+	DisplayName            string
+	PasswordHash           string
+	Enabled                bool
+	PasswordChangeRequired bool
+	CreatedAt              time.Time
+	PasswordChangedAt      time.Time
+	LastLoginAt            *time.Time
 }
 type Identity struct {
 	ID          string    `json:"id"`
@@ -35,14 +39,15 @@ func (u User) Identity() Identity {
 }
 
 type Session struct {
-	ID          string
-	UserID      string
-	TokenDigest string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	RevokedAt   *time.Time
-	SourceIP    string
-	UserAgent   string
+	ID                string
+	UserID            string
+	TokenDigest       string
+	CredentialVersion time.Time
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+	RevokedAt         *time.Time
+	SourceIP          string
+	UserAgent         string
 }
 type SessionView struct {
 	ID        string    `json:"id"`
@@ -58,9 +63,10 @@ type UserStore interface {
 	FindUserByUsername(context.Context, string) (User, error)
 	FindUserByID(context.Context, string) (User, error)
 	SetLastLogin(context.Context, string, time.Time) error
+	ChangePasswordAndRevokeSessions(context.Context, string, string, string, time.Time) error
 }
 type SessionStore interface {
-	CreateSession(context.Context, Session) error
+	CreateSession(context.Context, Session, string) error
 	FindSessionByDigest(context.Context, string) (Session, error)
 	RevokeSessionByDigest(context.Context, string, time.Time) error
 	RevokeSessionsForUser(context.Context, string, time.Time) (int, error)
@@ -72,11 +78,20 @@ type LoginInput struct {
 	UserAgent string
 }
 type IssuedSession struct {
-	Token    string
-	Session  SessionView
-	Identity Identity
+	Token                  string
+	Session                SessionView
+	Identity               Identity
+	PasswordChangeRequired bool
 }
 type AuthenticatedSession struct {
-	Session  SessionView
-	Identity Identity
+	Session                SessionView
+	Identity               Identity
+	PasswordChangeRequired bool
+}
+
+type ChangePasswordInput struct {
+	UserID          string
+	CurrentPassword string
+	NewPassword     string
+	SourceIP        string
 }
