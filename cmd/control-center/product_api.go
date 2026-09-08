@@ -30,6 +30,8 @@ func newProductHandler(identity *identityapi.Server) http.Handler {
 	marketHandler := guard(rbac.PermissionMarketRead, marketapi.New())
 	mux.Handle("/api/v1/market/manifests", marketHandler)
 	mux.Handle("/api/v1/market/manifests/", marketHandler)
+	mux.Handle("/api/v2/market/manifests", marketHandler)
+	mux.Handle("/api/v2/market/manifests/", marketHandler)
 	mux.Handle("/api/v1/domain/provider/resolve", guard(rbac.PermissionDomainProviderResolve, domainapi.ProviderHandler()))
 	mux.Handle("/api/v1/domain/lifecycle/plan", guard(rbac.PermissionDomainLifecyclePlan, domainapi.LifecyclePlanHandler()))
 	mux.Handle("/api/v1/domain/join/validate", guard(rbac.PermissionDomainLifecyclePlan, domainapi.JoinValidationHandler()))

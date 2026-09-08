@@ -1,0 +1,159 @@
+openapi: 3.1.0
+info:
+  title: Control Center Distributed Core Contracts
+  version: 0.4.0
+  description: >-
+    Side-effect-free schemas for topology, role assignment, distributed object
+    versioning and separate Desired/Actual State. This fragment defines no
+    production mutation endpoint.
+paths: {}
+components:
+  schemas:
+    Identifier:
+      type: string
+      minLength: 1
+      maxLength: 255
+      pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$'
+    DistributedObjectMetadata:
+      type: object
+      required: [object_id, scope_id, owner_scope, generation, resource_version, created_at, updated_at]
+      properties:
+        object_id: { $ref: '#/components/schemas/Identifier' }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+        owner_scope: { $ref: '#/components/schemas/Identifier' }
+        generation:
+          type: integer
+          format: uint64
+          minimum: 1
+          description: Desired semantic generation; advances only when desired content changes.
+        resource_version:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Opaque persistence/synchronization token; never parse, sort or increment it client-side.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ObjectPrecondition:
+      type: object
+      additionalProperties: false
+      required: [object_id, resource_version]
+      properties:
+        object_id: { $ref: '#/components/schemas/Identifier' }
+        resource_version: { type: string, minLength: 1, maxLength: 255 }
+        generation: { type: integer, format: uint64, minimum: 1 }
+      description: >-
+        Compare-and-swap guard. A storage adapter must verify it atomically with
+        an update or deletion. A malformed guard is 400, a missing guard is 428,
+        and a stale guard is 412.
+    ScopeKind:
+      type: string
+      enum: [global, management, site, resource]
+    DelegatedAuthority:
+      type: string
+      enum: [rbac, policy, configuration, desired-state, applications]
+    Scope:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name]
+      properties:
+        id: { $ref: '#/components/schemas/Identifier' }
+        kind: { $ref: '#/components/schemas/ScopeKind' }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        parent_id: { $ref: '#/components/schemas/Identifier' }
+        delegated_authorities:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/DelegatedAuthority' }
+      description: >-
+        A global scope has no parent; every other scope has one. Delegations are
+        explicit grants from the direct parent and are not implicitly inherited.
+    Site:
+      type: object
+      additionalProperties: false
+      required: [id, name, scope_id]
+      properties:
+        id: { $ref: '#/components/schemas/Identifier' }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+    ManagementZone:
+      type: object
+      additionalProperties: false
+      required: [id, name, scope_id]
+      properties:
+        id: { $ref: '#/components/schemas/Identifier' }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+        site_id: { $ref: '#/components/schemas/Identifier' }
+      description: Logical policy/RBAC boundary; it does not enable network forwarding or NAT.
+    NodeRole:
+      type: string
+      enum:
+        - management-node
+        - global-controller
+        - site-controller
+        - controller-cluster-member
+        - worker-node
+        - managed-node
+        - agent
+        - data-node
+        - consensus-node
+        - repository-node
+        - telemetry-node
+        - backup-repository-node
+        - edge-gateway
+      description: Cluster coordinator is elected runtime state and is intentionally not assignable.
+    RoleAssignment:
+      allOf:
+        - $ref: '#/components/schemas/DistributedObjectMetadata'
+        - type: object
+          required: [target_node_id, service_identity_id, role]
+          properties:
+            target_node_id: { $ref: '#/components/schemas/Identifier' }
+            service_identity_id: { $ref: '#/components/schemas/Identifier' }
+            role: { $ref: '#/components/schemas/NodeRole' }
+            site_id: { $ref: '#/components/schemas/Identifier' }
+            management_zone_id: { $ref: '#/components/schemas/Identifier' }
+      unevaluatedProperties: false
+      description: >-
+        Binds a stable logical role/service identity to a physical node. Moving
+        it changes target_node_id and desired generation, not its object identity.
+    DesiredState:
+      allOf:
+        - $ref: '#/components/schemas/DistributedObjectMetadata'
+        - type: object
+          required: [kind, target_object_id, spec]
+          properties:
+            kind: { $ref: '#/components/schemas/Identifier' }
+            target_object_id: { $ref: '#/components/schemas/Identifier' }
+            spec: { type: object, additionalProperties: true }
+      unevaluatedProperties: false
+      description: Top-down intent; owner_scope is scope_id or an ancestor of it.
+    ActualStateStatus:
+      type: string
+      enum: [converged, progressing, drifted, failed, unknown]
+    ActualState:
+      allOf:
+        - $ref: '#/components/schemas/DistributedObjectMetadata'
+        - type: object
+          required:
+            - kind
+            - target_object_id
+            - desired_object_id
+            - observed_generation
+            - source_node_id
+            - observed_at
+            - status
+            - state
+          properties:
+            kind: { $ref: '#/components/schemas/Identifier' }
+            target_object_id: { $ref: '#/components/schemas/Identifier' }
+            desired_object_id: { $ref: '#/components/schemas/Identifier' }
+            observed_generation: { type: integer, format: uint64, minimum: 0 }
+            source_node_id: { $ref: '#/components/schemas/Identifier' }
+            observed_at: { type: string, format: date-time }
+            status: { $ref: '#/components/schemas/ActualStateStatus' }
+            state: { type: object, additionalProperties: true }
+      unevaluatedProperties: false
+      description: >-
+        Bottom-up observation. owner_scope contains scope_id; synchronization
+        transports the observation to ancestors without rewriting ownership.

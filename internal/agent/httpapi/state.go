@@ -15,6 +15,15 @@ type heartbeatPayload struct {
 	SeenAt time.Time `json:"seen_at"`
 }
 
+// stateEnrollmentPayload intentionally preserves the bounded 0.3 state API
+// shape. The v2 enrollment contract is normalized by EnrollmentHandler; this
+// registry endpoint must not accept extended fields that it cannot persist.
+type stateEnrollmentPayload struct {
+	NodeID       string   `json:"node_id"`
+	Hostname     string   `json:"hostname"`
+	Capabilities []string `json:"capabilities,omitempty"`
+}
+
 func StateHandler(registry *agent.MemoryRegistry) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/agent/enrollments", func(w http.ResponseWriter, r *http.Request) {
@@ -29,8 +38,8 @@ func StateHandler(registry *agent.MemoryRegistry) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, maxEnrollmentRequestBytes)
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
-		var input enrollmentPayload
-		if err := decoder.Decode(&input); err != nil || agentEOF(decoder) != nil {
+		var input stateEnrollmentPayload
+		if err := decoder.Decode(&input); err != nil || ensureAgentEOF(decoder) != nil {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
@@ -54,7 +63,7 @@ func StateHandler(registry *agent.MemoryRegistry) http.Handler {
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()
 		var input heartbeatPayload
-		if err := decoder.Decode(&input); err != nil || agentEOF(decoder) != nil {
+		if err := decoder.Decode(&input); err != nil || ensureAgentEOF(decoder) != nil {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}

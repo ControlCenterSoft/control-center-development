@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrUnknownNode      = errors.New("unknown agent node")
-	ErrInvalidHeartbeat = errors.New("invalid agent heartbeat")
+	ErrUnknownNode                      = errors.New("unknown agent node")
+	ErrInvalidHeartbeat                 = errors.New("invalid agent heartbeat")
+	ErrEnrollmentPersistenceUnsupported = errors.New("enrollment contract is not supported by the transitional registry")
 )
 
 type NodeState struct {
@@ -31,6 +32,9 @@ func (r *MemoryRegistry) Enroll(request EnrollmentRequest) (NodeState, error) {
 	normalized, err := NormalizeEnrollment(request)
 	if err != nil {
 		return NodeState{}, err
+	}
+	if normalized.ContractVersion == EnrollmentContractV2 {
+		return NodeState{}, ErrEnrollmentPersistenceUnsupported
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
