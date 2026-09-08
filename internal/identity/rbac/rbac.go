@@ -9,25 +9,28 @@ import (
 type Permission string
 
 const (
-	PermissionAll                Permission = "*"
-	PermissionOverviewRead       Permission = "system.overview.read"
-	PermissionUsersRead          Permission = "identity.users.read"
-	PermissionUsersWrite         Permission = "identity.users.write"
-	PermissionRolesRead          Permission = "identity.roles.read"
-	PermissionRolesWrite         Permission = "identity.roles.write"
-	PermissionAuditRead          Permission = "audit.events.read"
-	PermissionResourcesRead      Permission = "resources.read"
-	PermissionRevisionsWrite     Permission = "config.revisions.write"
-	PermissionActionsRead        Permission = "orchestration.actions.read"
-	PermissionChangesWrite       Permission = "orchestration.changes.write"
-	PermissionChangesApprove     Permission = "orchestration.changes.approve"
-	PermissionJobsRead           Permission = "orchestration.jobs.read"
-	PermissionJobsCancel         Permission = "orchestration.jobs.cancel"
-	PermissionActionsExecute     Permission = "orchestration.actions.execute"
-	PermissionNodeEnrollmentPlan Permission = "nodes.enrollment.plan"
-	PermissionAutomationPlan     Permission = "automation.plan"
-	PermissionPXEPlan            Permission = "pxe.plan"
-	PermissionMarketRead         Permission = "market.manifests.read"
+	PermissionAll                      Permission = "*"
+	PermissionOverviewRead             Permission = "system.overview.read"
+	PermissionUsersRead                Permission = "identity.users.read"
+	PermissionUsersWrite               Permission = "identity.users.write"
+	PermissionRolesRead                Permission = "identity.roles.read"
+	PermissionRolesWrite               Permission = "identity.roles.write"
+	PermissionAuditRead                Permission = "audit.events.read"
+	PermissionResourcesRead            Permission = "resources.read"
+	PermissionRevisionsWrite           Permission = "config.revisions.write"
+	PermissionActionsRead              Permission = "orchestration.actions.read"
+	PermissionChangesWrite             Permission = "orchestration.changes.write"
+	PermissionChangesApprove           Permission = "orchestration.changes.approve"
+	PermissionJobsRead                 Permission = "orchestration.jobs.read"
+	PermissionJobsCancel               Permission = "orchestration.jobs.cancel"
+	PermissionActionsExecute           Permission = "orchestration.actions.execute"
+	PermissionNodeEnrollmentPlan       Permission = "nodes.enrollment.plan"
+	PermissionAutomationPlan           Permission = "automation.plan"
+	PermissionPXEPlan                  Permission = "pxe.plan"
+	PermissionMarketRead               Permission = "market.manifests.read"
+	PermissionDomainProviderResolve    Permission = "domain.provider.resolve"
+	PermissionInventoryNormalize       Permission = "inventory.normalize"
+	PermissionAgentEnrollmentNormalize Permission = "agent.enrollment.normalize"
 )
 
 type ScopeKind string
@@ -154,6 +157,7 @@ func BuiltinRoles() []Role {
 			PermissionRevisionsWrite, PermissionActionsRead, PermissionChangesWrite,
 			PermissionJobsRead, PermissionJobsCancel,
 			PermissionNodeEnrollmentPlan, PermissionAutomationPlan, PermissionPXEPlan, PermissionMarketRead,
+			PermissionDomainProviderResolve, PermissionInventoryNormalize, PermissionAgentEnrollmentNormalize,
 		}},
 		{Name: "auditor", Description: "Read-only security and audit access", Permissions: []Permission{
 			PermissionOverviewRead, PermissionAuditRead, PermissionUsersRead, PermissionRolesRead,
