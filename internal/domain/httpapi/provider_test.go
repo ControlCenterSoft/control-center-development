@@ -39,3 +39,13 @@ func TestProviderHandlerRejectsUnknownFields(t *testing.T) {
 		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
 	}
 }
+
+func TestProviderHandlerRejectsMultipleJSONValues(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/domain/provider/resolve", strings.NewReader(`{"preferred":"auto"} {}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	ProviderHandler().ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+	}
+}

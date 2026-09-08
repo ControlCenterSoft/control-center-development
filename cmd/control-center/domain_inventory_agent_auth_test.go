@@ -15,6 +15,7 @@ func TestDomainInventoryAgentAPIRBAC(t *testing.T) {
 		body string
 	}{
 		{name: "domain", path: "/api/v1/domain/provider/resolve", body: `{"preferred":"auto","requirements":{"WindowsDomainJoin":true}}`},
+		{name: "domain lifecycle", path: "/api/v1/domain/lifecycle/plan", body: `{"provider":"samba-ad-dc","operation":"health-preflight","domain_name":"example.test","target":{"node_id":"dc-01","platform":"linux"}}`},
 		{name: "inventory", path: "/api/v1/inventory/normalize", body: `{"hostname":"node-1","platform":"linux","machine_id":"machine-1"}`},
 		{name: "agent", path: "/api/v1/agent/enrollment/normalize", body: `{"node_id":"node-1","hostname":"node-1","capabilities":["inventory"]}`},
 	}

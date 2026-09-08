@@ -143,6 +143,7 @@ func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		path == "/api/v1/automation/plan" ||
 		path == "/api/v1/pxe/plan" ||
 		path == "/api/v1/domain/provider/resolve" ||
+		path == "/api/v1/domain/lifecycle/plan" ||
 		path == "/api/v1/inventory/normalize" ||
 		path == "/api/v1/inventory/reconcile" ||
 		path == "/api/v1/inventory/freshness" ||
