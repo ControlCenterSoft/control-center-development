@@ -18,6 +18,7 @@ import (
 	"control-center/internal/identity/rbac"
 	"control-center/internal/orchestration/action"
 	"control-center/internal/orchestration/change"
+	orchestrationconfig "control-center/internal/orchestration/config"
 	"control-center/internal/orchestration/events"
 	"control-center/internal/orchestration/job"
 	"control-center/internal/orchestration/policy"
@@ -71,7 +72,12 @@ func (p *testPersistence) CreateRevision(_ context.Context, actor, key, fingerpr
 			return revision, nil
 		}
 	}
-	revision := PersistedRevision{ID: "rev-test-" + string(rune('a'+len(p.state.Revisions))), Sequence: uint64(len(p.state.Revisions) + 1), Digest: "sha256:" + fingerprint, Content: append(json.RawMessage(nil), content...), CreatedAt: now, CreatedBy: actor, IdempotencyKey: key, Fingerprint: fingerprint}
+	revisionID := "rev-test-" + string(rune('a'+len(p.state.Revisions)))
+	model, err := orchestrationconfig.NewRevision(revisionID, uint64(len(p.state.Revisions)+1), now, content)
+	if err != nil {
+		return PersistedRevision{}, err
+	}
+	revision := PersistedRevision{ID: revisionID, Sequence: model.Sequence(), Digest: model.Digest(), Content: json.RawMessage(model.Content()), CreatedAt: now, CreatedBy: actor, IdempotencyKey: key, Fingerprint: fingerprint}
 	p.state.Revisions = append(p.state.Revisions, revision)
 	return revision, nil
 }

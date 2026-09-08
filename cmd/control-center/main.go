@@ -14,6 +14,7 @@ import (
 
 	"control-center/internal/buildinfo"
 	"control-center/internal/config"
+	coreobjectsapi "control-center/internal/corecontracts/httpapi"
 	"control-center/internal/httpapi"
 	"control-center/internal/identity/rbac"
 	"control-center/internal/persistence/postgres"
@@ -60,7 +61,15 @@ func run() error {
 	}
 	api := httpapi.New(logger, registry, httpapi.WithResourceGuard(resourceGuard), httpapi.WithReadinessCheck(db))
 	commonMiddleware := func(next http.Handler) http.Handler { return httpapi.Middleware(logger, next) }
-	orchestration, runner, err := newOrchestrationHandler(identity, db, commonMiddleware)
+	coreObjects, err := postgres.NewCoreObjectRepository(db)
+	if err != nil {
+		return fmt.Errorf("initialize distributed core repository: %w", err)
+	}
+	coreObjectGuard := func(next http.Handler) http.Handler {
+		return identity.Authenticate(identity.Require(rbac.PermissionCoreObjectsRead, rbac.GlobalScope())(next))
+	}
+	distributedCore := coreobjectsapi.New(logger, coreObjects, coreObjectGuard)
+	orchestration, runner, err := newOrchestrationHandler(identity, db, commonMiddleware, coreObjects)
 	if err != nil {
 		return fmt.Errorf("initialize orchestration: %w", err)
 	}
@@ -68,10 +77,11 @@ func run() error {
 	server := &http.Server{
 		Addr: cfg.ListenAddress,
 		Handler: splitHandler{
-			core:          api.Handler(),
-			identity:      commonMiddleware(identity),
-			orchestration: orchestration.Handler(),
-			product:       commonMiddleware(product),
+			core:            api.Handler(),
+			identity:        commonMiddleware(identity),
+			orchestration:   orchestration.Handler(),
+			distributedCore: commonMiddleware(distributedCore.Handler()),
+			product:         commonMiddleware(product),
 		},
 		ReadTimeout:       cfg.ReadTimeout,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
@@ -115,10 +125,11 @@ func run() error {
 }
 
 type splitHandler struct {
-	core          http.Handler
-	identity      http.Handler
-	orchestration http.Handler
-	product       http.Handler
+	core            http.Handler
+	identity        http.Handler
+	orchestration   http.Handler
+	distributedCore http.Handler
+	product         http.Handler
 }
 
 func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +149,12 @@ func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.orchestration.ServeHTTP(w, r)
 		return
 	}
+	if strings.HasPrefix(path, "/api/v1/core/") && h.distributedCore != nil {
+		h.distributedCore.ServeHTTP(w, r)
+		return
+	}
 	if path == "/api/v1/nodes/enrollment/plan" ||
+		isNodeLifecycleProductPath(path) ||
 		path == "/api/v1/automation/plan" ||
 		path == "/api/v1/pxe/plan" ||
 		path == "/api/v1/domain/provider/resolve" ||
@@ -168,6 +184,18 @@ func (h splitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.core.ServeHTTP(w, r)
+}
+
+func isNodeLifecycleProductPath(path string) bool {
+	tail, found := strings.CutPrefix(path, "/api/v1/nodes/")
+	if !found {
+		return false
+	}
+	parts := strings.Split(tail, "/")
+	if len(parts) == 2 {
+		return parts[0] != "" && parts[1] == "lifecycle"
+	}
+	return len(parts) == 4 && parts[0] != "" && parts[1] == "lifecycle" && parts[2] == "transitions" && parts[3] == "plan"
 }
 
 func newLogger(level string) *slog.Logger {

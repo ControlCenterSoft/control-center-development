@@ -25,6 +25,8 @@ const (
 	PermissionJobsCancel               Permission = "orchestration.jobs.cancel"
 	PermissionActionsExecute           Permission = "orchestration.actions.execute"
 	PermissionNodeEnrollmentPlan       Permission = "nodes.enrollment.plan"
+	PermissionNodeLifecycleRead        Permission = "nodes.lifecycle.read"
+	PermissionNodeLifecyclePlan        Permission = "nodes.lifecycle.plan"
 	PermissionAutomationPlan           Permission = "automation.plan"
 	PermissionPXEPlan                  Permission = "pxe.plan"
 	PermissionMarketRead               Permission = "market.manifests.read"
@@ -36,6 +38,8 @@ const (
 	PermissionInventoryFreshness       Permission = "inventory.freshness.evaluate"
 	PermissionAgentHeartbeatEvaluate   Permission = "agent.heartbeat.evaluate"
 	PermissionAgentLeaseEvaluate       Permission = "agent.lease.evaluate"
+	PermissionCoreObjectsRead          Permission = "core.objects.read"
+	PermissionCoreObjectsWrite         Permission = "core.objects.write"
 )
 
 type ScopeKind string
@@ -161,17 +165,21 @@ func BuiltinRoles() []Role {
 			PermissionResourcesRead,
 			PermissionRevisionsWrite, PermissionActionsRead, PermissionChangesWrite,
 			PermissionJobsRead, PermissionJobsCancel,
-			PermissionNodeEnrollmentPlan, PermissionAutomationPlan, PermissionPXEPlan, PermissionMarketRead,
+			PermissionNodeEnrollmentPlan, PermissionNodeLifecycleRead, PermissionNodeLifecyclePlan,
+			PermissionAutomationPlan, PermissionPXEPlan, PermissionMarketRead,
 			PermissionDomainProviderResolve, PermissionDomainLifecyclePlan, PermissionInventoryNormalize, PermissionAgentEnrollmentNormalize,
 			PermissionInventoryReconcile, PermissionInventoryFreshness, PermissionAgentHeartbeatEvaluate, PermissionAgentLeaseEvaluate,
+			PermissionCoreObjectsRead, PermissionCoreObjectsWrite,
 		}},
 		{Name: "auditor", Description: "Read-only security and audit access", Permissions: []Permission{
 			PermissionOverviewRead, PermissionAuditRead, PermissionUsersRead, PermissionRolesRead,
 			PermissionResourcesRead,
-			PermissionActionsRead, PermissionJobsRead, PermissionMarketRead,
+			PermissionActionsRead, PermissionJobsRead, PermissionMarketRead, PermissionNodeLifecycleRead,
+			PermissionCoreObjectsRead,
 		}},
 		{Name: "viewer", Description: "Read-only overview access", Permissions: []Permission{
-			PermissionOverviewRead, PermissionResourcesRead, PermissionActionsRead, PermissionMarketRead,
+			PermissionOverviewRead, PermissionResourcesRead, PermissionActionsRead, PermissionMarketRead, PermissionNodeLifecycleRead,
+			PermissionCoreObjectsRead,
 		}},
 	}
 }

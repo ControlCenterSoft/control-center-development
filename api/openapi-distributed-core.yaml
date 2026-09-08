@@ -3,11 +3,113 @@ info:
   title: Control Center Distributed Core Contracts
   version: 0.4.0
   description: >-
-    Side-effect-free schemas for topology, role assignment, distributed object
-    versioning and separate Desired/Actual State. This fragment defines no
-    production mutation endpoint.
-paths: {}
+    Persisted topology, role assignment, distributed object versioning and
+    separate Desired/Actual State. HTTP endpoints are authenticated and
+    read-only. Mutations use the high-risk core.object.apply action through the
+    existing /api/v1/changes and Job approval/execution boundary; there is no
+    direct mutation route and no host or network mutation in this API.
+  x-control-center-mutation-action: core.object.apply
+security:
+  - sessionCookie: []
+paths:
+  /api/v1/core/objects:
+    get:
+      operationId: listDistributedCoreObjects
+      summary: List versioned distributed core objects
+      parameters:
+        - name: object_type
+          in: query
+          schema: { $ref: '#/components/schemas/ObjectType' }
+        - name: scope_id
+          in: query
+          schema: { $ref: '#/components/schemas/Identifier' }
+        - name: owner_scope
+          in: query
+          schema: { $ref: '#/components/schemas/Identifier' }
+      responses:
+        '200':
+          description: Deterministically ordered objects.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoredObjectList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/core/objects/{objectId}:
+    get:
+      operationId: getDistributedCoreObject
+      summary: Get one versioned distributed core object
+      parameters:
+        - name: objectId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Identifier' }
+      responses:
+        '200':
+          description: Stored object.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoredObject' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/core/topology:
+    get:
+      operationId: getDistributedCoreTopology
+      summary: Get one coherent scope, site and management-zone snapshot
+      responses:
+        '200':
+          description: Validated topology snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopologySnapshot' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: cc_session
+  responses:
+    BadRequest:
+      description: Malformed path or filter.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: Authentication is required.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: The principal lacks core.objects.read.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: The object was not found.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ServiceUnavailable:
+      description: The distributed core repository is not initialized.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InternalError:
+      description: The object store could not provide a validated response.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   schemas:
     Identifier:
       type: string
@@ -45,6 +147,91 @@ components:
         Compare-and-swap guard. A storage adapter must verify it atomically with
         an update or deletion. A malformed guard is 400, a missing guard is 428,
         and a stale guard is 412.
+    ObjectType:
+      type: string
+      enum: [scope, site, management-zone, role-assignment, desired-state, actual-state]
+    MutationOperation:
+      type: string
+      enum: [create, replace]
+    MutationRequest:
+      type: object
+      additionalProperties: false
+      required: [operation, object_type, object_id, scope_id, owner_scope, document]
+      properties:
+        operation: { $ref: '#/components/schemas/MutationOperation' }
+        object_type: { $ref: '#/components/schemas/ObjectType' }
+        object_id: { $ref: '#/components/schemas/Identifier' }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+        owner_scope: { $ref: '#/components/schemas/Identifier' }
+        document:
+          type: object
+          description: Metadata-free document matching object_type.
+        precondition: { $ref: '#/components/schemas/ObjectPrecondition' }
+      allOf:
+        - if:
+            properties:
+              operation: { const: replace }
+            required: [operation]
+          then:
+            required: [precondition]
+        - if:
+            properties:
+              operation: { const: create }
+            required: [operation]
+          then:
+            not:
+              required: [precondition]
+      description: >-
+        Input of core.object.apply. The Job-derived downstream idempotency key
+        is supplied by the worker, never by this payload. Missing replace
+        preconditions, malformed guards and stale guards remain distinct typed
+        failures in the durable Job result; no direct mutation HTTP route exists.
+    StoredObject:
+      type: object
+      additionalProperties: false
+      required:
+        - object_id
+        - scope_id
+        - owner_scope
+        - generation
+        - resource_version
+        - created_at
+        - updated_at
+        - object_type
+        - document
+      properties:
+        object_id: { $ref: '#/components/schemas/Identifier' }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+        owner_scope: { $ref: '#/components/schemas/Identifier' }
+        generation: { type: integer, format: uint64, minimum: 1 }
+        resource_version: { type: string, minLength: 1, maxLength: 255 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        object_type: { $ref: '#/components/schemas/ObjectType' }
+        document: { type: object }
+    StoredObjectList:
+      type: object
+      additionalProperties: false
+      required: [items, count]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/StoredObject' }
+        count: { type: integer, minimum: 0 }
+    TopologySnapshot:
+      type: object
+      additionalProperties: false
+      required: [scopes, sites, management_zones]
+      properties:
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/StoredObject' }
+        sites:
+          type: array
+          items: { $ref: '#/components/schemas/StoredObject' }
+        management_zones:
+          type: array
+          items: { $ref: '#/components/schemas/StoredObject' }
     ScopeKind:
       type: string
       enum: [global, management, site, resource]
@@ -157,3 +344,16 @@ components:
       description: >-
         Bottom-up observation. owner_scope contains scope_id; synchronization
         transports the observation to ancestors without rewriting ownership.
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, correlation_id]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            correlation_id: { type: string }

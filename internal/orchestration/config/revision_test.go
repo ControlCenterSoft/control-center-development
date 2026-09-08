@@ -34,3 +34,28 @@ func TestRevisionPrecondition(t *testing.T) {
 		t.Fatalf("expected precondition failure, got %v", err)
 	}
 }
+
+func TestRevisionCanonicalizesJSONForStableStorageIdentity(t *testing.T) {
+	first, err := config.NewRevision("rev-a", 1, time.Unix(1, 0), []byte(`{"z": 2, "a": 1.0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := config.NewRevision("rev-b", 2, time.Unix(2, 0), []byte(`{"a":1.0,"z":2}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(first.Content()), `{"a":1.0,"z":2}`; got != want {
+		t.Fatalf("canonical content=%q want=%q", got, want)
+	}
+	if first.Digest() != second.Digest() {
+		t.Fatalf("equivalent JSON digests differ: %q != %q", first.Digest(), second.Digest())
+	}
+
+	plain, err := config.NewRevision("rev-plain", 3, time.Unix(3, 0), []byte(" config \n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(plain.Content()); got != " config \n" {
+		t.Fatalf("non-JSON content changed: %q", got)
+	}
+}

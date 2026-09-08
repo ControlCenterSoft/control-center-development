@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"control-center/internal/corecontracts"
 	"control-center/internal/identity/audit"
 	"control-center/internal/identity/auth"
 	"control-center/internal/identity/rbac"
@@ -37,9 +39,11 @@ func TestPostgresStateSurvivesAdapterRestart(t *testing.T) {
 	defer db.Close()
 	var migrationPresent bool
 	if err := db.QueryRowContext(ctx, `SELECT to_regclass('cc_jobs') IS NOT NULL
+        AND to_regclass('cc_core_objects') IS NOT NULL
+        AND to_regclass('cc_core_object_mutations') IS NOT NULL
         AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cc_local_users' AND column_name='password_change_required')
         AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cc_auth_sessions' AND column_name='credential_version')`).Scan(&migrationPresent); err != nil || !migrationPresent {
-		t.Fatalf("database must be migrated through 0005 before integration tests: present=%v err=%v", migrationPresent, err)
+		t.Fatalf("database must be migrated through 0006 before integration tests: present=%v err=%v", migrationPresent, err)
 	}
 
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -169,6 +173,94 @@ func TestPostgresStateSurvivesAdapterRestart(t *testing.T) {
 	}
 	if !foundRepairedChange {
 		t.Fatal("startup reconciliation did not repair the terminal job's durable change state")
+	}
+}
+
+func TestPostgresCoreObjectRepositoryCASAndRestart(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set; PostgreSQL integration test skipped")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	db, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var schemaReady bool
+	if err := db.QueryRowContext(ctx, `SELECT to_regclass('cc_core_objects') IS NOT NULL AND to_regclass('cc_core_object_mutations') IS NOT NULL`).Scan(&schemaReady); err != nil || !schemaReady {
+		t.Fatalf("database must be migrated through 0006: ready=%v err=%v", schemaReady, err)
+	}
+
+	repository, err := NewCoreObjectRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	objectID := "desired-integration-" + suffix
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_core_object_mutations WHERE object_id=$1`, objectID)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_core_objects WHERE object_id=$1`, objectID)
+	})
+	create := corecontracts.MutationRequest{
+		Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectDesiredState,
+		ObjectID: objectID, ScopeID: "global", OwnerScope: "global",
+		Document: json.RawMessage(`{"kind":"integration.config","target_object_id":"service-integration","spec":{"generation":1}}`),
+	}
+	created, err := repository.Apply(ctx, create, "core-create-"+suffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Generation != 1 || created.ResourceVersion == "" {
+		t.Fatalf("created metadata=%#v", created.ObjectMetadata)
+	}
+
+	restarted, err := NewCoreObjectRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := restarted.Get(ctx, objectID)
+	if err != nil || loaded.ResourceVersion != created.ResourceVersion {
+		t.Fatalf("object after adapter restart=%#v err=%v", loaded, err)
+	}
+	replayed, err := restarted.Apply(ctx, create, "core-create-"+suffix)
+	if err != nil || replayed.ResourceVersion != created.ResourceVersion || !replayed.UpdatedAt.Equal(created.UpdatedAt) {
+		t.Fatalf("idempotent replay=%#v err=%v", replayed, err)
+	}
+
+	generation := created.Generation
+	replace := corecontracts.MutationRequest{
+		Operation: corecontracts.MutationReplace, ObjectType: corecontracts.ObjectDesiredState,
+		ObjectID: objectID, ScopeID: "global", OwnerScope: "global",
+		Document:     json.RawMessage(`{"kind":"integration.config","target_object_id":"service-integration","spec":{"generation":2}}`),
+		Precondition: &corecontracts.ObjectPrecondition{ObjectID: objectID, ResourceVersion: created.ResourceVersion, Generation: &generation},
+	}
+	updated, err := restarted.Apply(ctx, replace, "core-replace-"+suffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Generation != 2 || updated.ResourceVersion == created.ResourceVersion {
+		t.Fatalf("updated metadata=%#v", updated.ObjectMetadata)
+	}
+	if _, err := restarted.Apply(ctx, replace, "core-stale-"+suffix); !errors.Is(err, corecontracts.ErrPreconditionFailed) {
+		t.Fatalf("stale CAS error=%v", err)
+	}
+	create.ObjectID = "another-object-" + suffix
+	if _, err := restarted.Apply(ctx, create, "core-create-"+suffix); !errors.Is(err, corecontracts.ErrIdempotencyConflict) {
+		t.Fatalf("idempotency key conflict error=%v", err)
+	}
+
+	objects, err := restarted.List(ctx, corecontracts.ObjectFilter{ObjectType: corecontracts.ObjectDesiredState, ScopeID: "global"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, object := range objects {
+		found = found || object.ObjectID == objectID && object.ResourceVersion == updated.ResourceVersion
+	}
+	if !found {
+		t.Fatalf("updated object absent from filtered list: %#v", objects)
 	}
 }
 
