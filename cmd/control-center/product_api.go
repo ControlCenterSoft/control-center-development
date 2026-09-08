@@ -28,6 +28,10 @@ func newProductHandler(identity *identityapi.Server) http.Handler {
 	mux.Handle("/api/v1/market/manifests/", marketHandler)
 	mux.Handle("/api/v1/domain/provider/resolve", guard(rbac.PermissionDomainProviderResolve, domainapi.ProviderHandler()))
 	mux.Handle("/api/v1/inventory/normalize", guard(rbac.PermissionInventoryNormalize, inventoryapi.NormalizeHandler()))
+	mux.Handle("/api/v1/inventory/reconcile", guard(rbac.PermissionInventoryReconcile, inventoryapi.ReconcileHandler()))
+	mux.Handle("/api/v1/inventory/freshness", guard(rbac.PermissionInventoryFreshness, inventoryapi.FreshnessHandler()))
 	mux.Handle("/api/v1/agent/enrollment/normalize", guard(rbac.PermissionAgentEnrollmentNormalize, agentapi.EnrollmentHandler()))
+	mux.Handle("/api/v1/agent/heartbeat/evaluate", guard(rbac.PermissionAgentHeartbeatEvaluate, agentapi.HeartbeatHandler()))
+	mux.Handle("/api/v1/agent/lease/evaluate", guard(rbac.PermissionAgentLeaseEvaluate, agentapi.LeaseHandler()))
 	return mux
 }
