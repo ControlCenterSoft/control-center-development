@@ -12,11 +12,11 @@ func Headers(policy Policy) map[string]string {
 	}
 
 	headers := map[string]string{
-		"Content-Security-Policy":   "default-src 'self'; frame-ancestors " + frameAncestors,
-		"Referrer-Policy":           "no-referrer",
-		"X-Content-Type-Options":    "nosniff",
-		"X-Frame-Options":           "DENY",
-		"Permissions-Policy":        "camera=(), microphone=(), geolocation=()",
+		"Content-Security-Policy":    "default-src 'self'; frame-ancestors " + frameAncestors,
+		"Referrer-Policy":            "no-referrer",
+		"X-Content-Type-Options":     "nosniff",
+		"X-Frame-Options":            "DENY",
+		"Permissions-Policy":         "camera=(), microphone=(), geolocation=()",
 		"Cross-Origin-Opener-Policy": "same-origin",
 	}
 	if policy.TLS {
