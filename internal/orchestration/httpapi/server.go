@@ -413,7 +413,10 @@ func (s *Server) ReconcileTerminalJobs(ctx context.Context, now time.Time) error
 	if ctx == nil || now.IsZero() {
 		return errors.New("reconciliation context and time are required")
 	}
-	type candidate struct { changeID string; jobID string }
+	type candidate struct {
+		changeID string
+		jobID    string
+	}
 	s.mu.RLock()
 	candidates := make([]candidate, 0, len(s.reconciliationCandidates))
 	for changeID, jobID := range s.reconciliationCandidates {
@@ -477,21 +480,31 @@ func (s *Server) reconcileJob(ctx context.Context, execution job.Job, now time.T
 	state := record.machine.Snapshot().State
 	if execution.Status == job.StatusCancelled {
 		if state != change.StateCancelled {
-			if err := transition(change.StateCancelled); err != nil { return err }
+			if err := transition(change.StateCancelled); err != nil {
+				return err
+			}
 		}
 		return persist()
 	}
 	if state == change.StateQueued && execution.Status != job.StatusQueued {
-		if err := transition(change.StateExecuting); err != nil { return err }
+		if err := transition(change.StateExecuting); err != nil {
+			return err
+		}
 	}
 	switch execution.Status {
 	case job.StatusSucceeded:
 		if record.machine.Snapshot().State == change.StateExecuting {
-			if err := transition(change.StateVerifying); err != nil { return err }
+			if err := transition(change.StateVerifying); err != nil {
+				return err
+			}
 		}
-		if err := transition(change.StateSucceeded); err != nil { return err }
+		if err := transition(change.StateSucceeded); err != nil {
+			return err
+		}
 	case job.StatusFailed:
-		if err := transition(change.StateFailed); err != nil { return err }
+		if err := transition(change.StateFailed); err != nil {
+			return err
+		}
 	case job.StatusCancelRequested, job.StatusRunning, job.StatusRetryWait, job.StatusQueued:
 	default:
 		return errors.New("unsupported job status")
@@ -526,10 +539,16 @@ func (s *Server) restoreChange(persisted PersistedChange) (*changeRecord, error)
 		return nil, errors.New("persisted change references unknown revision")
 	}
 	machine, err := change.New(persisted.Snapshot.ID, persisted.Snapshot.Action, persisted.Snapshot.Requester, revision, persisted.Snapshot.Decision, persisted.Snapshot.UpdatedAt)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	for _, approval := range persisted.Snapshot.Approvals {
-		if machine.Snapshot().State != change.StatePendingApproval { break }
-		if err := machine.Approve(approval, machine.Snapshot().Version, persisted.Snapshot.UpdatedAt); err != nil { return nil, err }
+		if machine.Snapshot().State != change.StatePendingApproval {
+			break
+		}
+		if err := machine.Approve(approval, machine.Snapshot().Version, persisted.Snapshot.UpdatedAt); err != nil {
+			return nil, err
+		}
 	}
 	for machine.Snapshot().State != persisted.Snapshot.State {
 		current := machine.Snapshot().State
@@ -538,22 +557,44 @@ func (s *Server) restoreChange(persisted PersistedChange) (*changeRecord, error)
 		case change.StateQueued:
 			next = change.StateQueued
 		case change.StateExecuting:
-			if current == change.StateApproved { next = change.StateQueued } else { next = change.StateExecuting }
+			if current == change.StateApproved {
+				next = change.StateQueued
+			} else {
+				next = change.StateExecuting
+			}
 		case change.StateVerifying, change.StateSucceeded:
 			switch current {
-			case change.StateApproved: next = change.StateQueued
-			case change.StateQueued: next = change.StateExecuting
-			case change.StateExecuting: next = change.StateVerifying
-			default: next = change.StateSucceeded
+			case change.StateApproved:
+				next = change.StateQueued
+			case change.StateQueued:
+				next = change.StateExecuting
+			case change.StateExecuting:
+				next = change.StateVerifying
+			default:
+				next = change.StateSucceeded
 			}
 		case change.StateFailed:
-			if current == change.StateApproved { next = change.StateQueued } else if current == change.StateQueued && persisted.Snapshot.Version-machine.Snapshot().Version > 1 { next = change.StateExecuting } else { next = change.StateFailed }
+			if current == change.StateApproved {
+				next = change.StateQueued
+			} else if current == change.StateQueued && persisted.Snapshot.Version-machine.Snapshot().Version > 1 {
+				next = change.StateExecuting
+			} else {
+				next = change.StateFailed
+			}
 		case change.StateCancelled:
-			if current == change.StateApproved && persisted.JobID != "" { next = change.StateQueued } else if current == change.StateQueued && persisted.Snapshot.Version-machine.Snapshot().Version > 1 { next = change.StateExecuting } else { next = change.StateCancelled }
+			if current == change.StateApproved && persisted.JobID != "" {
+				next = change.StateQueued
+			} else if current == change.StateQueued && persisted.Snapshot.Version-machine.Snapshot().Version > 1 {
+				next = change.StateExecuting
+			} else {
+				next = change.StateCancelled
+			}
 		default:
 			return nil, errors.New("persisted change state cannot be restored")
 		}
-		if err := machine.Transition(next, machine.Snapshot().Version, persisted.Snapshot.UpdatedAt); err != nil { return nil, err }
+		if err := machine.Transition(next, machine.Snapshot().Version, persisted.Snapshot.UpdatedAt); err != nil {
+			return nil, err
+		}
 	}
 	if machine.Snapshot().Version != persisted.Snapshot.Version {
 		return nil, errors.New("persisted change version failed integrity validation")
@@ -580,12 +621,18 @@ func idempotencyKey(w http.ResponseWriter, r *http.Request) (string, bool) {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
-	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") { return errors.New("application/json is required") }
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		return errors.New("application/json is required")
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil { return err }
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) { return errors.New("multiple JSON values") }
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return errors.New("multiple JSON values")
+	}
 	return nil
 }
 
@@ -596,6 +643,18 @@ func jsonObject(raw json.RawMessage) bool {
 }
 
 func digest(value []byte) string { sum := sha256.Sum256(value); return hex.EncodeToString(sum[:]) }
-func newID() string { var value [12]byte; if _, err := rand.Read(value[:]); err != nil { return strconv.FormatInt(time.Now().UnixNano(), 36) }; return hex.EncodeToString(value[:]) }
-func writeJSON(w http.ResponseWriter, status int, value any) { w.Header().Set("Content-Type", "application/json; charset=utf-8"); w.WriteHeader(status); _ = json.NewEncoder(w).Encode(value) }
-func writeError(w http.ResponseWriter, r *http.Request, status int, code, message string) { commonapi.WriteError(w, r, status, code, message) }
+func newID() string {
+	var value [12]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(value[:])
+}
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+func writeError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	commonapi.WriteError(w, r, status, code, message)
+}

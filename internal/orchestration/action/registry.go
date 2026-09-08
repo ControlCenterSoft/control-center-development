@@ -140,12 +140,16 @@ func NewTyped[T any](name, permission string, risk policy.Risk, inputSchema json
 		Name: name, Permission: permission, Risk: risk, InputSchema: inputSchema,
 		execute: func(ctx context.Context, raw json.RawMessage) (events.Output, error) {
 			input, err := decode(raw)
-			if err != nil { return events.Output{}, err }
+			if err != nil {
+				return events.Output{}, err
+			}
 			return execute(ctx, input)
 		},
 		verify: func(ctx context.Context, raw json.RawMessage, output events.Output) error {
 			input, err := decode(raw)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			return verify(ctx, input, output)
 		},
 	}
