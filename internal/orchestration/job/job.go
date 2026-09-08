@@ -27,35 +27,51 @@ const (
 	StatusFailed          Status = "failed"
 )
 
-func (s Status) Terminal() bool { return s == StatusCancelled || s == StatusSucceeded || s == StatusFailed }
+func (s Status) Terminal() bool {
+	return s == StatusCancelled || s == StatusSucceeded || s == StatusFailed
+}
 
 type Lease struct {
-	Token string `json:"token"`
-	WorkerID string `json:"workerId"`
+	Token     string    `json:"token"`
+	WorkerID  string    `json:"workerId"`
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 type Job struct {
-	ID string `json:"id"`
-	ChangeID string `json:"changeId"`
-	ActionName string `json:"actionName"`
-	Input json.RawMessage `json:"input"`
-	IdempotencyKey string `json:"idempotencyKey"`
-	Status Status `json:"status"`
-	Attempt int `json:"attempt"`
-	MaxAttempts int `json:"maxAttempts"`
-	NextAttemptAt time.Time `json:"nextAttemptAt,omitempty"`
-	Lease *Lease `json:"lease,omitempty"`
-	Output *events.Output `json:"output,omitempty"`
-	LastError string `json:"lastError,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Version uint64 `json:"version"`
+	ID             string          `json:"id"`
+	ChangeID       string          `json:"changeId"`
+	ActionName     string          `json:"actionName"`
+	Input          json.RawMessage `json:"input"`
+	IdempotencyKey string          `json:"idempotencyKey"`
+	Status         Status          `json:"status"`
+	Attempt        int             `json:"attempt"`
+	MaxAttempts    int             `json:"maxAttempts"`
+	NextAttemptAt  time.Time       `json:"nextAttemptAt,omitempty"`
+	Lease          *Lease          `json:"lease,omitempty"`
+	Output         *events.Output  `json:"output,omitempty"`
+	LastError      string          `json:"lastError,omitempty"`
+	CreatedAt      time.Time       `json:"createdAt"`
+	UpdatedAt      time.Time       `json:"updatedAt"`
+	Version        uint64          `json:"version"`
 }
 
-type CreateRequest struct { ID string; ChangeID string; ActionName string; Input json.RawMessage; IdempotencyKey string; MaxAttempts int; Now time.Time }
-type RetryPolicy struct { BaseDelay time.Duration; MaxDelay time.Duration }
-type Filter struct { ChangeID string; Status Status }
+type CreateRequest struct {
+	ID             string
+	ChangeID       string
+	ActionName     string
+	Input          json.RawMessage
+	IdempotencyKey string
+	MaxAttempts    int
+	Now            time.Time
+}
+type RetryPolicy struct {
+	BaseDelay time.Duration
+	MaxDelay  time.Duration
+}
+type Filter struct {
+	ChangeID string
+	Status   Status
+}
 
 type Repository interface {
 	Create(context.Context, CreateRequest) (created Job, wasCreated bool, err error)
