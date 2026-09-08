@@ -51,8 +51,7 @@ func run() error {
 		return fmt.Errorf("initialize resource registry: %w", err)
 	}
 
-	identity, err := newIdentityHandler(cfg.Environment, db,
-		strings.TrimSpace(os.Getenv("CC_BOOTSTRAP_ADMIN_USERNAME")), os.Getenv("CC_BOOTSTRAP_ADMIN_PASSWORD"))
+	identity, err := newIdentityHandler(cfg.Environment, db)
 	if err != nil {
 		return fmt.Errorf("initialize identity: %w", err)
 	}
