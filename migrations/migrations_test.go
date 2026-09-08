@@ -153,10 +153,36 @@ FROM cc_core_objects WHERE object_id='global'`).Scan(&replayCreatedAt, &replayUp
 		t.Fatal("scoped down migration left distributed core tables behind")
 	}
 
-	// Leave the disposable database at the cumulative schema so repository and
-	// orchestration integration tests can run against the same CI service.
+	// Restore the cumulative schema, then remove the synthetic legacy fixture.
+	// The following repository/orchestration test step deliberately reuses this
+	// disposable CI database and must not inherit a revision that predates the
+	// current application's stricter persisted-state invariants.
 	applyMigration(t, ctx, database, "0006_distributed_core_objects.up.sql")
 	assertDistributedCoreBootstrap(t, ctx, database)
+	removeLegacyFixture(t, ctx, database, organizationID, resourceID)
+}
+
+func removeLegacyFixture(t *testing.T, ctx context.Context, database *sql.DB, organizationID, resourceID string) {
+	t.Helper()
+	transaction, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer transaction.Rollback()
+	if _, err := transaction.ExecContext(ctx, `DELETE FROM config_revisions
+WHERE organization_id=$1 AND resource_id=$2`, organizationID, resourceID); err != nil {
+		t.Fatalf("remove legacy configuration revisions: %v", err)
+	}
+	if _, err := transaction.ExecContext(ctx, `DELETE FROM resources
+WHERE id=$1 AND organization_id=$2`, resourceID, organizationID); err != nil {
+		t.Fatalf("remove legacy resource: %v", err)
+	}
+	if _, err := transaction.ExecContext(ctx, `DELETE FROM organizations WHERE id=$1`, organizationID); err != nil {
+		t.Fatalf("remove legacy organization: %v", err)
+	}
+	if err := transaction.Commit(); err != nil {
+		t.Fatalf("commit legacy fixture cleanup: %v", err)
+	}
 }
 
 func applyMigration(t *testing.T, ctx context.Context, database *sql.DB, name string) {
