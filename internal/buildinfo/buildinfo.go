@@ -1,14 +1,8 @@
 package buildinfo
 
-// These values are replaced at build time through -ldflags. The defaults make
-// local development builds explicit and reproducible.
 var (
-	Version   = "0.3.0"
-	Commit    = "unknown"
-	BuildTime = "unknown"
-)
-
-const (
-	ProductName = "control-center"
-	APIVersion  = "v1"
+	// Version — версия релиза. Может быть переопределена во время сборки.
+	Version = "dev"
+	// Revision — неизменяемая ревизия исходного кода. Может быть переопределена во время сборки.
+	Revision = "unknown"
 )
