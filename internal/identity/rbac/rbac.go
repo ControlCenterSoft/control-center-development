@@ -31,6 +31,10 @@ const (
 	PermissionDomainProviderResolve    Permission = "domain.provider.resolve"
 	PermissionInventoryNormalize       Permission = "inventory.normalize"
 	PermissionAgentEnrollmentNormalize Permission = "agent.enrollment.normalize"
+	PermissionInventoryReconcile       Permission = "inventory.reconcile"
+	PermissionInventoryFreshness       Permission = "inventory.freshness.evaluate"
+	PermissionAgentHeartbeatEvaluate   Permission = "agent.heartbeat.evaluate"
+	PermissionAgentLeaseEvaluate       Permission = "agent.lease.evaluate"
 )
 
 type ScopeKind string
@@ -158,6 +162,7 @@ func BuiltinRoles() []Role {
 			PermissionJobsRead, PermissionJobsCancel,
 			PermissionNodeEnrollmentPlan, PermissionAutomationPlan, PermissionPXEPlan, PermissionMarketRead,
 			PermissionDomainProviderResolve, PermissionInventoryNormalize, PermissionAgentEnrollmentNormalize,
+			PermissionInventoryReconcile, PermissionInventoryFreshness, PermissionAgentHeartbeatEvaluate, PermissionAgentLeaseEvaluate,
 		}},
 		{Name: "auditor", Description: "Read-only security and audit access", Permissions: []Permission{
 			PermissionOverviewRead, PermissionAuditRead, PermissionUsersRead, PermissionRolesRead,
