@@ -1,0 +1,54 @@
+name: Public CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+      - 'develop/**'
+      - 'migration/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Public-safety scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f .env
+          test ! -f .env.staging
+          if grep -RInE --exclude-dir=.git --exclude='*.sum' --exclude='ci.yml' \
+            '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]+|AKIA[0-9A-Z]{16})' .; then
+            echo 'public-safety scan detected credential-like material' >&2
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Race tests
+        run: go test -race ./...
+
+      - name: Build
+        run: go build ./cmd/control-center
