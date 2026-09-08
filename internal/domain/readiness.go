@@ -11,7 +11,8 @@ type DomainReadiness struct {
 // EvaluateDomainReadiness validates provider prerequisites without deployment bindings.
 func EvaluateDomainReadiness(provider string, dnsReady, timeSyncReady, storageReady bool) DomainReadiness {
 	blockers := make([]string, 0)
-	if provider != "samba-ad" && provider != "freeipa" {
+	canonical, ok := canonicalProvider(Provider(provider))
+	if !ok || canonical == ProviderAuto {
 		blockers = append(blockers, "unsupported-provider")
 	}
 	if !dnsReady {

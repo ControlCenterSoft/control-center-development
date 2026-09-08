@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 type Provider string
 
@@ -10,6 +13,8 @@ const (
 	ProviderFreeIPA Provider = "freeipa"
 )
 
+const legacyProviderSamba Provider = "samba-ad"
+
 var ErrIncompatibleProvider = errors.New("domain provider is incompatible with requirements")
 
 type Requirements struct {
@@ -17,9 +22,26 @@ type Requirements struct {
 	GroupPolicy       bool
 }
 
-func ResolveProvider(preferred Provider, requirements Requirements) (Provider, error) {
-	switch preferred {
+func canonicalProvider(value Provider) (Provider, bool) {
+	switch Provider(strings.ToLower(strings.TrimSpace(string(value)))) {
 	case "", ProviderAuto:
+		return ProviderAuto, true
+	case ProviderSamba, legacyProviderSamba:
+		return ProviderSamba, true
+	case ProviderFreeIPA:
+		return ProviderFreeIPA, true
+	default:
+		return "", false
+	}
+}
+
+func ResolveProvider(preferred Provider, requirements Requirements) (Provider, error) {
+	canonical, ok := canonicalProvider(preferred)
+	if !ok {
+		return "", ErrIncompatibleProvider
+	}
+	switch canonical {
+	case ProviderAuto:
 		if requirements.WindowsDomainJoin || requirements.GroupPolicy {
 			return ProviderSamba, nil
 		}
