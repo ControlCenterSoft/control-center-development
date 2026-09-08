@@ -26,6 +26,28 @@ paths:
                 properties:
                   provider: { type: string, enum: [samba-ad-dc, freeipa] }
         '422': { description: Requested provider is incompatible with requirements }
+  /api/v1/domain/lifecycle/plan:
+    post:
+      operationId: planDomainLifecycle
+      description: >-
+        Builds a deterministic typed plan for an explicitly selected Samba AD
+        or FreeIPA provider. This planning boundary accepts no credentials,
+        endpoints, arbitrary commands or provider-specific free-form payloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainLifecyclePlanRequest'
+      responses:
+        '200':
+          description: Canonical deterministic lifecycle plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainLifecyclePlan'
+        '400': { description: Malformed request or unknown field }
+        '422': { description: Invalid operation or incompatible explicit provider choice }
   /api/v1/inventory/normalize:
     post:
       operationId: normalizeInventoryDevice
@@ -75,11 +97,86 @@ components:
       properties:
         preferred: { type: string, enum: [auto, samba-ad-dc, freeipa] }
         requirements:
-          type: object
-          additionalProperties: false
-          properties:
-            WindowsDomainJoin: { type: boolean }
-            GroupPolicy: { type: boolean }
+          $ref: '#/components/schemas/DomainRequirements'
+    DomainRequirements:
+      type: object
+      additionalProperties: false
+      properties:
+        WindowsDomainJoin: { type: boolean }
+        GroupPolicy: { type: boolean }
+    DomainLifecyclePlanRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, operation, domain_name, target]
+      properties:
+        provider: { type: string, enum: [samba-ad-dc, freeipa] }
+        operation: { $ref: '#/components/schemas/DomainLifecycleOperation' }
+        domain_name:
+          type: string
+          minLength: 3
+          maxLength: 254
+          description: Multi-label DNS domain; a final root dot is accepted and canonicalized away.
+        target: { $ref: '#/components/schemas/DomainLifecycleTarget' }
+        requirements: { $ref: '#/components/schemas/DomainRequirements' }
+    DomainLifecycleTarget:
+      type: object
+      additionalProperties: false
+      required: [node_id, platform]
+      properties:
+        node_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$'
+        platform: { type: string, enum: [linux, windows] }
+    DomainLifecycleOperation:
+      type: string
+      enum: [create, join, promote, health-preflight]
+    DomainLifecyclePlan:
+      type: object
+      additionalProperties: false
+      required: [schema_version, plan_id, provider, operation, domain_name, target, requirements, mutating, steps]
+      properties:
+        schema_version: { type: string, const: domain.lifecycle.plan/v1 }
+        plan_id: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        provider: { type: string, enum: [samba-ad-dc, freeipa] }
+        operation: { $ref: '#/components/schemas/DomainLifecycleOperation' }
+        domain_name: { type: string }
+        target: { $ref: '#/components/schemas/DomainLifecycleTarget' }
+        requirements: { $ref: '#/components/schemas/DomainRequirements' }
+        mutating: { type: boolean }
+        steps:
+          type: array
+          minItems: 6
+          maxItems: 7
+          items: { $ref: '#/components/schemas/DomainLifecycleStep' }
+    DomainLifecycleStep:
+      type: object
+      additionalProperties: false
+      required: [order, stage, action]
+      properties:
+        order: { type: integer, minimum: 1 }
+        stage: { type: string, enum: [preflight, apply, verify] }
+        action:
+          type: string
+          enum:
+            - validate-provider-compatibility
+            - validate-dns-readiness
+            - validate-time-sync-readiness
+            - validate-storage-readiness
+            - discover-directory
+            - samba-ad-dc.provision-domain
+            - samba-ad-dc.join-member
+            - samba-ad-dc.promote-controller
+            - samba-ad-dc.check-directory-health
+            - samba-ad-dc.verify-membership
+            - samba-ad-dc.verify-replication
+            - freeipa.provision-domain
+            - freeipa.enroll-host
+            - freeipa.promote-replica
+            - freeipa.check-directory-health
+            - freeipa.verify-membership
+            - freeipa.verify-replication
     Device:
       type: object
       additionalProperties: false

@@ -13,7 +13,7 @@ import (
 const maxProviderRequestBytes = 64 << 10
 
 type providerRequest struct {
-	Preferred  domain.Provider     `json:"preferred"`
+	Preferred    domain.Provider     `json:"preferred"`
 	Requirements domain.Requirements `json:"requirements"`
 }
 
@@ -60,9 +60,12 @@ func ProviderHandler() http.Handler {
 
 func ensureEOF(decoder *json.Decoder) error {
 	var extra any
-	if err := decoder.Decode(&extra); errors.Is(err, io.EOF) {
+	err := decoder.Decode(&extra)
+	if errors.Is(err, io.EOF) {
 		return nil
-	} else {
-		return err
 	}
+	if err == nil {
+		return errors.New("multiple JSON values are not allowed")
+	}
+	return err
 }

@@ -29,6 +29,7 @@ const (
 	PermissionPXEPlan                  Permission = "pxe.plan"
 	PermissionMarketRead               Permission = "market.manifests.read"
 	PermissionDomainProviderResolve    Permission = "domain.provider.resolve"
+	PermissionDomainLifecyclePlan      Permission = "domain.lifecycle.plan"
 	PermissionInventoryNormalize       Permission = "inventory.normalize"
 	PermissionAgentEnrollmentNormalize Permission = "agent.enrollment.normalize"
 	PermissionInventoryReconcile       Permission = "inventory.reconcile"
@@ -161,7 +162,7 @@ func BuiltinRoles() []Role {
 			PermissionRevisionsWrite, PermissionActionsRead, PermissionChangesWrite,
 			PermissionJobsRead, PermissionJobsCancel,
 			PermissionNodeEnrollmentPlan, PermissionAutomationPlan, PermissionPXEPlan, PermissionMarketRead,
-			PermissionDomainProviderResolve, PermissionInventoryNormalize, PermissionAgentEnrollmentNormalize,
+			PermissionDomainProviderResolve, PermissionDomainLifecyclePlan, PermissionInventoryNormalize, PermissionAgentEnrollmentNormalize,
 			PermissionInventoryReconcile, PermissionInventoryFreshness, PermissionAgentHeartbeatEvaluate, PermissionAgentLeaseEvaluate,
 		}},
 		{Name: "auditor", Description: "Read-only security and audit access", Permissions: []Permission{
