@@ -27,7 +27,6 @@ paths:
                 properties:
                   sessions:
                     type: array
-                    maxItems: 1024
                     items:
                       $ref: '#/components/schemas/SessionSecurityView'
         '401':
