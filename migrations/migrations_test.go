@@ -491,14 +491,25 @@ VALUES ('00000000-0000-4000-8000-000000000306',$1::uuid,'legacy-extension','glob
 		t.Fatal(err)
 	}
 
-	if _, err := database.ExecContext(ctx, `
-INSERT INTO cc_config_revisions (id,sequence,digest,content,created_at,created_by)
-VALUES ('legacy-revision',1,$1,'{"generation":3}',$2,$3);
-INSERT INTO cc_policy_decisions (id,policy_id,effect,risk,reason,minimum_approvals,distinct_actors,prohibit_requester,evaluated_at)
-VALUES ('legacy-decision','legacy-policy','allow','high','approved under 0.3 policy',1,true,true,$2);
-INSERT INTO cc_changes (id,action_name,requester,revision_id,decision_id,risk,input,idempotency_key,input_fingerprint,state,version,created_at,updated_at)
-VALUES ('legacy-change','resource.record',$3,'legacy-revision','legacy-decision','high','{"resourceId":"node-legacy"}',
- 'legacy-change-key',$4,'pending_approval',3,$2,$2)`, "sha256:"+strings.Repeat("c", 64), fixture.passwordChanged, fixture.adminID, strings.Repeat("e", 64)); err != nil {
+	changeTransaction, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer changeTransaction.Rollback()
+	if _, err := changeTransaction.ExecContext(ctx, `INSERT INTO cc_config_revisions (id,sequence,digest,content,created_at,created_by)
+VALUES ('legacy-revision',1,$1,'{"generation":3}',$2,$3)`, "sha256:"+strings.Repeat("c", 64), fixture.passwordChanged, fixture.adminID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := changeTransaction.ExecContext(ctx, `INSERT INTO cc_policy_decisions (id,policy_id,effect,risk,reason,minimum_approvals,distinct_actors,prohibit_requester,evaluated_at)
+VALUES ('legacy-decision','legacy-policy','allow','high','approved under 0.3 policy',1,true,true,$1)`, fixture.passwordChanged); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := changeTransaction.ExecContext(ctx, `INSERT INTO cc_changes (id,action_name,requester,revision_id,decision_id,risk,input,idempotency_key,input_fingerprint,state,version,created_at,updated_at)
+VALUES ('legacy-change','resource.record',$1,'legacy-revision','legacy-decision','high','{"resourceId":"node-legacy"}',
+ 'legacy-change-key',$2,'pending_approval',3,$3,$3)`, fixture.adminID, strings.Repeat("e", 64), fixture.passwordChanged); err != nil {
+		t.Fatal(err)
+	}
+	if err := changeTransaction.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	return fixture
