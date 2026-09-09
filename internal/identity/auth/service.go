@@ -129,6 +129,36 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 	}
 	return nil
 }
+
+func (s *Service) RevokeAllSessions(ctx context.Context, input RevokeAllSessionsInput) (int, error) {
+	user, err := s.users.FindUserByID(ctx, input.UserID)
+	if err != nil || !user.Enabled {
+		return 0, ErrUnauthenticated
+	}
+	if err := s.audit.Append(ctx, audit.Event{
+		Action: "auth.sessions_revoke_all", Outcome: "requested", ActorID: user.ID, SubjectID: user.ID,
+		SourceIP: input.SourceIP,
+	}); err != nil {
+		return 0, ErrAuditUnavailable
+	}
+	now := s.now().UTC()
+	count, err := s.sessions.RevokeSessionsForUser(ctx, user.ID, now)
+	if err != nil {
+		_ = s.audit.Append(ctx, audit.Event{
+			Action: "auth.sessions_revoke_all", Outcome: "failed", ActorID: user.ID, SubjectID: user.ID,
+			SourceIP: input.SourceIP, Details: map[string]any{"reason": "session_store_unavailable"},
+		})
+		return 0, fmt.Errorf("revoke sessions: %w", err)
+	}
+	if err := s.audit.Append(ctx, audit.Event{
+		Action: "auth.sessions_revoke_all", Outcome: "success", ActorID: user.ID, SubjectID: user.ID,
+		SourceIP: input.SourceIP, Details: map[string]any{"revoked_sessions": count},
+	}); err != nil {
+		return count, ErrAuditUnavailable
+	}
+	return count, nil
+}
+
 func (s *Service) Logout(ctx context.Context, token, sourceIP string) error {
 	digest, ok := validatedTokenDigest(token)
 	if !ok {
