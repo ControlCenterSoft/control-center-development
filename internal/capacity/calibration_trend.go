@@ -87,6 +87,12 @@ func BuildCalibrationTrend(request CalibrationTrendRequest, snapshots []Calibrat
 		if !calibration.AdvisoryOnly || calibration.ProductionMutation || !validCalibrationStatus(calibration.Status) || !validCalibrationQuality(calibration.Quality) {
 			return CalibrationTrend{}, fmt.Errorf("%w: invalid calibration snapshot evidence", ErrInvalidRecommendation)
 		}
+		if calibration.Status == CalibrationReady && !calibration.AdjustmentAllowed {
+			return CalibrationTrend{}, fmt.Errorf("%w: ready calibration snapshot must allow adjustment", ErrInvalidRecommendation)
+		}
+		if calibration.Status != CalibrationReady && (calibration.AdjustmentAllowed || !closeFloat(calibration.SuggestedMultiplier, 1)) {
+			return CalibrationTrend{}, fmt.Errorf("%w: non-ready calibration snapshot cannot carry an adjustment", ErrInvalidRecommendation)
+		}
 		if !finite(calibration.SuggestedMultiplier) || calibration.SuggestedMultiplier < 0.5 || calibration.SuggestedMultiplier > 1.5 ||
 			!finite(calibration.P90AbsoluteErrorPercent) || calibration.P90AbsoluteErrorPercent < 0 {
 			return CalibrationTrend{}, fmt.Errorf("%w: invalid calibration snapshot values", ErrInvalidRecommendation)
