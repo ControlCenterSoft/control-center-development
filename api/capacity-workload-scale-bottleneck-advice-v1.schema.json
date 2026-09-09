@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-workload-scale-bottleneck-advice-v1.schema.json",
+  "title": "Capacity Workload Scale Bottleneck Advice v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "advice_id",
+    "options_id",
+    "bottleneck_report_id",
+    "status",
+    "reason",
+    "recommended_action",
+    "advisory_only",
+    "production_mutation"
+  ],
+  "properties": {
+    "schema_version": {"const": "capacity.workload-scale-bottleneck-advice/v1"},
+    "advice_id": {"type": "string", "pattern": "^wsba-[a-f0-9]{24}$"},
+    "options_id": {"type": "string", "pattern": "^wso-[a-f0-9]{24}$"},
+    "bottleneck_report_id": {"type": "string", "pattern": "^br-[a-f0-9]{24}$"},
+    "candidate_scenario_id": {"type": "string", "pattern": "^wss-[a-f0-9]{24}$"},
+    "candidate_resource_factor": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000},
+    "recommended_scenario_id": {"type": "string", "pattern": "^wss-[a-f0-9]{24}$"},
+    "recommended_resource_factor": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000},
+    "bottleneck_node_id": {"type": "string", "minLength": 1},
+    "bottleneck_metric": {"type": "string", "minLength": 1},
+    "bottleneck_target_id": {"type": "string", "minLength": 1},
+    "bottleneck_severity": {"enum": ["healthy", "unknown", "warning", "critical"]},
+    "bottleneck_reserve_percent": {"type": "number"},
+    "bottleneck_reason": {"type": "string", "minLength": 1},
+    "next_segment_start": {"type": "number", "exclusiveMinimum": 0},
+    "next_segment_end": {"type": "number", "exclusiveMinimum": 0},
+    "next_segment_efficiency_ratio": {"type": "number", "minimum": 0},
+    "status": {
+      "enum": [
+        "recommendation-available",
+        "recommendation-capped-by-efficiency",
+        "inspect-bottleneck",
+        "collect-evidence",
+        "insufficient-capacity",
+        "blocked"
+      ]
+    },
+    "reason": {"type": "string", "minLength": 1},
+    "recommended_action": {
+      "enum": [
+        "none",
+        "collect-evidence",
+        "inspect-bottleneck-before-scaling",
+        "hold-at-recommended-factor-and-inspect-bottleneck",
+        "increase-evidence-backed-capacity-or-reduce-demand"
+      ]
+    },
+    "advisory_only": {"const": true},
+    "production_mutation": {"const": false}
+  }
+}
