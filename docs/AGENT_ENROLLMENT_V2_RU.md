@@ -64,3 +64,16 @@ Capacity evidence: `measured`, `estimated`, `benchmark`. Неизмеренны�
 - некорректная ссылка capacity/VLAN на отсутствующий объект отклоняет весь payload, а не удаляется молча.
 
 Полная машиночитаемая схема находится в `api/openapi-domain-inventory-agent.yaml`.
+
+## Начало этапа 0.5: одноразовый bootstrap token
+
+Внутренний контракт `agent.bootstrap-token/v1` создаёт короткоживущий token,
+привязанный к конкретным `node_id`, `scope_id` и transport (`ssh`, `winrm` или
+`offline-bundle`). Секрет выдаётся вызывающему коду один раз, хранится только в
+виде SHA-256 digest, сравнивается constant-time и атомарно помечается
+использованным. Срок действия ограничен диапазоном от одной до пятнадцати минут.
+
+Успешное потребление token возвращает только `BootstrapGrant`: оно не сохраняет
+Agent enrollment, не назначает роли и не меняет сеть. Mutating admission обязан
+передать grant в PostgreSQL-backed Change/Job/Audit pipeline и повторно
+проверить фактический mTLS identity и freshness.
