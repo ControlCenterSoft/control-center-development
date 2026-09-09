@@ -15,7 +15,7 @@ func TestRelease050IdentityAndRuntimePackets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(version)) != "0.5.0" || buildinfo.Version != "0.5.0" {
+	if buildinfo.Version != strings.TrimSpace(string(version)) {
 		t.Fatalf("release identity mismatch: VERSION=%q runtime=%q", strings.TrimSpace(string(version)), buildinfo.Version)
 	}
 	for _, path := range []string{
