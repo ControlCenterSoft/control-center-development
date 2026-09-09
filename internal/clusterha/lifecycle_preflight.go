@@ -34,39 +34,39 @@ const (
 // returned plan is safety evidence for a later audited executor, never an
 // execution authorization.
 type LifecyclePreflightRequest struct {
-	LifecyclePlan                 nodelifecycle.TransitionPlan `json:"lifecycle_plan"`
-	RoleAssignments               []corecontracts.RoleAssignment `json:"role_assignments"`
-	ClusterScopeID                string `json:"cluster_scope_id"`
-	ClusterServiceIdentityID      string `json:"cluster_service_identity_id"`
-	Membership                    Snapshot `json:"membership"`
-	StandaloneDowntimeAcknowledged bool `json:"standalone_downtime_acknowledged"`
-	LeaderTransferConfirmed       bool `json:"leader_transfer_confirmed"`
-	NextLeaderID                  string `json:"next_leader_id,omitempty"`
-	FencingConfirmed              bool `json:"fencing_confirmed"`
-	MembershipChange              *ChangeRequest `json:"membership_change,omitempty"`
+	LifecyclePlan                  nodelifecycle.TransitionPlan   `json:"lifecycle_plan"`
+	RoleAssignments                []corecontracts.RoleAssignment `json:"role_assignments"`
+	ClusterScopeID                 string                         `json:"cluster_scope_id"`
+	ClusterServiceIdentityID       string                         `json:"cluster_service_identity_id"`
+	Membership                     Snapshot                       `json:"membership"`
+	StandaloneDowntimeAcknowledged bool                           `json:"standalone_downtime_acknowledged"`
+	LeaderTransferConfirmed        bool                           `json:"leader_transfer_confirmed"`
+	NextLeaderID                   string                         `json:"next_leader_id,omitempty"`
+	FencingConfirmed               bool                           `json:"fencing_confirmed"`
+	MembershipChange               *ChangeRequest                 `json:"membership_change,omitempty"`
 }
 
 type LifecyclePreflightPlan struct {
-	PlanID                    string `json:"plan_id"`
-	Accepted                  bool `json:"accepted"`
-	PlanOnly                  bool `json:"plan_only"`
-	HostMutation              bool `json:"host_mutation"`
-	StateMutation             bool `json:"state_mutation"`
-	NodeID                    string `json:"node_id"`
-	LifecyclePlanID           string `json:"lifecycle_plan_id"`
-	LifecycleTarget           nodelifecycle.State `json:"lifecycle_target"`
-	ControllerBound           bool `json:"controller_bound"`
-	ClusterID                 string `json:"cluster_id"`
-	ClusterGeneration         uint64 `json:"cluster_generation"`
-	ClusterProfile            Profile `json:"cluster_profile"`
-	CurrentQuorum             int `json:"current_quorum"`
-	CurrentHealthyVotes       int `json:"current_healthy_votes"`
-	HealthyVotesAfterDrain    int `json:"healthy_votes_after_drain"`
-	RequiresStandaloneDowntime bool `json:"requires_standalone_downtime"`
-	RequiresLeaderTransfer    bool `json:"requires_leader_transfer"`
-	RequiresFencing           bool `json:"requires_fencing"`
-	MembershipPlanID          string `json:"membership_plan_id,omitempty"`
-	RequiredChecks            []LifecycleCheck `json:"required_checks"`
+	PlanID                     string              `json:"plan_id"`
+	Accepted                   bool                `json:"accepted"`
+	PlanOnly                   bool                `json:"plan_only"`
+	HostMutation               bool                `json:"host_mutation"`
+	StateMutation              bool                `json:"state_mutation"`
+	NodeID                     string              `json:"node_id"`
+	LifecyclePlanID            string              `json:"lifecycle_plan_id"`
+	LifecycleTarget            nodelifecycle.State `json:"lifecycle_target"`
+	ControllerBound            bool                `json:"controller_bound"`
+	ClusterID                  string              `json:"cluster_id"`
+	ClusterGeneration          uint64              `json:"cluster_generation"`
+	ClusterProfile             Profile             `json:"cluster_profile"`
+	CurrentQuorum              int                 `json:"current_quorum"`
+	CurrentHealthyVotes        int                 `json:"current_healthy_votes"`
+	HealthyVotesAfterDrain     int                 `json:"healthy_votes_after_drain"`
+	RequiresStandaloneDowntime bool                `json:"requires_standalone_downtime"`
+	RequiresLeaderTransfer     bool                `json:"requires_leader_transfer"`
+	RequiresFencing            bool                `json:"requires_fencing"`
+	MembershipPlanID           string              `json:"membership_plan_id,omitempty"`
+	RequiredChecks             []LifecycleCheck    `json:"required_checks"`
 }
 
 func BuildLifecyclePreflight(request LifecyclePreflightRequest) (LifecyclePreflightPlan, error) {
@@ -123,7 +123,7 @@ func BuildLifecyclePreflight(request LifecyclePreflightRequest) (LifecyclePrefli
 		checks = append(checks, CheckQuorumAfterDrain)
 	}
 
-	requiresLeaderTransfer := request.Membership.LeaderID == lifecycle.NodeID
+	requiresLeaderTransfer := !requiresStandalone && request.Membership.LeaderID == lifecycle.NodeID
 	if requiresLeaderTransfer {
 		if !request.LeaderTransferConfirmed {
 			return LifecyclePreflightPlan{}, fmt.Errorf("%w: draining current leader requires confirmed leader transfer", ErrUnsafeLifecyclePreflight)
@@ -134,7 +134,7 @@ func BuildLifecyclePreflight(request LifecyclePreflightRequest) (LifecyclePrefli
 		}
 		checks = append(checks, CheckLifecycleLeaderTransfer)
 	} else if request.LeaderTransferConfirmed || request.NextLeaderID != "" {
-		return LifecyclePreflightPlan{}, fmt.Errorf("%w: leader transfer metadata is only valid for the current leader", ErrInvalidLifecyclePreflight)
+		return LifecyclePreflightPlan{}, fmt.Errorf("%w: leader transfer metadata is not valid for this lifecycle preflight", ErrInvalidLifecyclePreflight)
 	}
 
 	requiresFencing := !member.Healthy
@@ -213,16 +213,20 @@ func sameSnapshot(left, right Snapshot) bool {
 	if left.ClusterID != right.ClusterID || left.Generation != right.Generation || left.LeaderID != right.LeaderID || len(left.Members) != len(right.Members) {
 		return false
 	}
-	leftMembers := append([]Member(nil), left.Members...)
-	rightMembers := append([]Member(nil), right.Members...)
-	sort.Slice(leftMembers, func(i, j int) bool { return leftMembers[i].ID < leftMembers[j].ID })
-	sort.Slice(rightMembers, func(i, j int) bool { return rightMembers[i].ID < rightMembers[j].ID })
+	leftMembers := canonicalMembers(left.Members)
+	rightMembers := canonicalMembers(right.Members)
 	for i := range leftMembers {
 		if leftMembers[i] != rightMembers[i] {
 			return false
 		}
 	}
 	return true
+}
+
+func canonicalMembers(members []Member) []Member {
+	out := append([]Member(nil), members...)
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 func containsString(values []string, target string) bool {
@@ -237,33 +241,37 @@ func containsString(values []string, target string) bool {
 func buildLifecyclePreflightResult(request LifecyclePreflightRequest, profile Profile, currentQuorum, currentHealthy, healthyAfterDrain int, requiresStandalone, requiresLeaderTransfer, requiresFencing bool, membershipPlanID string, checks []LifecycleCheck) (LifecyclePreflightPlan, error) {
 	checks = append([]LifecycleCheck(nil), checks...)
 	fingerprintInput := struct {
-		LifecyclePlanID             string `json:"lifecycle_plan_id"`
-		NodeID                      string `json:"node_id"`
-		LifecycleTarget             nodelifecycle.State `json:"lifecycle_target"`
-		ClusterID                   string `json:"cluster_id"`
-		ClusterGeneration           uint64 `json:"cluster_generation"`
-		ClusterScopeID              string `json:"cluster_scope_id"`
-		ClusterServiceIdentityID    string `json:"cluster_service_identity_id"`
-		StandaloneDowntimeAcknowledged bool `json:"standalone_downtime_acknowledged"`
-		LeaderTransferConfirmed     bool `json:"leader_transfer_confirmed"`
-		NextLeaderID                string `json:"next_leader_id"`
-		FencingConfirmed            bool `json:"fencing_confirmed"`
-		MembershipPlanID            string `json:"membership_plan_id"`
-		RequiredChecks              []LifecycleCheck `json:"required_checks"`
+		LifecyclePlanID                string              `json:"lifecycle_plan_id"`
+		NodeID                         string              `json:"node_id"`
+		LifecycleTarget                nodelifecycle.State `json:"lifecycle_target"`
+		ClusterID                      string              `json:"cluster_id"`
+		ClusterGeneration              uint64              `json:"cluster_generation"`
+		ClusterLeaderID                string              `json:"cluster_leader_id"`
+		ClusterMembers                 []Member            `json:"cluster_members"`
+		ClusterScopeID                 string              `json:"cluster_scope_id"`
+		ClusterServiceIdentityID       string              `json:"cluster_service_identity_id"`
+		StandaloneDowntimeAcknowledged bool                `json:"standalone_downtime_acknowledged"`
+		LeaderTransferConfirmed        bool                `json:"leader_transfer_confirmed"`
+		NextLeaderID                   string              `json:"next_leader_id"`
+		FencingConfirmed               bool                `json:"fencing_confirmed"`
+		MembershipPlanID               string              `json:"membership_plan_id"`
+		RequiredChecks                 []LifecycleCheck    `json:"required_checks"`
 	}{
-		LifecyclePlanID: lifecyclePlanID(request),
-		NodeID: request.LifecyclePlan.NodeID,
-		LifecycleTarget: request.LifecyclePlan.To,
-		ClusterID: request.Membership.ClusterID,
-		ClusterGeneration: request.Membership.Generation,
-		ClusterScopeID: request.ClusterScopeID,
-		ClusterServiceIdentityID: request.ClusterServiceIdentityID,
+		LifecyclePlanID:                request.LifecyclePlan.PlanID,
+		NodeID:                         request.LifecyclePlan.NodeID,
+		LifecycleTarget:                request.LifecyclePlan.To,
+		ClusterID:                      request.Membership.ClusterID,
+		ClusterGeneration:              request.Membership.Generation,
+		ClusterLeaderID:                request.Membership.LeaderID,
+		ClusterMembers:                 canonicalMembers(request.Membership.Members),
+		ClusterScopeID:                 request.ClusterScopeID,
+		ClusterServiceIdentityID:       request.ClusterServiceIdentityID,
 		StandaloneDowntimeAcknowledged: request.StandaloneDowntimeAcknowledged,
-		LeaderTransferConfirmed: request.LeaderTransferConfirmed,
-		NextLeaderID: request.NextLeaderID,
-		FencingConfirmed: request.FencingConfirmed,
-		MembershipPlanID: membershipPlanID,
-		RequiredChecks: checks,
+		LeaderTransferConfirmed:        request.LeaderTransferConfirmed,
+		NextLeaderID:                   request.NextLeaderID,
+		FencingConfirmed:               request.FencingConfirmed,
+		MembershipPlanID:               membershipPlanID,
+		RequiredChecks:                 checks,
 	}
 	encoded, err := json.Marshal(fingerprintInput)
 	if err != nil {
@@ -271,27 +279,25 @@ func buildLifecyclePreflightResult(request LifecyclePreflightRequest, profile Pr
 	}
 	digest := sha256.Sum256(encoded)
 	return LifecyclePreflightPlan{
-		PlanID: "chlp-" + hex.EncodeToString(digest[:])[:24],
-		Accepted: true,
-		PlanOnly: true,
-		HostMutation: false,
-		StateMutation: false,
-		NodeID: request.LifecyclePlan.NodeID,
-		LifecyclePlanID: request.LifecyclePlan.PlanID,
-		LifecycleTarget: request.LifecyclePlan.To,
-		ControllerBound: len(checks) > 1,
-		ClusterID: request.Membership.ClusterID,
-		ClusterGeneration: request.Membership.Generation,
-		ClusterProfile: profile,
-		CurrentQuorum: currentQuorum,
-		CurrentHealthyVotes: currentHealthy,
-		HealthyVotesAfterDrain: healthyAfterDrain,
+		PlanID:                     "chlp-" + hex.EncodeToString(digest[:])[:24],
+		Accepted:                   true,
+		PlanOnly:                   true,
+		HostMutation:               false,
+		StateMutation:              false,
+		NodeID:                     request.LifecyclePlan.NodeID,
+		LifecyclePlanID:            request.LifecyclePlan.PlanID,
+		LifecycleTarget:            request.LifecyclePlan.To,
+		ControllerBound:            len(checks) > 1,
+		ClusterID:                  request.Membership.ClusterID,
+		ClusterGeneration:          request.Membership.Generation,
+		ClusterProfile:             profile,
+		CurrentQuorum:              currentQuorum,
+		CurrentHealthyVotes:        currentHealthy,
+		HealthyVotesAfterDrain:     healthyAfterDrain,
 		RequiresStandaloneDowntime: requiresStandalone,
-		RequiresLeaderTransfer: requiresLeaderTransfer,
-		RequiresFencing: requiresFencing,
-		MembershipPlanID: membershipPlanID,
-		RequiredChecks: checks,
+		RequiresLeaderTransfer:     requiresLeaderTransfer,
+		RequiresFencing:            requiresFencing,
+		MembershipPlanID:           membershipPlanID,
+		RequiredChecks:             checks,
 	}, nil
 }
-
-func lifecyclePlanID(request LifecyclePreflightRequest) string { return request.LifecyclePlan.PlanID }
