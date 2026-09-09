@@ -130,6 +130,72 @@ func (s *Service) ChangePassword(ctx context.Context, input ChangePasswordInput)
 	return nil
 }
 
+func (s *Service) ListSessions(ctx context.Context, input ListSessionsInput) ([]SessionSecurityView, error) {
+	user, err := s.users.FindUserByID(ctx, input.UserID)
+	if err != nil || !user.Enabled {
+		return nil, ErrUnauthenticated
+	}
+	now := s.now().UTC()
+	sessions, err := s.sessions.ListActiveSessionsForUser(ctx, user.ID, now)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	views := make([]SessionSecurityView, 0, len(sessions))
+	for _, session := range sessions {
+		if !session.CredentialVersion.Equal(user.PasswordChangedAt) {
+			continue
+		}
+		views = append(views, session.SecurityView(input.CurrentSessionID))
+	}
+	if err := s.audit.Append(ctx, audit.Event{
+		Action: "auth.sessions_list", Outcome: "success", ActorID: user.ID, SubjectID: user.ID,
+		SourceIP: input.SourceIP, Details: map[string]any{"active_sessions": len(views)},
+	}); err != nil {
+		return nil, ErrAuditUnavailable
+	}
+	return views, nil
+}
+
+func (s *Service) RevokeSession(ctx context.Context, input RevokeSessionInput) (RevokeSessionResult, error) {
+	user, err := s.users.FindUserByID(ctx, input.UserID)
+	if err != nil || !user.Enabled {
+		return RevokeSessionResult{}, ErrUnauthenticated
+	}
+	if !validSessionID(input.SessionID) {
+		return RevokeSessionResult{}, ErrNotFound
+	}
+	now := s.now().UTC()
+	target, err := s.sessions.FindSessionForUserByID(ctx, user.ID, input.SessionID)
+	if err != nil || target.RevokedAt != nil || !now.Before(target.ExpiresAt) || !target.CredentialVersion.Equal(user.PasswordChangedAt) {
+		return RevokeSessionResult{}, ErrNotFound
+	}
+	current := target.ID == input.CurrentSessionID
+	if err := s.audit.Append(ctx, audit.Event{
+		Action: "auth.session_revoke", Outcome: "requested", ActorID: user.ID, SubjectID: user.ID,
+		SourceIP: input.SourceIP, Details: map[string]any{"session_id": target.ID, "current_session": current},
+	}); err != nil {
+		return RevokeSessionResult{}, ErrAuditUnavailable
+	}
+	if err := s.sessions.RevokeSessionForUserByID(ctx, user.ID, target.ID, now); err != nil {
+		_ = s.audit.Append(ctx, audit.Event{
+			Action: "auth.session_revoke", Outcome: "failed", ActorID: user.ID, SubjectID: user.ID,
+			SourceIP: input.SourceIP, Details: map[string]any{"session_id": target.ID, "reason": "session_not_active"},
+		})
+		if errors.Is(err, ErrNotFound) {
+			return RevokeSessionResult{}, ErrNotFound
+		}
+		return RevokeSessionResult{}, fmt.Errorf("revoke session: %w", err)
+	}
+	result := RevokeSessionResult{SessionID: target.ID, CurrentSessionRevoked: current}
+	if err := s.audit.Append(ctx, audit.Event{
+		Action: "auth.session_revoke", Outcome: "success", ActorID: user.ID, SubjectID: user.ID,
+		SourceIP: input.SourceIP, Details: map[string]any{"session_id": target.ID, "current_session": current},
+	}); err != nil {
+		return result, ErrAuditUnavailable
+	}
+	return result, nil
+}
+
 func (s *Service) RevokeAllSessions(ctx context.Context, input RevokeAllSessionsInput) (int, error) {
 	user, err := s.users.FindUserByID(ctx, input.UserID)
 	if err != nil || !user.Enabled {
@@ -188,6 +254,20 @@ func validatedTokenDigest(token string) (string, bool) {
 		return "", false
 	}
 	return digestToken(token), true
+}
+func validSessionID(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) == 36 {
+		if value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+			return false
+		}
+		value = strings.ReplaceAll(value, "-", "")
+	}
+	if len(value) != 32 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 func randomToken(size int) (string, error) {
 	b := make([]byte, size)
