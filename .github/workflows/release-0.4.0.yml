@@ -1,0 +1,107 @@
+name: Publish Control Center 0.4.0
+
+on:
+  push:
+    branches:
+      - release/0.4.0
+    paths:
+      - .github/workflows/release-0.4.0.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-control-center-0.4.0
+  cancel-in-progress: false
+
+env:
+  RELEASE_SHA: 0841b53582d53a1629901bbfb9a8ec3f1a1b7d1a
+  RELEASE_TAG: v0.4.0
+  RELEASE_TITLE: Control Center 0.4.0
+
+jobs:
+  publish:
+    name: Qualify and publish v0.4.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact qualified release
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat VERSION)" = "0.4.0"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+
+      - name: Run release qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          gofmt_out="$(gofmt -l cmd internal migrations)"
+          test -z "$gofmt_out" || { printf '%s\n' "$gofmt_out"; exit 1; }
+          go vet ./...
+          go test ./...
+          go test -race ./...
+
+      - name: Build reproducible release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/first dist/second dist/release
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+              go build -trimpath -buildvcs=false -ldflags='-s -w' \
+              -o "dist/first/control-center-0.4.0-linux-${arch}" ./cmd/control-center
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+              go build -trimpath -buildvcs=false -ldflags='-s -w' \
+              -o "dist/second/control-center-0.4.0-linux-${arch}" ./cmd/control-center
+            cmp "dist/first/control-center-0.4.0-linux-${arch}" \
+                "dist/second/control-center-0.4.0-linux-${arch}"
+            cp "dist/first/control-center-0.4.0-linux-${arch}" dist/release/
+          done
+          (cd dist/release && sha256sum control-center-0.4.0-linux-* > SHA256SUMS)
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+          cat > RELEASE_NOTES.md <<'EOF'
+          Control Center 0.4.0 is the qualified distributed-core release following the 0.3 baseline.
+
+          Highlights:
+          - persisted Network Zone and Network Interface contracts with referential integrity and concurrency guards;
+          - fail-closed recovery metadata validation and deterministic isolated recovery planning;
+          - reversible database migrations while preserving supported 0.3 identity, RBAC, audit and Change state;
+          - clean-install and supported-upgrade qualification across PostgreSQL 14–18;
+          - authenticated, read-oriented distributed-core API surfaces with explicit high-risk change boundaries.
+
+          Safety boundary: this release does not implicitly enable routing, forwarding, NAT, firewall mutation, credential handling, host mutation or production restore execution. High-risk mutations remain behind explicit change/approval boundaries.
+
+          Release source commit: 0841b53582d53a1629901bbfb9a8ec3f1a1b7d1a
+          EOF
+          gh release create "$RELEASE_TAG" \
+            dist/release/control-center-0.4.0-linux-amd64 \
+            dist/release/control-center-0.4.0-linux-arm64 \
+            dist/release/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_SHA" \
+            --title "$RELEASE_TITLE" \
+            --notes-file RELEASE_NOTES.md
