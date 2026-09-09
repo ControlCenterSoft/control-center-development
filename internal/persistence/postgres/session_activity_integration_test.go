@@ -84,6 +84,9 @@ func TestPostgresSessionActivityPersistsAndAdvances(t *testing.T) {
 	if err := store.TouchSessionByDigest(ctx, digest, advanced); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.TouchSessionByDigest(ctx, digest, now.Add(2*time.Minute)); err != nil {
+		t.Fatalf("stale concurrent activity should be an idempotent no-op: %v", err)
+	}
 	persisted, err = store.FindSessionByDigest(ctx, digest)
 	if err != nil {
 		t.Fatal(err)
