@@ -1,11 +1,97 @@
 openapi: 3.1.0
 info:
   title: Control Center Session Security API fragment
-  version: 0.1.0
+  version: 0.2.0
 security:
   - bearerAuth: []
   - sessionCookie: []
 paths:
+  /api/v1/auth/sessions:
+    get:
+      operationId: listOwnSessions
+      summary: List active sessions for the authenticated local identity
+      description: >-
+        Returns only active sessions owned by the authenticated identity. The
+        caller's current session is marked explicitly. Session tokens and token
+        digests are never returned. The operation is available only after any
+        mandatory first-login password change has been completed.
+      responses:
+        '200':
+          description: Active own-session inventory.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    maxItems: 1024
+                    items:
+                      $ref: '#/components/schemas/SessionSecurityView'
+        '401':
+          description: Authentication is missing or no longer valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The mandatory first-login password change has not been completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Session inventory or its required security audit evidence is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/sessions/{sessionID}:
+    delete:
+      operationId: revokeOwnSession
+      summary: Revoke one active session owned by the authenticated local identity
+      description: >-
+        Revokes only the selected active session when it belongs to the
+        authenticated identity. A foreign, expired, revoked, malformed, or
+        unknown identifier is reported uniformly as not found. Revoking the
+        current browser session clears its session cookie.
+      parameters:
+        - name: sessionID
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 32
+            maxLength: 36
+      responses:
+        '204':
+          description: The selected own session was revoked.
+        '401':
+          description: Authentication is missing or no longer valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The mandatory first-login password change has not been completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No matching active own session exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Session revocation or its required security audit evidence is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /api/v1/auth/sessions/revoke-all:
     post:
       operationId: revokeAllSessions
@@ -47,6 +133,29 @@ components:
       in: cookie
       name: cc_session
   schemas:
+    SessionSecurityView:
+      type: object
+      additionalProperties: false
+      required: [id, created_at, expires_at, current]
+      properties:
+        id:
+          type: string
+          minLength: 32
+          maxLength: 36
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        source_ip:
+          type: string
+          maxLength: 64
+        user_agent:
+          type: string
+          maxLength: 512
+        current:
+          type: boolean
     ErrorEnvelope:
       type: object
       additionalProperties: false
