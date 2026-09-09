@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Control Center Session Security API fragment
-  version: 0.2.0
+  version: 0.3.0
 security:
   - bearerAuth: []
   - sessionCookie: []
@@ -12,7 +12,10 @@ paths:
       summary: List active sessions for the authenticated local identity
       description: >-
         Returns only active sessions owned by the authenticated identity. The
-        caller's current session is marked explicitly. Session tokens and token
+        caller's current session is marked explicitly. Sessions that exceeded
+        the configured inactivity timeout are omitted even when their absolute
+        expiry has not yet been reached. Last activity and the effective idle
+        deadline are returned for operator visibility. Session tokens and token
         digests are never returned. The operation is available only after any
         mandatory first-login password change has been completed.
       responses:
@@ -30,7 +33,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/SessionSecurityView'
         '401':
-          description: Authentication is missing or no longer valid.
+          description: Authentication is missing, expired, revoked, or idle-expired.
           content:
             application/json:
               schema:
@@ -53,9 +56,9 @@ paths:
       summary: Revoke one active session owned by the authenticated local identity
       description: >-
         Revokes only the selected active session when it belongs to the
-        authenticated identity. A foreign, expired, revoked, malformed, or
-        unknown identifier is reported uniformly as not found. Revoking the
-        current browser session clears its session cookie.
+        authenticated identity. A foreign, expired, idle-expired, revoked,
+        malformed, or unknown identifier is reported uniformly as not found.
+        Revoking the current browser session clears its session cookie.
       parameters:
         - name: sessionID
           in: path
@@ -135,7 +138,7 @@ components:
     SessionSecurityView:
       type: object
       additionalProperties: false
-      required: [id, created_at, expires_at, current]
+      required: [id, created_at, last_activity_at, idle_expires_at, expires_at, current]
       properties:
         id:
           type: string
@@ -144,9 +147,18 @@ components:
         created_at:
           type: string
           format: date-time
+        last_activity_at:
+          type: string
+          format: date-time
+          description: Last successfully authenticated use of the session.
+        idle_expires_at:
+          type: string
+          format: date-time
+          description: Effective inactivity deadline, capped by the absolute expiry.
         expires_at:
           type: string
           format: date-time
+          description: Absolute session expiry; successful activity never extends this value.
         source_ip:
           type: string
           maxLength: 64
