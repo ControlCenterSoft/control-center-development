@@ -59,6 +59,22 @@ func (s Session) View() SessionView {
 	return SessionView{ID: s.ID, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt}
 }
 
+type SessionSecurityView struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	SourceIP  string    `json:"source_ip,omitempty"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	Current   bool      `json:"current"`
+}
+
+func (s Session) SecurityView(currentSessionID string) SessionSecurityView {
+	return SessionSecurityView{
+		ID: s.ID, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt,
+		SourceIP: s.SourceIP, UserAgent: s.UserAgent, Current: s.ID == currentSessionID,
+	}
+}
+
 type UserStore interface {
 	FindUserByUsername(context.Context, string) (User, error)
 	FindUserByID(context.Context, string) (User, error)
@@ -68,7 +84,10 @@ type UserStore interface {
 type SessionStore interface {
 	CreateSession(context.Context, Session, string) error
 	FindSessionByDigest(context.Context, string) (Session, error)
+	FindSessionForUserByID(context.Context, string, string) (Session, error)
+	ListActiveSessionsForUser(context.Context, string, time.Time) ([]Session, error)
 	RevokeSessionByDigest(context.Context, string, time.Time) error
+	RevokeSessionForUserByID(context.Context, string, string, time.Time) error
 	RevokeSessionsForUser(context.Context, string, time.Time) (int, error)
 }
 type LoginInput struct {
@@ -94,6 +113,24 @@ type ChangePasswordInput struct {
 	CurrentPassword string
 	NewPassword     string
 	SourceIP        string
+}
+
+type ListSessionsInput struct {
+	UserID           string
+	CurrentSessionID string
+	SourceIP         string
+}
+
+type RevokeSessionInput struct {
+	UserID           string
+	SessionID        string
+	CurrentSessionID string
+	SourceIP         string
+}
+
+type RevokeSessionResult struct {
+	SessionID             string
+	CurrentSessionRevoked bool
 }
 
 type RevokeAllSessionsInput struct {
