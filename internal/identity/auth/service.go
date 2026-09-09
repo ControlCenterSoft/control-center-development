@@ -15,19 +15,31 @@ import (
 	"control-center/internal/identity/security"
 )
 
-const DefaultSessionTTL = 8 * time.Hour
+const (
+	DefaultSessionTTL         = 8 * time.Hour
+	DefaultSessionIdleTimeout = 2 * time.Hour
+)
 
-type Service struct {
-	users      UserStore
-	sessions   SessionStore
-	audit      audit.Logger
-	hasher     security.PasswordHasher
-	dummyHash  string
-	sessionTTL time.Duration
-	now        func() time.Time
+type ServiceOption func(*Service)
+
+func WithSessionIdleTimeout(timeout time.Duration) ServiceOption {
+	return func(service *Service) {
+		service.sessionIdleTimeout = timeout
+	}
 }
 
-func NewService(users UserStore, sessions SessionStore, log audit.Logger, hasher security.PasswordHasher, sessionTTL time.Duration) (*Service, error) {
+type Service struct {
+	users              UserStore
+	sessions           SessionStore
+	audit              audit.Logger
+	hasher             security.PasswordHasher
+	dummyHash          string
+	sessionTTL         time.Duration
+	sessionIdleTimeout time.Duration
+	now                func() time.Time
+}
+
+func NewService(users UserStore, sessions SessionStore, log audit.Logger, hasher security.PasswordHasher, sessionTTL time.Duration, options ...ServiceOption) (*Service, error) {
 	if users == nil || sessions == nil || log == nil {
 		return nil, errors.New("auth stores and audit logger are required")
 	}
@@ -37,6 +49,10 @@ func NewService(users UserStore, sessions SessionStore, log audit.Logger, hasher
 	if sessionTTL < time.Minute || sessionTTL > 7*24*time.Hour {
 		return nil, errors.New("session TTL outside allowed range")
 	}
+	idleTimeout := DefaultSessionIdleTimeout
+	if idleTimeout > sessionTTL {
+		idleTimeout = sessionTTL
+	}
 	dummySecret, err := randomToken(32)
 	if err != nil {
 		return nil, err
@@ -45,7 +61,20 @@ func NewService(users UserStore, sessions SessionStore, log audit.Logger, hasher
 	if err != nil {
 		return nil, fmt.Errorf("prepare timing equalizer: %w", err)
 	}
-	return &Service{users: users, sessions: sessions, audit: log, hasher: hasher, dummyHash: dummyHash, sessionTTL: sessionTTL, now: func() time.Time { return time.Now().UTC() }}, nil
+	service := &Service{
+		users: users, sessions: sessions, audit: log, hasher: hasher, dummyHash: dummyHash,
+		sessionTTL: sessionTTL, sessionIdleTimeout: idleTimeout,
+		now: func() time.Time { return time.Now().UTC() },
+	}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	if service.sessionIdleTimeout < time.Minute || service.sessionIdleTimeout > service.sessionTTL {
+		return nil, errors.New("session idle timeout outside allowed range")
+	}
+	return service, nil
 }
 func (s *Service) Login(ctx context.Context, input LoginInput) (IssuedSession, error) {
 	username := normalizeUsername(input.Username)
@@ -64,7 +93,10 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (IssuedSession, e
 	if err != nil {
 		return IssuedSession{}, err
 	}
-	session := Session{ID: randomID(), UserID: user.ID, TokenDigest: digestToken(token), CredentialVersion: user.PasswordChangedAt, CreatedAt: now, ExpiresAt: now.Add(s.sessionTTL), SourceIP: input.SourceIP, UserAgent: truncate(input.UserAgent, 512)}
+	session := Session{
+		ID: randomID(), UserID: user.ID, TokenDigest: digestToken(token), CredentialVersion: user.PasswordChangedAt,
+		CreatedAt: now, LastActivityAt: now, ExpiresAt: now.Add(s.sessionTTL), SourceIP: input.SourceIP, UserAgent: truncate(input.UserAgent, 512),
+	}
 	if err := s.sessions.CreateSession(ctx, session, user.PasswordHash); err != nil {
 		return IssuedSession{}, fmt.Errorf("create session: %w", err)
 	}
@@ -80,8 +112,9 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated
 	if !ok {
 		return AuthenticatedSession{}, ErrUnauthenticated
 	}
+	now := s.now().UTC()
 	session, err := s.sessions.FindSessionByDigest(ctx, digest)
-	if err != nil || session.RevokedAt != nil || !s.now().Before(session.ExpiresAt) {
+	if err != nil || !session.activeAt(now, s.sessionIdleTimeout) {
 		return AuthenticatedSession{}, ErrUnauthenticated
 	}
 	user, err := s.users.FindUserByID(ctx, session.UserID)
@@ -91,6 +124,10 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated
 	if !session.CredentialVersion.Equal(user.PasswordChangedAt) {
 		return AuthenticatedSession{}, ErrUnauthenticated
 	}
+	if err := s.sessions.TouchSessionByDigest(ctx, digest, now); err != nil {
+		return AuthenticatedSession{}, ErrUnauthenticated
+	}
+	session.LastActivityAt = now
 	return AuthenticatedSession{Session: session.View(), Identity: user.Identity(), PasswordChangeRequired: user.PasswordChangeRequired}, nil
 }
 
@@ -142,10 +179,10 @@ func (s *Service) ListSessions(ctx context.Context, input ListSessionsInput) ([]
 	}
 	views := make([]SessionSecurityView, 0, len(sessions))
 	for _, session := range sessions {
-		if !session.CredentialVersion.Equal(user.PasswordChangedAt) {
+		if !session.activeAt(now, s.sessionIdleTimeout) || !session.CredentialVersion.Equal(user.PasswordChangedAt) {
 			continue
 		}
-		views = append(views, session.SecurityView(input.CurrentSessionID))
+		views = append(views, session.SecurityView(input.CurrentSessionID, s.sessionIdleTimeout))
 	}
 	if err := s.audit.Append(ctx, audit.Event{
 		Action: "auth.sessions_list", Outcome: "success", ActorID: user.ID, SubjectID: user.ID,
@@ -166,7 +203,7 @@ func (s *Service) RevokeSession(ctx context.Context, input RevokeSessionInput) (
 	}
 	now := s.now().UTC()
 	target, err := s.sessions.FindSessionForUserByID(ctx, user.ID, input.SessionID)
-	if err != nil || target.RevokedAt != nil || !now.Before(target.ExpiresAt) || !target.CredentialVersion.Equal(user.PasswordChangedAt) {
+	if err != nil || !target.activeAt(now, s.sessionIdleTimeout) || !target.CredentialVersion.Equal(user.PasswordChangedAt) {
 		return RevokeSessionResult{}, ErrNotFound
 	}
 	current := target.ID == input.CurrentSessionID
