@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const MaxSessionInventory = 256
+
 var (
 	ErrInvalidCredentials     = errors.New("invalid username or password")
 	ErrUnauthenticated        = errors.New("authentication required")
