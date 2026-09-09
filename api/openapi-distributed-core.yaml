@@ -3,11 +3,12 @@ info:
   title: Control Center Distributed Core Contracts
   version: 0.4.0
   description: >-
-    Persisted topology, role assignment, distributed object versioning and
-    separate Desired/Actual State. HTTP endpoints are authenticated and
-    read-only. Mutations use the high-risk core.object.apply action through the
-    existing /api/v1/changes and Job approval/execution boundary; there is no
-    direct mutation route and no host or network mutation in this API.
+    Persisted topology, role assignment, Network Zone/Interface inventory,
+    distributed object versioning and separate Desired/Actual State. HTTP
+    endpoints are authenticated and read-only. Mutations use the high-risk
+    core.object.apply action through the existing /api/v1/changes and Job
+    approval/execution boundary; there is no direct mutation route and no
+    routing, forwarding, NAT, firewall, or host mutation in this API.
   x-control-center-mutation-action: core.object.apply
 security:
   - sessionCookie: []
@@ -61,7 +62,7 @@ paths:
   /api/v1/core/topology:
     get:
       operationId: getDistributedCoreTopology
-      summary: Get one coherent scope, site and management-zone snapshot
+      summary: Get one coherent scope, site, management-zone and network snapshot
       responses:
         '200':
           description: Validated topology snapshot.
@@ -149,7 +150,7 @@ components:
         and a stale guard is 412.
     ObjectType:
       type: string
-      enum: [scope, site, management-zone, role-assignment, desired-state, actual-state]
+      enum: [scope, site, management-zone, network-zone, network-interface, role-assignment, desired-state, actual-state]
     MutationOperation:
       type: string
       enum: [create, replace]
@@ -221,7 +222,7 @@ components:
     TopologySnapshot:
       type: object
       additionalProperties: false
-      required: [scopes, sites, management_zones]
+      required: [scopes, sites, management_zones, network_zones, network_interfaces]
       properties:
         scopes:
           type: array
@@ -230,6 +231,12 @@ components:
           type: array
           items: { $ref: '#/components/schemas/StoredObject' }
         management_zones:
+          type: array
+          items: { $ref: '#/components/schemas/StoredObject' }
+        network_zones:
+          type: array
+          items: { $ref: '#/components/schemas/StoredObject' }
+        network_interfaces:
           type: array
           items: { $ref: '#/components/schemas/StoredObject' }
     ScopeKind:
@@ -272,6 +279,75 @@ components:
         scope_id: { $ref: '#/components/schemas/Identifier' }
         site_id: { $ref: '#/components/schemas/Identifier' }
       description: Logical policy/RBAC boundary; it does not enable network forwarding or NAT.
+    NetworkZoneKind:
+      type: string
+      enum: [unassigned, wan, lan, management, dmz, cluster, storage, backup, trusted]
+      description: Classification only; it does not enable any network behavior.
+    NetworkZone:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, scope_id, site_id]
+      properties:
+        id: { $ref: '#/components/schemas/Identifier' }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        kind: { $ref: '#/components/schemas/NetworkZoneKind' }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+        site_id: { $ref: '#/components/schemas/Identifier' }
+      description: >-
+        Site-scoped network classification, separate from ManagementZone.
+        scope_id must equal the distributed envelope scope and must be inside
+        site_id. The contract cannot express routing, forwarding, NAT, or
+        firewall activation.
+    NetworkInterfaceKind:
+      type: string
+      enum: [physical, bond, bridge, vlan, virtual]
+    NetworkLinkState:
+      type: string
+      enum: [up, down, unknown]
+      description: Observed inventory state; never a desired host-operation instruction.
+    NetworkInterface:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - node_id
+        - name
+        - kind
+        - scope_id
+        - site_id
+        - network_zone_id
+        - operational_state
+        - mtu
+      properties:
+        id: { $ref: '#/components/schemas/Identifier' }
+        node_id: { $ref: '#/components/schemas/Identifier' }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        kind: { $ref: '#/components/schemas/NetworkInterfaceKind' }
+        scope_id: { $ref: '#/components/schemas/Identifier' }
+        site_id: { $ref: '#/components/schemas/Identifier' }
+        network_zone_id: { $ref: '#/components/schemas/Identifier' }
+        mac_address:
+          type: string
+          description: Canonical 48-bit colon-separated address; required for physical interfaces.
+          pattern: '^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$'
+        operational_state: { $ref: '#/components/schemas/NetworkLinkState' }
+        addresses:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items:
+            type: string
+            description: Canonical IPv4 or IPv6 CIDR prefix.
+        mtu: { type: integer, format: uint32, minimum: 68, maximum: 65535 }
+        link_speed_mbps: { type: integer, format: uint64, minimum: 0, maximum: 10000000 }
+        parent_interface_id: { $ref: '#/components/schemas/Identifier' }
+        vlan_id: { type: integer, minimum: 1, maximum: 4094 }
+      description: >-
+        Persistent inventory/topology only. node_id must have a RoleAssignment
+        at site_id; the site, scope, Network Zone, and optional parent must form
+        one coherent snapshot. VLAN requires a same-node/site/scope parent and
+        vlan_id. Unknown route/gateway/forwarding/NAT/firewall fields are
+        rejected and this contract performs no host mutation.
     NodeRole:
       type: string
       enum:

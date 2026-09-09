@@ -29,18 +29,20 @@ var (
 type ObjectType string
 
 const (
-	ObjectScope          ObjectType = "scope"
-	ObjectSite           ObjectType = "site"
-	ObjectManagementZone ObjectType = "management-zone"
-	ObjectRoleAssignment ObjectType = "role-assignment"
-	ObjectDesiredState   ObjectType = "desired-state"
-	ObjectActualState    ObjectType = "actual-state"
+	ObjectScope            ObjectType = "scope"
+	ObjectSite             ObjectType = "site"
+	ObjectManagementZone   ObjectType = "management-zone"
+	ObjectNetworkZone      ObjectType = "network-zone"
+	ObjectNetworkInterface ObjectType = "network-interface"
+	ObjectRoleAssignment   ObjectType = "role-assignment"
+	ObjectDesiredState     ObjectType = "desired-state"
+	ObjectActualState      ObjectType = "actual-state"
 )
 
 // Valid reports whether the object type has a canonical document schema.
 func (t ObjectType) Valid() bool {
 	switch t {
-	case ObjectScope, ObjectSite, ObjectManagementZone, ObjectRoleAssignment, ObjectDesiredState, ObjectActualState:
+	case ObjectScope, ObjectSite, ObjectManagementZone, ObjectNetworkZone, ObjectNetworkInterface, ObjectRoleAssignment, ObjectDesiredState, ObjectActualState:
 		return true
 	default:
 		return false
@@ -165,6 +167,8 @@ func ValidateStoredObjects(objects []StoredObject) error {
 	scopes := make([]Scope, 0)
 	sites := make([]Site, 0)
 	zones := make([]ManagementZone, 0)
+	networkZones := make([]NetworkZone, 0)
+	networkInterfaces := make([]NetworkInterface, 0)
 	assignments := make([]RoleAssignment, 0)
 	for _, object := range objects {
 		if err := validateStoredEnvelope(object); err != nil {
@@ -193,6 +197,18 @@ func ValidateStoredObjects(objects []StoredObject) error {
 				return invalidDocument(object, err)
 			}
 			zones = append(zones, zone)
+		case ObjectNetworkZone:
+			var zone NetworkZone
+			if err := decodeDocument(object.Document, &zone); err != nil {
+				return invalidDocument(object, err)
+			}
+			networkZones = append(networkZones, zone)
+		case ObjectNetworkInterface:
+			var networkInterface NetworkInterface
+			if err := decodeDocument(object.Document, &networkInterface); err != nil {
+				return invalidDocument(object, err)
+			}
+			networkInterfaces = append(networkInterfaces, networkInterface)
 		case ObjectRoleAssignment:
 			var document RoleAssignmentDocument
 			if err := decodeDocument(object.Document, &document); err != nil {
@@ -212,6 +228,9 @@ func ValidateStoredObjects(objects []StoredObject) error {
 		}
 	}
 	if err := ValidateRoleAssignments(assignments, topology); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidObject, err)
+	}
+	if err := ValidateNetworkContracts(networkZones, networkInterfaces, assignments, topology); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidObject, err)
 	}
 	return nil
@@ -391,6 +410,28 @@ func validateTypedObject(object StoredObject, topology Topology) error {
 		if object.OwnerScope != topology.RootID() && !topology.IsDelegated(object.OwnerScope, DelegateConfiguration) {
 			return fmt.Errorf("%w: management-zone owner has no configuration delegation", ErrInvalidObject)
 		}
+	case ObjectNetworkZone:
+		var zone NetworkZone
+		if err := decodeDocument(object.Document, &zone); err != nil {
+			return invalidDocument(object, err)
+		}
+		if zone.ID != object.ObjectID || zone.ScopeID != object.ScopeID || !topology.Contains(object.OwnerScope, object.ScopeID) {
+			return fmt.Errorf("%w: network-zone metadata does not match its document or hierarchy", ErrInvalidObject)
+		}
+		if object.OwnerScope != topology.RootID() && !topology.IsDelegated(object.OwnerScope, DelegateConfiguration) {
+			return fmt.Errorf("%w: network-zone owner has no configuration delegation", ErrInvalidObject)
+		}
+	case ObjectNetworkInterface:
+		var networkInterface NetworkInterface
+		if err := decodeDocument(object.Document, &networkInterface); err != nil {
+			return invalidDocument(object, err)
+		}
+		if networkInterface.ID != object.ObjectID || networkInterface.ScopeID != object.ScopeID || !topology.Contains(object.OwnerScope, object.ScopeID) {
+			return fmt.Errorf("%w: network-interface metadata does not match its document or hierarchy", ErrInvalidObject)
+		}
+		if object.OwnerScope != topology.RootID() && !topology.IsDelegated(object.OwnerScope, DelegateConfiguration) {
+			return fmt.Errorf("%w: network-interface owner has no configuration delegation", ErrInvalidObject)
+		}
 	case ObjectRoleAssignment:
 		var document RoleAssignmentDocument
 		if err := decodeDocument(object.Document, &document); err != nil {
@@ -446,6 +487,28 @@ func validateTypedSuccessor(current, next StoredObject, snapshot []StoredObject)
 			return invalidDocument(next, err)
 		}
 		return ValidateRoleAssignmentSuccessor(roleAssignmentFrom(current.ObjectMetadata, before), roleAssignmentFrom(next.ObjectMetadata, after), topology)
+	case ObjectNetworkZone:
+		var before, after NetworkZone
+		if err := decodeDocument(current.Document, &before); err != nil {
+			return invalidDocument(current, err)
+		}
+		if err := decodeDocument(next.Document, &after); err != nil {
+			return invalidDocument(next, err)
+		}
+		if before.Kind != after.Kind || before.SiteID != after.SiteID {
+			return fmt.Errorf("%w: Network Zone kind and site are immutable", ErrInvalidTransition)
+		}
+	case ObjectNetworkInterface:
+		var before, after NetworkInterface
+		if err := decodeDocument(current.Document, &before); err != nil {
+			return invalidDocument(current, err)
+		}
+		if err := decodeDocument(next.Document, &after); err != nil {
+			return invalidDocument(next, err)
+		}
+		if before.NodeID != after.NodeID || before.Kind != after.Kind || before.SiteID != after.SiteID {
+			return fmt.Errorf("%w: Network Interface node, kind, and site are immutable", ErrInvalidTransition)
+		}
 	case ObjectDesiredState:
 		var before, after DesiredStateDocument
 		if err := decodeDocument(current.Document, &before); err != nil {

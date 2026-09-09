@@ -23,7 +23,7 @@ var applyInputSchema = json.RawMessage(`{
   "required":["operation","object_type","object_id","scope_id","owner_scope","document"],
   "properties":{
     "operation":{"enum":["create","replace"]},
-    "object_type":{"enum":["scope","site","management-zone","role-assignment","desired-state","actual-state"]},
+    "object_type":{"enum":["scope","site","management-zone","network-zone","network-interface","role-assignment","desired-state","actual-state"]},
     "object_id":{"type":"string","minLength":1,"maxLength":255,"pattern":"^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$"},
     "scope_id":{"type":"string","minLength":1,"maxLength":255,"pattern":"^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$"},
     "owner_scope":{"type":"string","minLength":1,"maxLength":255,"pattern":"^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,253}[A-Za-z0-9])?$"},

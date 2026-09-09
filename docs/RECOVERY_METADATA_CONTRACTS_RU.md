@@ -97,6 +97,21 @@ Schema: `recovery.objective-evidence/v1`.
 
 `FAILED` содержит превышенное значение и/или явную причину. Evidence не может быть датировано позже итогового измерения. Это обеспечивает требование: RPO/RTO и Backup Health подтверждаются фактом восстановления, а не декларацией provider.
 
+## Aggregate integrity
+
+Проверка отдельного JSON-документа не доказывает существование его ссылок. `ValidateRecoveryMetadataGraph` поэтому принимает полный read-consistent snapshot из четырёх обязательных коллекций: RecoveryPoint, BackupMetadata, RestoreMetadata и RecoveryObjectiveEvidence. Пустая коллекция передаётся как non-nil пустой Go slice; `nil` означает недоступную или частичную projection и отклоняется fail-closed.
+
+Aggregate validator дополнительно доказывает:
+
+- глобальную уникальность recovery object IDs, provider operation claims и repository artifact keys;
+- двустороннюю согласованность RecoveryPoint/Backup, совпадение scope/owner и полное backup-покрытие объектов для `READY`;
+- существование parent backup, отсутствие циклов, совместимость target/provider/repository и строгий временной порядок incremental/differential chains;
+- принадлежность Restore указанному RecoveryPoint, наличие доступных completed artifacts, совместимость source/target/provider и покрытие PITR target реальным BASE_WAL window;
+- происхождение Backup Health и RPO/RTO evidence из конкретного завершённого isolated restore drill: один evidence ID имеет ровно один verification/fencing origin, а переносимая immutable ссылка должна совпадать с ним полностью;
+- невозможность заявить `VERIFIED` или `PASSED` на основе failed restore, а также невозможность указать observed RTO меньше фактической длительности связанного restore.
+
+Validator не заменяет атомарное чтение persistence adapter: вызывающий слой обязан сформировать snapshot в одной согласованной ревизии. Существование `policy_id`, topology ancestry для `owner_scope` и существование внешних защищаемых объектов проверяются соответствующими policy/topology projections до записи; внутри recovery graph все связанные записи требуют одинаковых `scope_id` и `owner_scope`.
+
 ## Совместимость с 0.3.x
 
 В 0.3.x отсутствовали типизированные RecoveryPoint, BackupMetadata, RestoreMetadata и RPO/RTO evidence. Существовали общие Jobs, Resources и Config Revisions, но их состояние не доказывает наличие корректного backup artifact или успешного restore.
@@ -118,7 +133,8 @@ Schema: `recovery.objective-evidence/v1`.
 - `ValidateBackupMetadata`;
 - `ValidateRestoreMetadata`;
 - `ValidateRecoveryObjectiveEvidence`;
+- `ValidateRecoveryMetadataGraph` для полного read-consistent snapshot и межобъектной provenance validation;
 - строгие decoders для RecoveryPoint, Provider/Fencing, Backup, Restore и RecoveryObjectiveEvidence;
 - `MigrateV03Metadata` для compatibility report.
 
-Контрактные тесты покрывают положительные сценарии, несовместимые state transitions, timestamp ordering, PITR, repository-safe artifacts, encryption key references, provider capabilities, Backup Health evidence, fencing gates, object-level restore, restore drills, RPO/RTO claims и migration determinism.
+Контрактные тесты покрывают положительные сценарии, несовместимые state transitions, timestamp ordering, PITR, repository-safe artifacts, encryption key references, provider capabilities, Backup Health evidence, fencing gates, object-level restore, restore drills, RPO/RTO claims, отсутствующие/перекрёстные ссылки, orphan records, parent cycles, подмену evidence provenance и migration determinism.

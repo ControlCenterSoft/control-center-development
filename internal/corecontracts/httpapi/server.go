@@ -124,13 +124,17 @@ func (s *Server) getTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := struct {
-		Scopes          []corecontracts.StoredObject `json:"scopes"`
-		Sites           []corecontracts.StoredObject `json:"sites"`
-		ManagementZones []corecontracts.StoredObject `json:"management_zones"`
+		Scopes            []corecontracts.StoredObject `json:"scopes"`
+		Sites             []corecontracts.StoredObject `json:"sites"`
+		ManagementZones   []corecontracts.StoredObject `json:"management_zones"`
+		NetworkZones      []corecontracts.StoredObject `json:"network_zones"`
+		NetworkInterfaces []corecontracts.StoredObject `json:"network_interfaces"`
 	}{
-		Scopes:          make([]corecontracts.StoredObject, 0),
-		Sites:           make([]corecontracts.StoredObject, 0),
-		ManagementZones: make([]corecontracts.StoredObject, 0),
+		Scopes:            make([]corecontracts.StoredObject, 0),
+		Sites:             make([]corecontracts.StoredObject, 0),
+		ManagementZones:   make([]corecontracts.StoredObject, 0),
+		NetworkZones:      make([]corecontracts.StoredObject, 0),
+		NetworkInterfaces: make([]corecontracts.StoredObject, 0),
 	}
 	for _, object := range objects {
 		switch object.ObjectType {
@@ -140,6 +144,10 @@ func (s *Server) getTopology(w http.ResponseWriter, r *http.Request) {
 			response.Sites = append(response.Sites, object)
 		case corecontracts.ObjectManagementZone:
 			response.ManagementZones = append(response.ManagementZones, object)
+		case corecontracts.ObjectNetworkZone:
+			response.NetworkZones = append(response.NetworkZones, object)
+		case corecontracts.ObjectNetworkInterface:
+			response.NetworkInterfaces = append(response.NetworkInterfaces, object)
 		}
 	}
 	writeJSON(w, http.StatusOK, response)

@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"control-center/internal/corecontracts"
 )
 
 const (
@@ -52,36 +54,36 @@ type HardwareInventory struct {
 	Storage      []StorageDevice `json:"storage"`
 }
 
-type InterfaceKind string
+type InterfaceKind = corecontracts.NetworkInterfaceKind
 
 const (
-	InterfacePhysical InterfaceKind = "physical"
-	InterfaceBond     InterfaceKind = "bond"
-	InterfaceBridge   InterfaceKind = "bridge"
-	InterfaceVLAN     InterfaceKind = "vlan"
-	InterfaceVirtual  InterfaceKind = "virtual"
+	InterfacePhysical = corecontracts.NetworkInterfacePhysical
+	InterfaceBond     = corecontracts.NetworkInterfaceBond
+	InterfaceBridge   = corecontracts.NetworkInterfaceBridge
+	InterfaceVLAN     = corecontracts.NetworkInterfaceVLAN
+	InterfaceVirtual  = corecontracts.NetworkInterfaceVirtual
 )
 
-type LinkState string
+type LinkState = corecontracts.NetworkLinkState
 
 const (
-	LinkUp      LinkState = "up"
-	LinkDown    LinkState = "down"
-	LinkUnknown LinkState = "unknown"
+	LinkUp      = corecontracts.NetworkLinkUp
+	LinkDown    = corecontracts.NetworkLinkDown
+	LinkUnknown = corecontracts.NetworkLinkUnknown
 )
 
-type NetworkZone string
+type NetworkZone = corecontracts.NetworkZoneKind
 
 const (
-	ZoneUnassigned NetworkZone = "unassigned"
-	ZoneWAN        NetworkZone = "wan"
-	ZoneLAN        NetworkZone = "lan"
-	ZoneManagement NetworkZone = "management"
-	ZoneDMZ        NetworkZone = "dmz"
-	ZoneCluster    NetworkZone = "cluster"
-	ZoneStorage    NetworkZone = "storage"
-	ZoneBackup     NetworkZone = "backup"
-	ZoneTrusted    NetworkZone = "trusted"
+	ZoneUnassigned = corecontracts.NetworkZoneUnassigned
+	ZoneWAN        = corecontracts.NetworkZoneWAN
+	ZoneLAN        = corecontracts.NetworkZoneLAN
+	ZoneManagement = corecontracts.NetworkZoneManagement
+	ZoneDMZ        = corecontracts.NetworkZoneDMZ
+	ZoneCluster    = corecontracts.NetworkZoneCluster
+	ZoneStorage    = corecontracts.NetworkZoneStorage
+	ZoneBackup     = corecontracts.NetworkZoneBackup
+	ZoneTrusted    = corecontracts.NetworkZoneTrusted
 )
 
 type NetworkInterface struct {
