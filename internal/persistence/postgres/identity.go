@@ -127,7 +127,7 @@ func (s *IdentityStore) ListActiveSessionsForUser(ctx context.Context, userID st
 	return result, nil
 }
 func (s *IdentityStore) TouchSessionByDigest(ctx context.Context, digest string, at time.Time) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE cc_auth_sessions SET last_activity_at=$2 WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 AND last_activity_at<=$2`, digest, at.UTC())
+	result, err := s.db.ExecContext(ctx, `UPDATE cc_auth_sessions SET last_activity_at=GREATEST(last_activity_at,$2) WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2`, digest, at.UTC())
 	return requireAffected(result, err, auth.ErrNotFound)
 }
 func (s *IdentityStore) RevokeSessionByDigest(ctx context.Context, digest string, at time.Time) error {
