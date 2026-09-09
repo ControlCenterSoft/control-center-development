@@ -95,3 +95,8 @@ type ChangePasswordInput struct {
 	NewPassword     string
 	SourceIP        string
 }
+
+type RevokeAllSessionsInput struct {
+	UserID   string
+	SourceIP string
+}
