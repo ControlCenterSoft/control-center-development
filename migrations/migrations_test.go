@@ -447,17 +447,32 @@ VALUES
 
 	// This same-named future permission and its custom/built-in grants prove
 	// that 0008 uses additive ON CONFLICT behavior and a conservative down path.
-	if _, err := database.ExecContext(ctx, `
-INSERT INTO cc_rbac_roles (name,description,built_in) VALUES ('legacy-extension','Legacy extension role',false);
-INSERT INTO cc_rbac_permissions (name,description) VALUES
+	transaction, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer transaction.Rollback()
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO cc_rbac_roles (name,description,built_in) VALUES ('legacy-extension','Legacy extension role',false)`, nil},
+		{`INSERT INTO cc_rbac_permissions (name,description) VALUES
  ('market.manifests.read','Legacy extension-owned definition'),
- ('legacy.custom.read','Legacy custom permission');
-INSERT INTO cc_rbac_role_permissions (role_name,permission_name) VALUES
+ ('legacy.custom.read','Legacy custom permission')`, nil},
+		{`INSERT INTO cc_rbac_role_permissions (role_name,permission_name) VALUES
  ('legacy-extension','market.manifests.read'),
  ('legacy-extension','legacy.custom.read'),
- ('viewer','market.manifests.read');
-INSERT INTO cc_rbac_user_bindings (id,user_id,role_name,scope_kind,scope_id,created_at,created_by)
-VALUES ('00000000-0000-4000-8000-000000000306',$1::uuid,'legacy-extension','global',NULL,$2,$1::uuid)`, fixture.adminID, fixture.passwordChanged); err != nil {
+ ('viewer','market.manifests.read')`, nil},
+		{`INSERT INTO cc_rbac_user_bindings (id,user_id,role_name,scope_kind,scope_id,created_at,created_by)
+VALUES ('00000000-0000-4000-8000-000000000306',$1::uuid,'legacy-extension','global',NULL,$2,$1::uuid)`, []any{fixture.adminID, fixture.passwordChanged}},
+	}
+	for _, statement := range statements {
+		if _, err := transaction.ExecContext(ctx, statement.query, statement.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := transaction.Commit(); err != nil {
 		t.Fatal(err)
 	}
 
