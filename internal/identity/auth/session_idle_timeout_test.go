@@ -5,6 +5,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"control-center/internal/identity/audit"
+	"control-center/internal/identity/security"
 )
 
 func TestSessionIdleTimeoutRejectsInactiveSession(t *testing.T) {
@@ -107,15 +110,15 @@ func TestSessionInventoryOmitsIdleExpiredSessionsAndReportsIdleDeadline(t *testi
 	if !views[0].IdleExpiresAt.Equal(wantIdleExpiry) {
 		t.Fatalf("idle expiry=%s, want %s", views[0].IdleExpiresAt, wantIdleExpiry)
 	}
-	if views[0].Current != true || first.Session.ID == second.Session.ID {
+	if !views[0].Current || first.Session.ID == second.Session.ID {
 		t.Fatalf("unexpected current-session metadata: %#v", views[0])
 	}
 }
 
 func TestSessionIdleTimeoutOptionIsBoundedByAbsoluteTTL(t *testing.T) {
 	store := NewMemoryStore()
-	hasher := securityHasherForIdleTimeoutTest(t)
-	log := newIdleTimeoutAuditLog()
+	hasher := security.NewPasswordHasher()
+	log := audit.NewMemoryLog()
 	hash, err := hasher.Hash("synthetic test password long enough")
 	if err != nil {
 		t.Fatal(err)
