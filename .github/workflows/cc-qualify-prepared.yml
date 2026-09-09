@@ -1,0 +1,39 @@
+name: CC qualify prepared Market manifests package
+
+on:
+  push:
+    branches:
+      - integration/cc-next-market-manifests
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current integration branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - name: Cherry-pick prepared package onto current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main:refs/remotes/origin/main parallel/market/builtin-manifests:refs/remotes/origin/prepared
+          base="$(git merge-base origin/main origin/prepared)"
+          while IFS= read -r commit; do
+            [[ -n "$commit" ]] || continue
+            if ! git cherry-pick "$commit"; then
+              echo "::group::Cherry-pick conflicts"
+              git diff --name-only --diff-filter=U | sort
+              echo "::endgroup::"
+              exit 1
+            fi
+          done < <(git rev-list --reverse "$base"..origin/prepared)
+          git rm .github/workflows/cc-qualify-prepared.yml
+          git commit -m "ci: remove Market-manifests qualification helper"
+          git push origin HEAD:integration/cc-next-market-manifests
