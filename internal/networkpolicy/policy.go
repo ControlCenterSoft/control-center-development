@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	ErrInvalidZone        = errors.New("invalid network zone")
-	ErrForwardingDisabled = errors.New("inter-zone forwarding disabled")
+	ErrInvalidZone         = errors.New("invalid network zone")
+	ErrForwardingDisabled  = errors.New("inter-zone forwarding disabled")
 	ErrEdgeGatewayRequired = errors.New("edge gateway required")
 )
 
