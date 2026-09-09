@@ -142,9 +142,6 @@ func (s *MemoryStore) ListActiveSessionsForUser(_ context.Context, userID string
 		}
 		return result[i].CreatedAt.After(result[j].CreatedAt)
 	})
-	if len(result) > MaxSessionInventory {
-		result = result[:MaxSessionInventory]
-	}
 	return result, nil
 }
 func (s *MemoryStore) RevokeSessionByDigest(_ context.Context, digest string, at time.Time) error {
