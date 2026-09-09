@@ -37,10 +37,10 @@ func (z Zone) Valid() bool {
 // between network zones. Inter-zone routing is fail-closed and WAN forwarding
 // additionally requires an explicitly assigned Edge Gateway role.
 type ForwardingIntent struct {
-	Source              Zone
-	Destination         Zone
-	ExplicitlyEnabled   bool
-	EdgeGatewayAssigned bool
+	Source              Zone `json:"source"`
+	Destination         Zone `json:"destination"`
+	ExplicitlyEnabled   bool `json:"explicitly_enabled"`
+	EdgeGatewayAssigned bool `json:"edge_gateway_assigned"`
 }
 
 // AuthorizeForwarding returns nil only when the requested forwarding is
