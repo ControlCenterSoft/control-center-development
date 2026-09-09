@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	BootstrapContractV1 = "agent.bootstrap-token/v1"
+	BootstrapContractV1  = "agent.bootstrap-token/v1"
 	bootstrapIDBytes     = 16
 	bootstrapSecretBytes = 32
 	minimumBootstrapTTL  = time.Minute
