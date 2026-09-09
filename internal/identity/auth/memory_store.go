@@ -103,6 +103,16 @@ func (s *MemoryStore) CreateSession(_ context.Context, session Session, expected
 	if _, exists := s.sessionsByDigest[session.TokenDigest]; exists {
 		return ErrConflict
 	}
+	session.CreatedAt = session.CreatedAt.UTC()
+	session.ExpiresAt = session.ExpiresAt.UTC()
+	if session.LastActivityAt.IsZero() {
+		session.LastActivityAt = session.CreatedAt
+	} else {
+		session.LastActivityAt = session.LastActivityAt.UTC()
+	}
+	if session.LastActivityAt.Before(session.CreatedAt) || session.LastActivityAt.After(session.ExpiresAt) {
+		return ErrConflict
+	}
 	s.sessionsByDigest[session.TokenDigest] = session
 	return nil
 }
@@ -143,6 +153,22 @@ func (s *MemoryStore) ListActiveSessionsForUser(_ context.Context, userID string
 		return result[i].CreatedAt.After(result[j].CreatedAt)
 	})
 	return result, nil
+}
+func (s *MemoryStore) TouchSessionByDigest(_ context.Context, digest string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, exists := s.sessionsByDigest[digest]
+	if !exists || session.RevokedAt != nil {
+		return ErrNotFound
+	}
+	at = at.UTC()
+	lastActivity := session.activityAt()
+	if !at.Before(session.ExpiresAt) || at.Before(lastActivity) {
+		return ErrNotFound
+	}
+	session.LastActivityAt = at
+	s.sessionsByDigest[digest] = session
+	return nil
 }
 func (s *MemoryStore) RevokeSessionByDigest(_ context.Context, digest string, at time.Time) error {
 	s.mu.Lock()
