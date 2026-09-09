@@ -57,6 +57,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	s.mux.Handle("GET /api/v1/auth/session", s.Authenticate(http.HandlerFunc(s.session)))
 	s.mux.Handle("POST /api/v1/auth/password", s.Authenticate(http.HandlerFunc(s.changePassword)))
+	s.mux.Handle("GET /api/v1/auth/sessions", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.listSessions))))
+	s.mux.Handle("DELETE /api/v1/auth/sessions/{sessionID}", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.revokeSession))))
 	s.mux.Handle("POST /api/v1/auth/sessions/revoke-all", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.revokeAllSessions))))
 	s.mux.Handle("GET /api/v1/identity/self", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.identitySelf))))
 	s.mux.Handle("GET /api/v1/system/overview", s.Authenticate(s.Require(rbac.PermissionOverviewRead, rbac.GlobalScope())(http.HandlerFunc(s.overviewAPI))))
@@ -227,6 +229,45 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) listSessions(w http.ResponseWriter, r *http.Request) {
+	principal, _ := PrincipalFromContext(r.Context())
+	sessions, err := s.auth.ListSessions(r.Context(), auth.ListSessionsInput{
+		UserID: principal.Identity.ID, CurrentSessionID: principal.Session.ID, SourceIP: remoteIP(r),
+	})
+	if err != nil {
+		if errors.Is(err, auth.ErrUnauthenticated) {
+			writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+			return
+		}
+		writeError(w, r, http.StatusServiceUnavailable, "session_inventory_unavailable", "Session inventory is temporarily unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+}
+
+func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request) {
+	principal, _ := PrincipalFromContext(r.Context())
+	result, err := s.auth.RevokeSession(r.Context(), auth.RevokeSessionInput{
+		UserID: principal.Identity.ID, SessionID: r.PathValue("sessionID"),
+		CurrentSessionID: principal.Session.ID, SourceIP: remoteIP(r),
+	})
+	if result.CurrentSessionRevoked {
+		s.clearSessionCookie(w)
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrUnauthenticated):
+			writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+		case errors.Is(err, auth.ErrNotFound):
+			writeError(w, r, http.StatusNotFound, "session_not_found", "Active session was not found")
+		default:
+			writeError(w, r, http.StatusServiceUnavailable, "session_revocation_unavailable", "Session revocation is temporarily unavailable")
+		}
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
