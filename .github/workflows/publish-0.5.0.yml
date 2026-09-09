@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ env.TARGET_SHA }}
-          persist-credentials: false
+          persist-credentials: true
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
@@ -33,17 +33,22 @@ jobs:
           go test ./...
           go vet ./...
           go build -trimpath -buildvcs=false ./cmd/control-center
-      - name: Publish immutable source release
+      - name: Publish immutable source tag and release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha' 2>/dev/null || true)"
+          existing="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}" | awk '{print $1}')"
           if [ -n "$existing" ]; then
             test "$existing" = "$TARGET_SHA"
-            exit 0
+          else
+            git tag "$RELEASE_TAG" "$TARGET_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
           fi
-          gh release create "$RELEASE_TAG" \
-            --target "$TARGET_SHA" \
-            --title "Control Center 0.5.0" \
-            --notes "Qualified source release for Multi-node Operations and Lifecycle. Source CI is green; production deployment and artifact signing are separate protected gates."
+          if ! gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$RELEASE_TAG" \
+              -f name="Control Center 0.5.0" \
+              -f body="Qualified source release for Multi-node Operations and Lifecycle. Source CI is green; production deployment and artifact signing are separate protected gates." \
+              -F draft=false -F prerelease=false
+          fi
