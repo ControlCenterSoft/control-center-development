@@ -162,12 +162,13 @@ func (s *MemoryStore) TouchSessionByDigest(_ context.Context, digest string, at 
 		return ErrNotFound
 	}
 	at = at.UTC()
-	lastActivity := session.activityAt()
-	if !at.Before(session.ExpiresAt) || at.Before(lastActivity) {
+	if !at.Before(session.ExpiresAt) {
 		return ErrNotFound
 	}
-	session.LastActivityAt = at
-	s.sessionsByDigest[digest] = session
+	if at.After(session.activityAt()) {
+		session.LastActivityAt = at
+		s.sessionsByDigest[digest] = session
+	}
 	return nil
 }
 func (s *MemoryStore) RevokeSessionByDigest(_ context.Context, digest string, at time.Time) error {
