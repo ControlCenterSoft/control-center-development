@@ -75,6 +75,55 @@ type Role struct {
 	Permissions []Permission `json:"permissions"`
 }
 
+// PermissionDefinition is the canonical persisted definition of a built-in
+// permission. Keeping this registry next to the permission constants lets the
+// database upgrade qualification prove that every permission used by a
+// built-in role is present after a clean install or upgrade.
+type PermissionDefinition struct {
+	Name        Permission
+	Description string
+}
+
+var builtinPermissions = []PermissionDefinition{
+	{Name: PermissionAll, Description: "All permissions; valid only through an explicit role binding"},
+	{Name: PermissionOverviewRead, Description: "Read system overview"},
+	{Name: PermissionUsersRead, Description: "Read local identities"},
+	{Name: PermissionUsersWrite, Description: "Manage local identities"},
+	{Name: PermissionRolesRead, Description: "Read roles and bindings"},
+	{Name: PermissionRolesWrite, Description: "Manage roles and bindings"},
+	{Name: PermissionAuditRead, Description: "Read security audit events"},
+	{Name: PermissionResourcesRead, Description: "Read resource inventory and observed state"},
+	{Name: PermissionRevisionsWrite, Description: "Create immutable configuration revisions"},
+	{Name: PermissionActionsRead, Description: "Read executable action descriptors"},
+	{Name: PermissionChangesWrite, Description: "Create changes"},
+	{Name: PermissionChangesApprove, Description: "Approve high-risk changes"},
+	{Name: PermissionJobsRead, Description: "Read job execution state and outputs"},
+	{Name: PermissionJobsCancel, Description: "Request job cancellation"},
+	{Name: PermissionActionsExecute, Description: "Execute allowlisted orchestration actions"},
+	{Name: PermissionNodeEnrollmentPlan, Description: "Plan node enrollment"},
+	{Name: PermissionNodeLifecycleRead, Description: "Read node lifecycle state"},
+	{Name: PermissionNodeLifecyclePlan, Description: "Plan guarded node lifecycle transitions"},
+	{Name: PermissionAutomationPlan, Description: "Plan software automation without host mutation"},
+	{Name: PermissionPXEPlan, Description: "Plan PXE deployment without host mutation"},
+	{Name: PermissionMarketRead, Description: "Read Market manifests"},
+	{Name: PermissionDomainProviderResolve, Description: "Resolve compatible directory-service providers"},
+	{Name: PermissionDomainLifecyclePlan, Description: "Plan directory-service lifecycle operations"},
+	{Name: PermissionInventoryNormalize, Description: "Normalize inventory observations"},
+	{Name: PermissionAgentEnrollmentNormalize, Description: "Normalize agent enrollment contracts"},
+	{Name: PermissionInventoryReconcile, Description: "Reconcile inventory observations"},
+	{Name: PermissionInventoryFreshness, Description: "Evaluate inventory freshness"},
+	{Name: PermissionAgentHeartbeatEvaluate, Description: "Evaluate agent heartbeat health"},
+	{Name: PermissionAgentLeaseEvaluate, Description: "Evaluate agent lease state"},
+	{Name: PermissionCoreObjectsRead, Description: "Read distributed core topology and state objects"},
+	{Name: PermissionCoreObjectsWrite, Description: "Apply typed distributed core object changes through Change and Job"},
+}
+
+// BuiltinPermissions returns a defensive copy of the canonical built-in
+// permission registry. Custom permissions are deliberately outside this set.
+func BuiltinPermissions() []PermissionDefinition {
+	return append([]PermissionDefinition(nil), builtinPermissions...)
+}
+
 type Binding struct {
 	SubjectID string `json:"subject_id"`
 	RoleName  string `json:"role_name"`

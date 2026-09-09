@@ -264,6 +264,103 @@ func TestPostgresCoreObjectRepositoryCASAndRestart(t *testing.T) {
 	}
 }
 
+func TestPostgresNetworkContractsSurviveAdapterRestart(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set; PostgreSQL integration test skipped")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	db, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var networkTypesEnabled bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid='cc_core_objects'::regclass
+      AND conname='cc_core_objects_type'
+      AND pg_get_constraintdef(oid) LIKE '%network-zone%'
+      AND pg_get_constraintdef(oid) LIKE '%network-interface%'
+)`).Scan(&networkTypesEnabled); err != nil || !networkTypesEnabled {
+		t.Fatalf("database must be migrated through 0007: enabled=%v err=%v", networkTypesEnabled, err)
+	}
+
+	repository, err := NewCoreObjectRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	scopeID := "network-scope-" + suffix
+	siteID := "network-site-" + suffix
+	roleID := "network-agent-role-" + suffix
+	zoneID := "network-zone-" + suffix
+	interfaceID := "network-interface-" + suffix
+	objectIDs := []string{interfaceID, zoneID, roleID, siteID, scopeID}
+	t.Cleanup(func() {
+		for _, objectID := range objectIDs {
+			_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_core_object_mutations WHERE object_id=$1`, objectID)
+			_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_core_objects WHERE object_id=$1`, objectID)
+		}
+	})
+
+	requests := []corecontracts.MutationRequest{
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectScope,
+			ObjectID: scopeID, ScopeID: "global", OwnerScope: "global",
+			Document: json.RawMessage(fmt.Sprintf(`{"id":%q,"kind":"site","name":"Network integration scope","parent_id":"global","delegated_authorities":["configuration","desired-state"]}`, scopeID)),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectSite,
+			ObjectID: siteID, ScopeID: scopeID, OwnerScope: "global",
+			Document: json.RawMessage(fmt.Sprintf(`{"id":%q,"name":"Network integration site","scope_id":%q}`, siteID, scopeID)),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectRoleAssignment,
+			ObjectID: roleID, ScopeID: scopeID, OwnerScope: "global",
+			Document: json.RawMessage(fmt.Sprintf(`{"target_node_id":%q,"service_identity_id":%q,"role":"agent","site_id":%q}`, "network-node-"+suffix, "network-agent-"+suffix, siteID)),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectNetworkZone,
+			ObjectID: zoneID, ScopeID: scopeID, OwnerScope: "global",
+			Document: json.RawMessage(fmt.Sprintf(`{"id":%q,"name":"Integration LAN","kind":"lan","scope_id":%q,"site_id":%q}`, zoneID, scopeID, siteID)),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectNetworkInterface,
+			ObjectID: interfaceID, ScopeID: scopeID, OwnerScope: "global",
+			Document: json.RawMessage(fmt.Sprintf(`{"id":%q,"node_id":%q,"name":"eth0","kind":"physical","scope_id":%q,"site_id":%q,"network_zone_id":%q,"mac_address":"02:00:00:00:00:01","operational_state":"up","addresses":["192.0.2.10/24"],"mtu":1500,"link_speed_mbps":1000}`, interfaceID, "network-node-"+suffix, scopeID, siteID, zoneID)),
+		},
+	}
+	for index, request := range requests {
+		if _, err := repository.Apply(ctx, request, fmt.Sprintf("network-integration-%s-%d", suffix, index)); err != nil {
+			t.Fatalf("persist %s %q: %v", request.ObjectType, request.ObjectID, err)
+		}
+	}
+
+	restarted, err := NewCoreObjectRepository(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := restarted.Get(ctx, interfaceID)
+	if err != nil || loaded.ObjectType != corecontracts.ObjectNetworkInterface || loaded.Generation != 1 {
+		t.Fatalf("network interface after adapter restart=%#v err=%v", loaded, err)
+	}
+	objects, err := restarted.List(ctx, corecontracts.ObjectFilter{})
+	if err != nil {
+		t.Fatalf("validate restarted distributed snapshot: %v", err)
+	}
+	foundZone, foundInterface := false, false
+	for _, object := range objects {
+		foundZone = foundZone || object.ObjectID == zoneID && object.ObjectType == corecontracts.ObjectNetworkZone
+		foundInterface = foundInterface || object.ObjectID == interfaceID && object.ObjectType == corecontracts.ObjectNetworkInterface
+	}
+	if !foundZone || !foundInterface {
+		t.Fatalf("restarted snapshot lacks network objects: zone=%v interface=%v", foundZone, foundInterface)
+	}
+}
+
 func hexDigest(value string) string { return hexDigestBytes([]byte(value)) }
 func hexDigestBytes(value []byte) string {
 	sum := sha256.Sum256(value)

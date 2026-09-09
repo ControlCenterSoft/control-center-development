@@ -54,6 +54,39 @@ func TestApplyActionUsesDurableDownstreamIdempotency(t *testing.T) {
 	}
 }
 
+func TestApplyActionSchemaIncludesNetworkContractObjects(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	repository, err := corecontracts.NewMemoryObjectRepository([]corecontracts.StoredObject{corecontracts.LegacyGlobalScopeObject(now)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, err := NewApplyAction(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties struct {
+			ObjectType struct {
+				Enum []string `json:"enum"`
+			} `json:"object_type"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(definition.InputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]bool{"network-zone": false, "network-interface": false}
+	for _, objectType := range schema.Properties.ObjectType.Enum {
+		if _, exists := wanted[objectType]; exists {
+			wanted[objectType] = true
+		}
+	}
+	for objectType, found := range wanted {
+		if !found {
+			t.Fatalf("core.object.apply schema lacks %q: %s", objectType, definition.InputSchema)
+		}
+	}
+}
+
 func TestApplyActionRequiresWorkerInvocation(t *testing.T) {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 	repository, err := corecontracts.NewMemoryObjectRepository([]corecontracts.StoredObject{corecontracts.LegacyGlobalScopeObject(now)})

@@ -17,9 +17,202 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  public-safety:
+    name: Public safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Scan repository boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f .env
+          test ! -f .env.staging
+          if grep -RInE --exclude-dir=.git --exclude='*.sum' --exclude='ci.yml' \
+            '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]+|AKIA[0-9A-Z]{16})' .; then
+            echo 'public-safety scan detected credential-like material' >&2
+            exit 1
+          fi
+
+  static-analysis:
+    name: Format and vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Formatting
+        run: make fmt-check
+
+      - name: Vet
+        run: go vet ./...
+
+  unit:
+    name: Unit and contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run side-effect-free tests
+        run: go test ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build control-center
+        run: go build -trimpath -buildvcs=false ./cmd/control-center
+
+  postgres-migration-qualification:
+    name: PostgreSQL ${{ matrix.postgres }} / ${{ matrix.scenario }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres:
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+        scenario:
+          - clean-install
+          - supported-upgrade
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: control_center_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d control_center_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run isolated migration scenario
+        shell: bash
+        env:
+          MIGRATION_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
+          QUALIFICATION_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          case "$QUALIFICATION_SCENARIO" in
+            clean-install)
+              qualification_test=TestPostgresCleanInstallAndRestart
+              ;;
+            supported-upgrade)
+              qualification_test=TestPostgresUpgradeFrom03PreservesLegacyState
+              ;;
+            *)
+              echo 'unsupported qualification scenario' >&2
+              exit 2
+              ;;
+          esac
+          go test ./migrations -run "^${qualification_test}$" -count=1 -v
+
+  postgres-adapter-compatibility:
+    name: PostgreSQL ${{ matrix.postgres }} adapters
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres:
+          - '15'
+          - '16'
+          - '17'
+          - '18'
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: control_center_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d control_center_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install current schema for adapter tests
+        env:
+          MIGRATION_INSTALL_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
+        run: go test ./migrations -run '^TestPostgresInstallCurrentSchemaFixture$' -count=1 -v
+
+      - name: Verify PostgreSQL adapters and restart recovery
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
+        run: go test ./internal/persistence/postgres -run '^TestPostgres' -count=1 -v
+
+  race:
+    name: Race and PostgreSQL restart tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-alpine
@@ -33,7 +226,7 @@ jobs:
           --health-cmd "pg_isready -U postgres -d control_center_test"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 12
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -46,30 +239,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Public-safety scan
-        shell: bash
-        run: |
-          set -euo pipefail
-          test ! -f .env
-          test ! -f .env.staging
-          if grep -RInE --exclude-dir=.git --exclude='*.sum' --exclude='ci.yml' \
-            '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9]+|AKIA[0-9A-Z]{16})' .; then
-            echo 'public-safety scan detected credential-like material' >&2
-            exit 1
-          fi
-
-      - name: Verify 0.3 to 0.4 database migration
+      - name: Install current schema for race tests
         env:
-          MIGRATION_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
-        run: go test ./migrations -run TestPostgresUpgradeFrom03PreservesLegacyState -count=1
+          MIGRATION_INSTALL_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
+        run: go test ./migrations -run '^TestPostgresInstallCurrentSchemaFixture$' -count=1
 
-      - name: Vet
-        run: go vet ./...
-
-      - name: Race tests
+      - name: Run race detector with PostgreSQL adapters
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
-        run: go test -race ./...
-
-      - name: Build
-        run: go build ./cmd/control-center
+        run: go test -race -count=1 ./...

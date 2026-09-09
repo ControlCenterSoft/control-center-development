@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -45,11 +46,60 @@ func TestDistributedCoreReadAPI(t *testing.T) {
 		t.Fatalf("get status=%d body=%s", result.Code, result.Body.String())
 	}
 	result = request(handler, http.MethodGet, "/api/v1/core/topology")
-	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"scopes":[`) || !strings.Contains(result.Body.String(), `"management_zones":[]`) {
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"scopes":[`) ||
+		!strings.Contains(result.Body.String(), `"management_zones":[]`) ||
+		!strings.Contains(result.Body.String(), `"network_zones":[]`) ||
+		!strings.Contains(result.Body.String(), `"network_interfaces":[]`) {
 		t.Fatalf("topology status=%d body=%s", result.Code, result.Body.String())
 	}
 	if guardCalls != 3 {
 		t.Fatalf("guard calls=%d, want 3", guardCalls)
+	}
+}
+
+func TestDistributedCoreReadAPIIncludesNetworkSnapshot(t *testing.T) {
+	repository := testRepository(t)
+	requests := []corecontracts.MutationRequest{
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectScope,
+			ObjectID: "scope-site-a", ScopeID: "global", OwnerScope: "global",
+			Document: json.RawMessage(`{"id":"scope-site-a","kind":"site","name":"Site A scope","parent_id":"global","delegated_authorities":["configuration","desired-state"]}`),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectSite,
+			ObjectID: "site-a", ScopeID: "scope-site-a", OwnerScope: "global",
+			Document: json.RawMessage(`{"id":"site-a","name":"Site A","scope_id":"scope-site-a"}`),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectRoleAssignment,
+			ObjectID: "role-agent-a", ScopeID: "scope-site-a", OwnerScope: "global",
+			Document: json.RawMessage(`{"target_node_id":"node-a","service_identity_id":"agent-a","role":"agent","site_id":"site-a"}`),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectNetworkZone,
+			ObjectID: "network-zone-a", ScopeID: "scope-site-a", OwnerScope: "global",
+			Document: json.RawMessage(`{"id":"network-zone-a","name":"Site A LAN","kind":"lan","scope_id":"scope-site-a","site_id":"site-a"}`),
+		},
+		{
+			Operation: corecontracts.MutationCreate, ObjectType: corecontracts.ObjectNetworkInterface,
+			ObjectID: "network-interface-a", ScopeID: "scope-site-a", OwnerScope: "global",
+			Document: json.RawMessage(`{"id":"network-interface-a","node_id":"node-a","name":"eth0","kind":"physical","scope_id":"scope-site-a","site_id":"site-a","network_zone_id":"network-zone-a","mac_address":"02:00:00:00:00:01","operational_state":"up","mtu":1500}`),
+		},
+	}
+	for index, mutation := range requests {
+		if _, err := repository.Apply(context.Background(), mutation, fmt.Sprintf("network-read-api-%d", index)); err != nil {
+			t.Fatalf("persist %s: %v", mutation.ObjectType, err)
+		}
+	}
+	handler := New(testLogger(), repository, func(next http.Handler) http.Handler { return next }).Handler()
+
+	result := request(handler, http.MethodGet, "/api/v1/core/objects?object_type=network-interface")
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"object_id":"network-interface-a"`) || !strings.Contains(result.Body.String(), `"count":1`) {
+		t.Fatalf("network interface list status=%d body=%s", result.Code, result.Body.String())
+	}
+	result = request(handler, http.MethodGet, "/api/v1/core/topology")
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"network_zones":[{"object_id":"network-zone-a"`) || !strings.Contains(result.Body.String(), `"network_interfaces":[{"object_id":"network-interface-a"`) {
+		t.Fatalf("network topology status=%d body=%s", result.Code, result.Body.String())
 	}
 }
 

@@ -35,6 +35,8 @@ Bootstrap token, приватные ключи, пароли, произволь
 
 Канонические network zones: `unassigned`, `wan`, `lan`, `management`, `dmz`, `cluster`, `storage`, `backup`, `trusted`.
 
+Agent v2 использует те же закрытые enum Network Zone, Interface Kind и Link State, что и персистентный Distributed Core. Enrollment payload остаётся наблюдаемым входным снимком; создание `network-zone`/`network-interface` выполняется отдельно через валидируемый `core.object.apply` и не активирует сеть.
+
 Capacity evidence: `measured`, `estimated`, `benchmark`. Неизмеренные значения могут храниться как данные контракта, но сами по себе не подтверждают readiness или сертифицированную capacity.
 
 ## Fail-closed preconditions

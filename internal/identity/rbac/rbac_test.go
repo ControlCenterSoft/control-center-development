@@ -105,3 +105,29 @@ func TestBuiltinDistributedCorePermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestBuiltinPermissionRegistryCoversEveryRolePermission(t *testing.T) {
+	definitions := BuiltinPermissions()
+	registered := make(map[Permission]struct{}, len(definitions))
+	for _, definition := range definitions {
+		if definition.Name == "" || definition.Description == "" {
+			t.Fatalf("incomplete built-in permission definition: %#v", definition)
+		}
+		if _, duplicate := registered[definition.Name]; duplicate {
+			t.Fatalf("duplicate built-in permission definition %q", definition.Name)
+		}
+		registered[definition.Name] = struct{}{}
+	}
+	for _, role := range BuiltinRoles() {
+		for _, permission := range role.Permissions {
+			if _, exists := registered[permission]; !exists {
+				t.Errorf("built-in role %q uses unregistered permission %q", role.Name, permission)
+			}
+		}
+	}
+
+	definitions[0].Description = "mutated by caller"
+	if BuiltinPermissions()[0].Description == definitions[0].Description {
+		t.Fatal("built-in permission registry was mutable through its result")
+	}
+}

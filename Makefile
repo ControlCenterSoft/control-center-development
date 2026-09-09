@@ -27,7 +27,7 @@ vet:
 	go vet ./...
 
 fmt-check:
-	@test -z "$$(gofmt -l cmd internal)" || { gofmt -d cmd internal; exit 1; }
+	@test -z "$$(gofmt -l cmd internal migrations)" || { gofmt -d cmd internal migrations; exit 1; }
 
 check: fmt-check vet test-race
 
