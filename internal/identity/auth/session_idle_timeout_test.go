@@ -73,6 +73,34 @@ func TestAuthenticationRefreshesSessionActivity(t *testing.T) {
 	}
 }
 
+func TestSessionActivityTouchIsMonotonic(t *testing.T) {
+	service, store, _ := newTestService(t)
+	now := time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	issued, err := service.Login(context.Background(), LoginInput{
+		Username: "administrator", Password: "synthetic test password long enough",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := digestToken(issued.Token)
+	newer := now.Add(10 * time.Minute)
+	older := now.Add(5 * time.Minute)
+	if err := store.TouchSessionByDigest(context.Background(), digest, newer); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TouchSessionByDigest(context.Background(), digest, older); err != nil {
+		t.Fatalf("stale concurrent activity should be an idempotent no-op: %v", err)
+	}
+	persisted, err := store.FindSessionByDigest(context.Background(), digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !persisted.LastActivityAt.Equal(newer) {
+		t.Fatalf("stale activity regressed timestamp to %s, want %s", persisted.LastActivityAt, newer)
+	}
+}
+
 func TestSessionInventoryOmitsIdleExpiredSessionsAndReportsIdleDeadline(t *testing.T) {
 	service, _, _ := newTestService(t)
 	service.sessionIdleTimeout = 15 * time.Minute
