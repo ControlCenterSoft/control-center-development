@@ -41,6 +41,7 @@ type WorkloadCurve struct {
 	CurveID            string                    `json:"curve_id"`
 	ScopeID            string                    `json:"scope_id"`
 	WorkloadUnit       WorkloadUnit              `json:"workload_unit"`
+	MinimumPoints      int                       `json:"minimum_points"`
 	Points             []WorkloadCurvePoint      `json:"points"`
 	Status             WorkloadCurveStatus       `json:"status"`
 	Reason             string                    `json:"reason"`
@@ -50,15 +51,15 @@ type WorkloadCurve struct {
 }
 
 type WorkloadCurveEstimate struct {
-	SchemaVersion         string               `json:"schema_version"`
-	EstimateID            string               `json:"estimate_id"`
-	CurveID               string               `json:"curve_id"`
-	TargetResourceFactor  float64              `json:"target_resource_factor"`
-	EstimatedSafeWorkload *float64             `json:"estimated_safe_workload,omitempty"`
-	Status                WorkloadCurveStatus  `json:"status"`
-	Reason                string               `json:"reason"`
-	AdvisoryOnly          bool                 `json:"advisory_only"`
-	ProductionMutation    bool                 `json:"production_mutation"`
+	SchemaVersion         string              `json:"schema_version"`
+	EstimateID            string              `json:"estimate_id"`
+	CurveID               string              `json:"curve_id"`
+	TargetResourceFactor  float64             `json:"target_resource_factor"`
+	EstimatedSafeWorkload *float64            `json:"estimated_safe_workload,omitempty"`
+	Status                WorkloadCurveStatus `json:"status"`
+	Reason                string              `json:"reason"`
+	AdvisoryOnly          bool                `json:"advisory_only"`
+	ProductionMutation    bool                `json:"production_mutation"`
 }
 
 // BuildWorkloadCurve builds a deterministic piecewise-linear capacity curve
@@ -152,6 +153,7 @@ func BuildWorkloadCurve(request WorkloadCurveRequest, points []WorkloadCurvePoin
 		CurveID:            "wlc-" + hex.EncodeToString(digest[:])[:24],
 		ScopeID:            request.ScopeID,
 		WorkloadUnit:       request.WorkloadUnit,
+		MinimumPoints:      request.MinimumPoints,
 		Points:             normalized,
 		Status:             status,
 		Reason:             reason,
@@ -165,14 +167,24 @@ func BuildWorkloadCurve(request WorkloadCurveRequest, points []WorkloadCurvePoin
 // extrapolates beyond measured resource factors; callers must collect evidence
 // instead of treating an unobserved scale factor as safe capacity.
 func EstimateWorkloadCurve(curve WorkloadCurve, targetResourceFactor float64) (WorkloadCurveEstimate, error) {
-	if curve.SchemaVersion != WorkloadCurveSchemaV1 || !identifierPattern.MatchString(curve.ScopeID) ||
-		!validWorkloadUnit(curve.WorkloadUnit) || !curve.AdvisoryOnly || curve.ProductionMutation ||
-		len(curve.Points) < 3 || len(curve.Points) > 64 {
+	if curve.SchemaVersion != WorkloadCurveSchemaV1 || !curve.AdvisoryOnly || curve.ProductionMutation {
 		return WorkloadCurveEstimate{}, fmt.Errorf("%w: invalid workload curve evidence", ErrInvalidRecommendation)
 	}
 	if !finitePositive(targetResourceFactor) || targetResourceFactor > 1000 {
 		return WorkloadCurveEstimate{}, fmt.Errorf("%w: target_resource_factor is outside supported bounds", ErrInvalidRecommendation)
 	}
+	rebuilt, err := BuildWorkloadCurve(
+		WorkloadCurveRequest{ScopeID: curve.ScopeID, WorkloadUnit: curve.WorkloadUnit, MinimumPoints: curve.MinimumPoints},
+		curve.Points,
+	)
+	if err != nil {
+		return WorkloadCurveEstimate{}, fmt.Errorf("%w: invalid workload curve evidence: %v", ErrInvalidRecommendation, err)
+	}
+	if rebuilt.CurveID != curve.CurveID || rebuilt.Status != curve.Status || rebuilt.Reason != curve.Reason ||
+		rebuilt.Confidence != curve.Confidence {
+		return WorkloadCurveEstimate{}, fmt.Errorf("%w: workload curve evidence mismatch", ErrInvalidRecommendation)
+	}
+	curve = rebuilt
 	if curve.Status == WorkloadCurveBlocked {
 		return curveEstimate(curve, targetResourceFactor, nil, WorkloadCurveBlocked, "curve_blocked"), nil
 	}
@@ -180,8 +192,7 @@ func EstimateWorkloadCurve(curve WorkloadCurve, targetResourceFactor float64) (W
 		return WorkloadCurveEstimate{}, fmt.Errorf("%w: unsupported workload curve state", ErrInvalidRecommendation)
 	}
 
-	points := append([]WorkloadCurvePoint(nil), curve.Points...)
-	sort.Slice(points, func(i, j int) bool { return points[i].ResourceFactor < points[j].ResourceFactor })
+	points := curve.Points
 	if targetResourceFactor < points[0].ResourceFactor-floatTolerance(targetResourceFactor, points[0].ResourceFactor) ||
 		targetResourceFactor > points[len(points)-1].ResourceFactor+floatTolerance(targetResourceFactor, points[len(points)-1].ResourceFactor) {
 		return curveEstimate(curve, targetResourceFactor, nil, WorkloadCurveCollectEvidence, "target_outside_observed_curve"), nil
@@ -229,7 +240,7 @@ func curveEstimate(curve WorkloadCurve, target float64, value *float64, status W
 }
 
 func validWorkloadProfileID(value string) bool {
-	if len(value) != len("wlp-")+24 || !strings.HasPrefix(value, "wlp-") {
+	if value != strings.ToLower(value) || len(value) != len("wlp-")+24 || !strings.HasPrefix(value, "wlp-") {
 		return false
 	}
 	_, err := hex.DecodeString(strings.TrimPrefix(value, "wlp-"))
