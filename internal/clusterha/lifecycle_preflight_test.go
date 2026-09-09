@@ -11,14 +11,13 @@ import (
 
 func lifecyclePlan(nodeID string, target nodelifecycle.State) nodelifecycle.TransitionPlan {
 	return nodelifecycle.TransitionPlan{
-		PlanID:         "nlp-test-plan",
-		Accepted:       true,
-		PlanOnly:       true,
-		HostMutation:   false,
-		StateMutation:  false,
-		NodeID:         nodeID,
-		To:             target,
-		LifecycleTarget: "",
+		PlanID:        "nlp-test-plan",
+		Accepted:      true,
+		PlanOnly:      true,
+		HostMutation:  false,
+		StateMutation: false,
+		NodeID:        nodeID,
+		To:            target,
 	}
 }
 
@@ -127,13 +126,6 @@ func TestBuildLifecyclePreflightRequiresStandaloneDowntimeAcknowledgement(t *tes
 	if !errors.Is(err, ErrUnsafeLifecyclePreflight) {
 		t.Fatalf("error = %v, want ErrUnsafeLifecyclePreflight", err)
 	}
-	request.StandaloneDowntimeAcknowledged = true
-	request.LeaderTransferConfirmed = true
-	request.NextLeaderID = "controller-b"
-	_, err = BuildLifecyclePreflight(request)
-	if !errors.Is(err, ErrUnsafeLifecyclePreflight) {
-		t.Fatalf("standalone leader must not accept an unavailable next leader: %v", err)
-	}
 }
 
 func TestBuildLifecyclePreflightAllowsStandaloneDrainWithOnlyDowntimeAck(t *testing.T) {
@@ -146,6 +138,18 @@ func TestBuildLifecyclePreflightAllowsStandaloneDrainWithOnlyDowntimeAck(t *test
 	}
 	if !plan.RequiresStandaloneDowntime || plan.RequiresLeaderTransfer {
 		t.Fatalf("unexpected standalone plan: %+v", plan)
+	}
+}
+
+func TestBuildLifecyclePreflightRejectsLeaderMetadataForStandalone(t *testing.T) {
+	request := preflightRequest("controller-a", nodelifecycle.StateDraining)
+	request.Membership = standalone()
+	request.StandaloneDowntimeAcknowledged = true
+	request.LeaderTransferConfirmed = true
+	request.NextLeaderID = "controller-b"
+	_, err := BuildLifecyclePreflight(request)
+	if !errors.Is(err, ErrInvalidLifecyclePreflight) {
+		t.Fatalf("error = %v, want ErrInvalidLifecyclePreflight", err)
 	}
 }
 
@@ -206,8 +210,8 @@ func TestBuildLifecyclePreflightDoesNotGateNonControllerNode(t *testing.T) {
 	request := preflightRequest("worker-a", nodelifecycle.StateDraining)
 	request.RoleAssignments = []corecontracts.RoleAssignment{{
 		ObjectMetadata: corecontracts.ObjectMetadata{ObjectID: "role-worker-a", ScopeID: "scope-a"},
-		TargetNodeID: "worker-a",
-		Role:         corecontracts.RoleWorkerNode,
+		TargetNodeID:   "worker-a",
+		Role:           corecontracts.RoleWorkerNode,
 	}}
 	plan, err := BuildLifecyclePreflight(request)
 	if err != nil {
@@ -224,14 +228,34 @@ func TestBuildLifecyclePreflightIDChangesWhenObservedMembershipChanges(t *testin
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight(first) error = %v", err)
 	}
-	request.Membership.Members[2].Healthy = false
-	request.FencingConfirmed = false
+	request.Membership.Members[1].Healthy = false
+	request.FencingConfirmed = true
 	second, err := BuildLifecyclePreflight(request)
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight(second) error = %v", err)
 	}
 	if first.PlanID == second.PlanID {
 		t.Fatalf("plan ID did not bind observed membership change: %s", first.PlanID)
+	}
+}
+
+func TestBuildLifecyclePreflightIDIsStableAcrossMemberOrder(t *testing.T) {
+	request := preflightRequest("controller-b", nodelifecycle.StateDraining)
+	first, err := BuildLifecyclePreflight(request)
+	if err != nil {
+		t.Fatalf("BuildLifecyclePreflight(first) error = %v", err)
+	}
+	request.Membership.Members = []Member{
+		controller("controller-c", true, true),
+		controller("controller-a", true, true),
+		controller("controller-b", true, true),
+	}
+	second, err := BuildLifecyclePreflight(request)
+	if err != nil {
+		t.Fatalf("BuildLifecyclePreflight(second) error = %v", err)
+	}
+	if first.PlanID != second.PlanID {
+		t.Fatalf("plan ID changed for equivalent member ordering: %s != %s", first.PlanID, second.PlanID)
 	}
 }
 
