@@ -1,0 +1,67 @@
+openapi: 3.1.0
+info:
+  title: Control Center Session Security API fragment
+  version: 0.1.0
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+paths:
+  /api/v1/auth/sessions/revoke-all:
+    post:
+      operationId: revokeAllSessions
+      summary: Revoke every active session for the authenticated local identity
+      description: >-
+        Revokes all currently active sessions for the authenticated identity,
+        including the session used for this request. The operation is available
+        only after any mandatory first-login password change has been completed.
+        No session token or credential is returned or persisted in audit details.
+      responses:
+        '204':
+          description: All active sessions were revoked; the caller must authenticate again.
+        '401':
+          description: Authentication is missing or no longer valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The mandatory first-login password change has not been completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Session revocation or its required security audit evidence is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: cc_session
+  schemas:
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, correlation_id]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+              minLength: 1
+              maxLength: 128
