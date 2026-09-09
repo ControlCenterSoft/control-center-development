@@ -57,6 +57,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	s.mux.Handle("GET /api/v1/auth/session", s.Authenticate(http.HandlerFunc(s.session)))
 	s.mux.Handle("POST /api/v1/auth/password", s.Authenticate(http.HandlerFunc(s.changePassword)))
+	s.mux.Handle("POST /api/v1/auth/sessions/revoke-all", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.revokeAllSessions))))
 	s.mux.Handle("GET /api/v1/identity/self", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.identitySelf))))
 	s.mux.Handle("GET /api/v1/system/overview", s.Authenticate(s.Require(rbac.PermissionOverviewRead, rbac.GlobalScope())(http.HandlerFunc(s.overviewAPI))))
 
@@ -223,6 +224,23 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeError(w, r, http.StatusServiceUnavailable, "password_change_unavailable", "Password change is temporarily unavailable")
 		}
+		return
+	}
+	s.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) revokeAllSessions(w http.ResponseWriter, r *http.Request) {
+	principal, _ := PrincipalFromContext(r.Context())
+	_, err := s.auth.RevokeAllSessions(r.Context(), auth.RevokeAllSessionsInput{
+		UserID: principal.Identity.ID, SourceIP: remoteIP(r),
+	})
+	if err != nil {
+		if errors.Is(err, auth.ErrUnauthenticated) {
+			writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+			return
+		}
+		writeError(w, r, http.StatusServiceUnavailable, "session_revocation_unavailable", "Session revocation is temporarily unavailable")
 		return
 	}
 	s.clearSessionCookie(w)
