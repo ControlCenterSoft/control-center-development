@@ -158,7 +158,7 @@ func BuildForecast(request ForecastRequest, observations []GrowthObservation) (F
 	}
 
 	canonical := struct {
-		Request      ForecastRequest      `json:"request"`
+		Request      ForecastRequest     `json:"request"`
 		Observations []GrowthObservation `json:"observations"`
 	}{request, normalized}
 	encoded, err := json.Marshal(canonical)
