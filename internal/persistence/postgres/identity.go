@@ -150,7 +150,7 @@ func BootstrapAdmin(ctx context.Context, db *sql.DB, username, passwordHash stri
 	if db == nil || strings.TrimSpace(username) == "" || passwordHash == "" || now.IsZero() {
 		return "", false, errors.New("database, username, password hash, and time are required")
 	}
-	tx, err := sdbBeginTx(ctx, db)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", false, err
 	}
@@ -182,11 +182,6 @@ func BootstrapAdmin(ctx context.Context, db *sql.DB, username, passwordHash stri
 	}
 	return userID, true, nil
 }
-
-func sdbBeginTx(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
-	return db.BeginTx(ctx, nil)
-}
-
 func deterministicUUID(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	bytes := append([]byte(nil), sum[:16]...)
