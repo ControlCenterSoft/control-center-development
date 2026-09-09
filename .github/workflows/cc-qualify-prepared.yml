@@ -38,10 +38,14 @@ jobs:
             fi
             expected=$'README.md\ninternal/persistence/postgres/postgres_integration_test.go\nmigrations/README.md'
             if [[ "$conflicts" == "$expected" ]]; then
-              echo "Preserving current-main evolved documentation and PostgreSQL integration coverage"
+              echo "Prepared first-login semantics are already present in evolved current-main files"
               git checkout --ours -- README.md internal/persistence/postgres/postgres_integration_test.go migrations/README.md
               git add README.md internal/persistence/postgres/postgres_integration_test.go migrations/README.md
-              git cherry-pick --continue
+              if git diff --quiet && git diff --cached --quiet; then
+                git cherry-pick --skip
+              else
+                git cherry-pick --continue
+              fi
               continue
             fi
             echo "::group::Unexpected cherry-pick conflicts"
