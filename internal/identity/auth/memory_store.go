@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -114,6 +115,35 @@ func (s *MemoryStore) FindSessionByDigest(_ context.Context, digest string) (Ses
 	}
 	return session, nil
 }
+func (s *MemoryStore) FindSessionForUserByID(_ context.Context, userID, sessionID string) (Session, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, session := range s.sessionsByDigest {
+		if session.UserID == userID && session.ID == sessionID {
+			return session, nil
+		}
+	}
+	return Session{}, ErrNotFound
+}
+func (s *MemoryStore) ListActiveSessionsForUser(_ context.Context, userID string, now time.Time) ([]Session, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now = now.UTC()
+	result := make([]Session, 0)
+	for _, session := range s.sessionsByDigest {
+		if session.UserID != userID || session.RevokedAt != nil || !now.Before(session.ExpiresAt) {
+			continue
+		}
+		result = append(result, session)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+	return result, nil
+}
 func (s *MemoryStore) RevokeSessionByDigest(_ context.Context, digest string, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -127,6 +157,20 @@ func (s *MemoryStore) RevokeSessionByDigest(_ context.Context, digest string, at
 		s.sessionsByDigest[digest] = session
 	}
 	return nil
+}
+func (s *MemoryStore) RevokeSessionForUserByID(_ context.Context, userID, sessionID string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for digest, session := range s.sessionsByDigest {
+		if session.UserID != userID || session.ID != sessionID || session.RevokedAt != nil || !at.UTC().Before(session.ExpiresAt) {
+			continue
+		}
+		revokedAt := at.UTC()
+		session.RevokedAt = &revokedAt
+		s.sessionsByDigest[digest] = session
+		return nil
+	}
+	return ErrNotFound
 }
 func (s *MemoryStore) RevokeSessionsForUser(_ context.Context, userID string, at time.Time) (int, error) {
 	s.mu.Lock()
