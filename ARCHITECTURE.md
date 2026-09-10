@@ -1,12 +1,12 @@
 # Архитектура Control Center
 
-Статус: **нормативный архитектурный источник истины для текущей разработки**.
+Этот документ фиксирует продуктовую архитектуру и обязательные эксплуатационные инварианты Control Center. Он описывает как уже опубликованные основы, так и целевую модель. Конкретная возможность считается доступной только тогда, когда она фактически реализована и опубликована в соответствующей версии; наличие архитектурного контракта само по себе не является обещанием production-доступности.
 
-Этот документ описывает целевую архитектуру продукта. Если текущая реализация ещё не поддерживает описанную возможность, код считается переходным состоянием и должен эволюционировать к этой модели без создания параллельных несовместимых контрактов.
+На 10.09.2026 последний опубликованный исходный релиз — **0.16.0**. Отдельный стабильный бинарный канал распространения подтверждён до **0.3.1**.
 
 ## 1. Базовые принципы
 
-Control Center развивается как модульный монолит с жёсткими доменными границами. Вынос компонента в отдельный процесс или узел выполняется только по измеренной нагрузке, независимому жизненному циклу, требованиям отказоустойчивости или отдельной границе доверия.
+Control Center строится как модульная инфраструктурная платформа с жёсткими доменными границами и типизированными операциями. Вынос компонента в отдельный процесс или узел оправдан только измеренной нагрузкой, независимым жизненным циклом, требованиями отказоустойчивости либо отдельной границей доверия.
 
 Канонический путь изменения состояния:
 
@@ -14,263 +14,188 @@ Control Center развивается как модульный монолит �
 
 Обязательные инварианты:
 
-- RBAC — deny-by-default и проверяется на сервере;
-- Web/API не предоставляет произвольный shell/exec;
-- длительные изменения выполняются через Change/Job;
-- Jobs устойчивы, идемпотентны и имеют явную модель повторов/lease;
+- RBAC работает deny-by-default и проверяется на сервере;
+- Web/API не предоставляет произвольный shell/exec как продуктовую функцию;
+- длительные и опасные изменения выполняются через Change/Job;
+- Jobs имеют явную модель idempotency, retries, leases и завершения;
 - Desired State отделён от Actual State;
-- все опасные операции имеют модель отказа и восстановления;
-- PostgreSQL хранит транзакционное состояние Control Center;
-- тяжёлая телеметрия, большие артефакты и резервные копии не должны бесконечно расти в основной транзакционной БД.
+- для опасных операций определяются preflight, blast radius, проверка результата и recovery/rollback;
+- транзакционное состояние хранится отдельно от тяжёлой телеметрии, больших артефактов и резервных копий;
+- автоматизация не получает полномочий шире, чем разрешают RBAC, policy и конкретный типизированный action.
 
-## 2. Источник истины разработки
+## 2. Core и Market
 
-Для реализации источником истины является ветка `main` репозитория `ControlCenterSoft/control-center-development` совместно с тремя нормативными файлами:
+### Core
 
-- `ARCHITECTURE.md` — архитектура и инварианты;
-- `ROADMAP.md` — последовательность внедрения;
-- `docs/REQUIREMENTS_RU.md` — принятые требования и критерии полноты.
+Core содержит обязательные платформенные подсистемы и общие границы безопасности:
 
-Репозиторий `control-center-stable` является стабильным релизным каналом, а `control-center` — публичным сайтом/витриной. Они не определяют архитектуру разработки.
+- Identity, Sessions и RBAC;
+- Desired State / Actual State;
+- Change и durable Job execution;
+- Nodes, Roles и Lifecycle;
+- Site/Zone/Scope foundation;
+- Network Management;
+- Monitoring, Health и Audit;
+- Backup/Recovery contracts;
+- Capacity Planner / Capacity Intelligence foundation;
+- общие API, persistence и security contracts.
 
-Документация Google Drive является подробной продуктовой и эксплуатационной документацией и должна синхронизироваться с этим источником истины. При обнаружении расхождения реализация не должна продолжать развитие спорного контракта до устранения расхождения.
+### Market
 
-## 3. Ролевая модель узла
+Market содержит устанавливаемые инфраструктурные возможности. Market-модуль не становится частью Core только потому, что использует его API.
 
-Базовая сущность — **Control Center Node**. Роли не являются взаимоисключающими: один физический сервер может одновременно выполнять несколько функций, если Capacity Planner подтверждает достаточный резерв.
+Для поддерживаемого модуля должны быть определены как минимум:
 
-Нормативные роли и понятия:
-
-- **Management Node / Сервер управления** — узел с API и Web UI управления;
-- **Global Controller / Глобальный контроллер** — корневой логический Control Plane;
-- **Site Controller / Контроллер площадки** — автономный контроллер подразделения, площадки или изолированного контура;
-- **Controller Cluster Member / Член кластера управления** — физический участник одного логического Control Plane;
-- **Cluster Coordinator / Координатор кластера** — выбранный кластером координатор/лидер, а не постоянный ручной master;
-- **Worker Node / Исполнительный сервер** — узел выполнения сервисов, заданий и Market workloads;
-- **Managed Node / Управляемый узел** — управляемый сервер/устройство;
-- **Control Center Agent** — минимальный доверенный агент узла;
-- **Management Zone / Зона управления** — логическая область политик, RBAC и сетевых/эксплуатационных ограничений;
-- **Data Node / Узел данных** — PostgreSQL для состояния Control Center;
-- **Consensus Node / Узел консенсуса** — quorum/leader election/locks;
-- **Repository Node / Узел репозитория** — пакеты, установщики, PXE/ISO/Market-артефакты;
-- **Telemetry Node / Узел телеметрии** — масштабируемое хранение/обработка метрик;
-- **Backup Repository Node / Узел резервного хранения** — резервные копии, WAL/snapshots и DR-артефакты;
-- **Edge Gateway / Пограничный шлюз** — явная роль маршрутизации/NAT/firewall; наличие WAN+LAN само по себе эту роль не включает.
-
-Физический сервер не равен сервисной идентичности: роль или сервис должны переноситься на другой узел без изменения своей логической идентичности.
-
-## 4. Иерархия и кластер управления
-
-Иерархия универсальна и допускает несколько уровней вложенности. Не вводится жёсткая обязательная роль `Regional Controller`: любой Site/Management scope может иметь дочерние scopes/контроллеры.
-
-Один логический родительский Control Plane может состоять из нескольких физических Controller Cluster Members. Несколько независимых masters одного scope запрещены.
-
-Поддерживаемые профили:
-
-- 1 Controller — standalone;
-- 2 Controllers + Witness — допустимый HA-профиль;
-- 3 Controllers — рекомендуемый HA-профиль;
-- 5 Controllers — крупный профиль.
-
-Критические записи запрещены при потере quorum. Оставшийся меньшинством узел переходит в безопасный/ограниченный режим вместо риска split-brain.
-
-Site Controller обязан продолжать разрешённые локальные операции при потере WAN: локальный UI/API, политики, Jobs, inventory, локальные Market-сервисы и кэш. После восстановления связи выполняется контролируемая синхронизация.
-
-## 5. Enrollment и распространение Control Center
-
-Первая интернет-установка создаёт **Seed Controller**. После неё новые узлы могут получать Control Center из уже работающей инфраструктуры.
-
-Control Center Agent поддерживает:
-
-- уникальный Node ID;
-- heartbeat/freshness;
-- hardware/network/software inventory;
-- capability и role negotiation;
-- типизированное выполнение задач;
-- установку/обновление управляемых сервисов;
-- получение Desired State;
-- отправку Actual State/Events/Telemetry;
-- self-update по контролируемой политике.
-
-Поддерживаемые способы присоединения:
-
-1. bootstrap-команда + одноразовый enrollment token;
-2. remote bootstrap через SSH/WinRM;
-3. PXE/автоматическая установка;
-4. Offline Enrollment Bundle для air-gap.
-
-Enrollment использует короткоживущий одноразовый token, fingerprint/доверие к CA, уникальный сертификат узла и mTLS. Постоянный bootstrap-пароль запрещён.
-
-## 6. Desired/Actual State и синхронизация
-
-Сверху вниз передаются Desired State, политики, RBAC, конфигурация, разрешённые приложения и ограничения.
-
-Снизу вверх передаются Actual State, inventory, telemetry, события, результаты Jobs, ошибки и capacity observations.
-
-Критические данные синхронизируются практически в реальном времени. Некритичные inventory/telemetry/history могут иметь настраиваемый интервал.
-
-Global и Site не должны строиться как одна физически растянутая через WAN PostgreSQL-репликация. У автономного Site допускается локальный State Store, а связь Global↔Site реализуется явным **Control Center State Synchronization Protocol** с ownership/version/conflict rules.
-
-Нормативные поля распределённого объекта включают как минимум:
-
-`object_id`, `scope_id`, `owner_scope`, `generation`, `resource_version`, `created_at`, `updated_at`.
-
-Глобальные политики и глобальный Desired State принадлежат верхнему scope; локальный Actual State, inventory/events/jobs/telemetry — соответствующему Site. Локальные overrides допускаются только в явно делегированных границах.
-
-## 7. Данные, PostgreSQL и HA
-
-PostgreSQL остаётся основной транзакционной БД с первого сервера.
-
-В малой установке Controller, Data Node, Repository и Worker могут находиться на одном сервере. При росте роли разносятся без изменения контрактов приложения.
-
-Для HA целевая схема:
-
-- PostgreSQL + Patroni для управления репликами/switchover/failover;
-- etcd как целевой consensus/DCS слой для leader election и coordination;
-- Data Node и Consensus Node — логические роли, не обязательные отдельные физические машины в малой установке.
-
-Primary DB не используется как хранилище больших ISO/пакетов/backup BLOB. Для этого существует Repository/Object Storage abstraction. Тяжёлая time-series телеметрия должна иметь отдельный backend abstraction и retention.
-
-## 8. Capacity & Placement Advisor
-
-Control Center обязан не только показывать загрузку, но и рассчитывать:
-
-- текущее число обслуживаемых устройств;
-- рекомендуемую безопасную ёмкость;
-- технический предел с указанием низкой надёжности такой оценки;
-- текущий bottleneck;
-- запас по CPU/RAM/storage/IOPS/latency/network/DB/service queues;
-- прогноз исчерпания резерва;
-- влияние изменения настроек (`what-if`);
-- рекомендацию добавить/перенести конкретную роль или сервис.
-
-Capacity Planner использует hardware inventory, фактическую телеметрию, Device Workload Profiles, Market Capacity Profiles, DB/network/storage characteristics, историю роста и результаты нагрузочных тестов. Модель должна самокалиброваться на реальной инфраструктуре.
-
-Каждый официальный Market-модуль обязан иметь Capacity Profile и benchmark/load-test scenario.
-
-## 9. Нагрузочные испытания
-
-Нормативный тестовый контур должен уметь синтетически моделировать сотни и тысячи CC Agents и повышать нагрузку ступенями (например 100→500→1000→2500→5000→10000 и далее до насыщения).
-
-Измеряются CPU, RAM, storage latency/IOPS/queue, DB latency/TPS/WAL, network throughput/loss/latency, API P50/P95/P99, длина очередей, job completion time и error rate.
-
-Допускаемые инструменты: k6/Locust, pgbench, fio, iperf3, stress-ng, tc/netem и собственный Synthetic CC Agent Generator. Результат теста — воспроизводимый Capacity Profile, а не маркетинговая цифра максимума.
-
-## 10. Node Lifecycle Manager
-
-Жизненный цикл узла является частью Core:
-
-`DISCOVERED → ENROLLING → ACTIVE → DRAINING → MAINTENANCE → UPDATE/REPLACE/REMOVE → ACTIVE/RETIRED`
-
-Аварийный путь:
-
-`ACTIVE → FAILED → RECOVERING → ACTIVE/REPLACED`.
-
-Drain запрещает новое размещение/Jobs на узле, завершает или переносит активные операции и мигрирует переносимые сервисы перед обслуживанием.
-
-Replace Node сначала enroll/проверяет новый сервер, синхронизирует необходимые сервисы/данные, выполняет switchover и только после health-check выводит старый сервер в RETIRED.
-
-## 11. Upgrade Orchestrator
-
-Обновление выполняется по dependency graph, а не командой «обновить всё».
-
-Preflight обязан проверять quorum, DB replicas/lag, резервную копию и recovery point, свободное место, совместимость версий, capacity reserve, активные критические Jobs и состояние зависимостей.
-
-Кластер обновляется rolling-схемой: followers/replicas сначала, leader/primary — после контролируемого switchover. Поддерживаются update rings: Canary → Early → Standard → Final, maintenance windows, pause/stop и change freeze.
-
-Целевой compatibility contract: Controller версии N управляет как минимум Site/Agent N и N-1 в пределах объявленной матрицы совместимости.
-
-## 12. Recovery Manager и отказоустойчивое восстановление
-
-Recovery Manager покрывает восстановление Node, Service, Database, Configuration, User/Group, Policy, Application, Site и всего Control Plane.
-
-Обязательные возможности:
-
-- fencing перед stateful failover;
-- восстановление Worker workload на другом узле;
-- безопасная деградация при потере quorum;
-- rebuild Controller/Site из Desired State;
-- логические controller endpoints вместо жёстко прошитого IP в Agents;
-- PostgreSQL base backup + WAL/PITR;
-- объектное восстановление без обязательного отката всей production DB;
-- soft delete/Recycle Bin и история версий для критичных объектов;
-- восстановление связей пользователя/групп/RBAC/политик;
-- автоматический Recovery Point перед high-impact mutation;
-- настраиваемые RPO/RTO;
-- регулярный изолированный restore drill с функциональной проверкой;
-- Backup Health означает доказанную восстанавливаемость, а не только успешное завершение backup job.
-
-Для PostgreSQL целевой backup provider — pgBackRest или совместимый provider через abstraction. Stateful Market-модули обязаны иметь собственный Recovery Adapter.
-
-Типизированные контракты метаданных RecoveryPoint/Backup/Restore, evidence, provider и fencing зафиксированы в [`docs/RECOVERY_METADATA_CONTRACTS_RU.md`](docs/RECOVERY_METADATA_CONTRACTS_RU.md) и [`api/openapi-recovery-metadata.yaml`](api/openapi-recovery-metadata.yaml). Контракты не запускают backup/restore и не выполняют инфраструктурные изменения.
-
-## 13. Network & Security Manager
-
-Сетевые интерфейсы и зоны — часть Core. Узел может иметь WAN, LAN, MANAGEMENT, DMZ, CLUSTER, STORAGE, BACKUP и иные интерфейсы/VLAN.
-
-Наличие WAN+LAN **не включает маршрутизацию автоматически**. По умолчанию межзонная пересылка запрещена. Routing/NAT/port-forwarding включаются только при назначении Edge Gateway и явной policy.
-
-Linux firewall baseline — nftables через управляемый структурированный backend (libnftables/JSON или эквивалент), без генерации произвольного shell из Web UI.
-
-Сетевые изменения применяются безопасно:
-
-`Recovery snapshot → временное применение → connectivity check → confirm`;
-
-при потере управляющего соединения выполняется автоматический rollback.
-
-Netplan может быть одним из OS backends, но публичный Core contract не привязан к конкретному дистрибутиву.
-
-## 14. Market Manifest v2
-
-Текущий минимальный manifest `install/upgrade/remove` является переходным. Целевой контракт каждого серьёзного модуля включает:
-
-- install;
-- configure;
-- health/diagnostics;
+- устойчивый module identity;
+- compatibility, dependencies и conflicts;
+- требуемые permissions/capabilities;
+- network и storage requirements;
 - capacity profile;
-- scale/placement requirements;
-- update;
-- migrate/drain;
-- backup;
-- restore;
-- failover;
-- remove;
-- dependency/network/storage/secret requirements;
-- security permissions/risk metadata;
-- provider/backend abstraction.
+- install/update/migrate/backup/restore/remove lifecycle;
+- health и audit semantics;
+- failure/recovery model.
 
-Workload type должен различать как минимум STATELESS, STATEFUL, CLUSTERED и SINGLETON.
+К направлениям Market относятся Directory Services, DNS/DHCP, PXE Windows/Linux, Software Automation Windows/Linux, Inventory/Compliance, File Services, Monitoring, Backup и другие инфраструктурные providers. Наличие направления в архитектуре или roadmap не означает, что соответствующий модуль уже опубликован.
 
-Новый Market workload не считается production-ready без Update, Backup/Restore, Health, Capacity и failure-path tests.
+## 3. Desired State и Actual State
 
-Исполняемый контракт полей, правил валидации, явной активации и консервативной миграции v1→v2 зафиксирован в [`docs/MARKET_MANIFEST_V2_RU.md`](docs/MARKET_MANIFEST_V2_RU.md) и [`api/openapi-market-manifest-v2.yaml`](api/openapi-market-manifest-v2.yaml).
+Desired State описывает намерение администратора. Actual State описывает наблюдаемое фактическое состояние. Эти модели не должны подменять друг друга.
 
-## 15. Обязательные корпоративные модули Market
+Каждый управляемый объект должен иметь достаточную identity/version metadata, чтобы система могла обнаруживать stale-state, concurrent update и drift. Изменение Desired State не считается завершённым, пока соответствующий Job не выполнился и Actual State/Health не подтвердили требуемый результат.
 
-Помимо уже существующих направлений Directory Services, DNS/DHCP, PXE, Automation, Inventory, File Services и Monitoring в целевой Market входят:
+Reconciliation допускается только в пределах явно разрешённого контракта. Автоматический reconciler не должен выполнять произвольные destructive actions из одного лишь факта расхождения Desired/Actual.
 
-### Mail & Groupware
+## 4. Change и Job execution
 
-Полноценная почта, SMTP/IMAP, Webmail, календари, общие календари, контакты/адресные книги, мобильная синхронизация, anti-spam, SPF/DKIM/DMARC, TLS, quotas, directory integration, HA, capacity и backup/recovery.
+Опасные или длительные операции оформляются как Changes и durable Jobs. План должен быть понятен до исполнения и фиксировать хотя бы:
 
-Первичный provider profile: Postfix + Dovecot + Rspamd + SOGo. Архитектура допускает альтернативный provider, например Stalwart, без изменения пользовательского контракта. Internet-facing Mail Edge рекомендуется размещать в DMZ и не совмещать с Global Controller при наличии ресурсов.
+- что изменится;
+- целевые объекты и scope;
+- риск и blast radius;
+- необходимые preconditions;
+- ожидаемый результат;
+- метод проверки;
+- recovery/rollback либо безопасную compensation модель.
 
-### 1C:Enterprise Server
+Worker выполняет только allowlisted typed actions. Повтор Job после сбоя не должен превращать идемпотентную операцию в повторное destructive изменение.
 
-Управление сервером/кластером 1С, рабочими процессами/RAS, информационными базами, совместимым DB provider, Web publication, лицензированным дистрибутивом пользователя, monitoring/capacity, HA, update, backup/restore и migration.
+## 5. Узлы, роли и lifecycle
 
-БД 1С всегда логически и операционно отделена от PostgreSQL Control Center, даже при временном размещении на одном физическом сервере.
+Узел является first-class объектом с identity, site/zone, hardware/network inventory, assigned roles, health и lifecycle state.
 
-### Secure Web Gateway / Corporate Proxy
+Целевая ролевая модель допускает специализированные роли управления, исполнения, хранения данных, consensus, telemetry, backup/repository и edge-функции. Конкретный набор поддерживаемых ролей определяется опубликованной версией.
 
-Корпоративный прокси-шлюз с Explicit Proxy/PAC и Transparent/Intercept/TPROXY режимами, directory authentication для explicit режима, device/IP/VLAN/Site identity для transparent режима, URL/category policies, allow/block lists, schedules, bandwidth limits, quotas/accounting, отчёты, optional TLS inspection (по умолчанию OFF), pluggable antivirus/ICAP/DLP, HA и Capacity Profile.
+Lifecycle узла включает контролируемые переходы, в том числе:
 
-Первичный provider profile: Squid 7.x + nftables/TPROXY + Linux traffic control + Control Center Policy Engine. Backend должен оставаться заменяемым.
+`enrollment → active → maintenance → drain → replacement/decommission`
 
-Transparent mode обычно требует Edge Gateway или управляемого redirect path; Explicit Proxy может работать на обычном Worker Node.
+Maintenance не должен автоматически означать удаление данных. Drain обязан учитывать stateful workloads и provider-specific ограничения. Replacement должен сохранять identity/ownership semantics там, где это необходимо. Decommission допускается только после проверки зависимостей, данных, recovery path и отсутствия незавершённых Jobs.
 
-## 16. Порядок внедрения
+## 6. Single-node и multi-node/HA
 
-Архитектурные контракты ролей, scope/site/zone, Node lifecycle, Market Manifest v2, network model, capacity/recovery metadata и distributed object versioning должны быть заложены **до дальнейшего массового расширения Market и до HA**.
+Single-node — полноценный режим использования Control Center. Он не должен искусственно требовать второй сервер.
 
-Фактическая реализация etcd/Patroni, полноценного multi-site sync, автоматического rebalancing и Enterprise Market выполняется поэтапно согласно `ROADMAP.md`. Наличие целевого контракта сейчас не означает, что сложная HA должна появиться в одном релизе.
+Multi-node модель предназначена для распределения ролей, ёмкости и отказоустойчивости. Целевая HA-модель включает controller membership, quorum/consensus, fencing/split-brain protection, controlled switchover/failover, восстановление после потери узлов и HA-профили stateful данных.
+
+Наличие multi-node объектов или HA-контрактов не означает, что production failover уже поддерживается. HA считается поддержанным только для конкретных ролей и версий, для которых опубликованы и проверены quorum/fencing/failover/recovery процедуры.
+
+## 7. Управляемая сеть
+
+Network Management является частью Core и рассматривается как отдельный безопасный subsystem, а не набор произвольных команд ОС.
+
+Целевая модель поддерживает:
+
+- multi-NIC;
+- назначение интерфейсам ролей/зон, включая типовые WAN/LAN;
+- VLAN и bonding там, где это поддерживается платформой;
+- routing;
+- DNS/NTP;
+- firewall policy;
+- NAT/port-forwarding только при явном включении;
+- staged changes с preflight, connectivity verification и rollback.
+
+Наличие WAN+LAN **не делает узел маршрутизатором автоматически** и не включает forwarding/NAT/port-forwarding. Сетевое изменение не должно оставлять узел недоступным без заранее определённого recovery path.
+
+Изменения IP, routing, firewall и management connectivity относятся к повышенному риску и должны применяться поэтапно с проверкой новой связности до окончательной фиксации.
+
+## 8. Capacity Planner и Capacity Intelligence
+
+Capacity Planner использует hardware inventory, наблюдаемую загрузку, storage/network characteristics, workload profiles и исторические данные для оценки безопасной ёмкости и bottlenecks.
+
+Целевая модель предусматривает:
+
+- безопасный запас CPU/RAM/storage/network;
+- bottleneck identification;
+- workload forecast;
+- horizon до исчерпания резерва;
+- what-if planning;
+- placement/scale recommendations;
+- calibration по измеренному evidence;
+- анализ эффективности масштабирования и сценариев изменения нагрузки.
+
+Опубликованная линия 0.7–0.16 развивает этот контур как **advisory-only**. В 0.15 опубликована bounded nonlinear Workload Curve с piecewise interpolation только внутри измеренного диапазона и запретом extrapolation; в 0.16 опубликован Workload Curve Efficiency для обнаружения diminishing returns с fail-closed проверкой malformed, non-increasing и non-finite evidence.
+
+Capacity evidence и рекомендации не являются разрешением на production mutation. Они не должны самостоятельно выполнять placement, drain, migration, resize, rebalance, изменение сети или закупку ресурсов.
+
+## 9. Persistence и данные
+
+PostgreSQL используется для транзакционного состояния Control Center в поддерживаемых профилях. Изменения схемы должны быть версионированы, воспроизводимы и иметь понятный forward migration path.
+
+Перед потенциально опасным обновлением базы требуется проверенный backup/recovery path. Приложение не должно считать миграцию успешной только потому, что процесс завершился без ошибки: после изменения необходимы schema/runtime readiness checks.
+
+Большие бинарные артефакты, долговременные резервные копии и высокочастотная телеметрия должны иметь подходящие специализированные хранилища и retention policy, а не бесконтрольно расти в основной транзакционной БД.
+
+## 10. Backup и Recovery
+
+Recovery — отдельная продуктовая способность, а не побочный эффект наличия backup-файла.
+
+Целевая модель включает Recovery Point metadata, backup integrity/retention, restore verification, PostgreSQL backup/PITR для поддерживаемых профилей, object-level recovery там, где это безопасно, RPO/RTO policies, restore drills и восстановление после отказа узла либо ошибочных действий оператора/приложения.
+
+Backup считается полезным только при наличии проверяемого restore path.
+
+## 11. Monitoring, Health и Audit
+
+Health разделяется как минимум на liveness и readiness. Компонент может быть жив, но не готов обслуживать запросы из-за базы данных, миграций, quorum, storage или иной зависимости.
+
+Audit должен фиксировать security- и state-changing события с достаточной identity/context metadata. История аудита не должна превращаться в скрытый канал хранения секретов.
+
+Observability обязана помогать ответить: что произошло, кто инициировал, какой план выполнялся, какой Job исполнялся, какой Actual State получен и какой recovery path доступен.
+
+## 12. Authentication policy
+
+Для опубликованной исходной линии начиная с 0.6.0 действует локальная bootstrap-политика: после чистой установки создаётся пользователь `admin` с первоначальным паролем `admin`.
+
+При первом входе пользователь обязан сменить пароль; до смены обычная работа с системой запрещена. При последующем обновлении существующий пользовательский пароль сохраняется и не сбрасывается к первоначальному значению.
+
+Отдельный stable-binary выпуск 0.3.1 относится к более ранней bootstrap-модели, поэтому его эксплуатационное поведение должно определяться документацией именно этого бинарного выпуска.
+
+## 13. Upgrade safety
+
+Обновление Control Center должно быть version-aware и recovery-aware. Для stateful профиля безопасный порядок включает:
+
+1. проверку текущей и целевой version identity;
+2. compatibility/preflight;
+3. проверку свободного места и зависимостей;
+4. backup и проверку rollback artifact;
+5. forward migrations;
+6. переключение runtime на новую версию;
+7. restart;
+8. liveness/readiness;
+9. version/login/RBAC/API/UI smoke;
+10. rollback/recovery при деградации.
+
+Для multi-node/HA обновление должно учитывать quorum, порядок узлов, drain/maintenance и допустимое число одновременно недоступных экземпляров.
+
+## 14. Security boundaries
+
+Control Center не должен превращать удобство автоматизации в универсальный удалённый shell. Привилегированные операции должны быть минимальными, типизированными, scoped и аудируемыми.
+
+Секреты не должны попадать в API-ответы, логи, audit payloads или пользовательскую документацию. Чувствительные credentials должны храниться и передаваться через предназначенные для этого механизмы.
+
+Network, backup, restore, identity, role assignment и destructive lifecycle operations требуют повышенного уровня проверки и явного recovery plan.
+
+## 15. Граница опубликованной функциональности
+
+Последний опубликованный исходный релиз 0.16.0 подтверждает развитие Capacity Intelligence до Workload Curve Efficiency. Более новые capability stages должны считаться предварительными до официальной публикации соответствующих версий.
+
+Отдельный stable binary channel имеет собственную release identity. Более новый исходный релиз нельзя описывать как уже доступный бинарный stable-пакет, пока соответствующий пакет фактически не опубликован.
