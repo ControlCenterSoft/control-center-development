@@ -441,8 +441,15 @@ VALUES
 		CreatedAt: fixture.passwordChanged.Add(time.Minute), ExpiresAt: fixture.passwordChanged.Add(2 * time.Hour),
 		SourceIP: "127.0.0.1", UserAgent: "upgrade-qualification",
 	}
-	if err := identities.CreateSession(ctx, session, fixture.selectedHash); err != nil {
-		t.Fatal("seed 0.3 administrator session")
+	// Seed the legacy session with the v0.3 schema directly. Using the current
+	// identity adapter here would make the fixture depend on post-0.3 columns.
+	if _, err := database.ExecContext(ctx, `INSERT INTO cc_auth_sessions
+(id,user_id,token_digest,credential_version,created_at,expires_at,source_ip,user_agent)
+VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,NULLIF($7,'')::inet,$8)`,
+		session.ID, session.UserID, session.TokenDigest, session.CredentialVersion.UTC(),
+		session.CreatedAt.UTC(), session.ExpiresAt.UTC(), session.SourceIP, session.UserAgent,
+	); err != nil {
+		t.Fatalf("seed 0.3 administrator session: %v", err)
 	}
 
 	// This same-named future permission and its custom/built-in grants prove
