@@ -1,7 +1,9 @@
 package rbac
 
 import (
+	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -130,8 +132,21 @@ type Binding struct {
 	Scope     Scope  `json:"scope"`
 }
 
+type EffectiveGrant struct {
+	RoleName    string       `json:"role_name"`
+	Scope       Scope        `json:"scope"`
+	Permissions []Permission `json:"permissions"`
+}
+
 type Checker interface {
 	Allowed(subjectID string, permission Permission, target Scope) bool
+}
+
+// Introspector exposes the grants already assigned to one authenticated
+// subject. It is deliberately read-only and does not imply permission to read
+// bindings for another identity.
+type Introspector interface {
+	EffectiveGrants(context.Context, string) ([]EffectiveGrant, error)
 }
 
 type Authorizer struct {
@@ -197,6 +212,47 @@ func (a *Authorizer) Allowed(subjectID string, permission Permission, target Sco
 		}
 	}
 	return false
+}
+
+func (a *Authorizer) EffectiveGrants(ctx context.Context, subjectID string) ([]EffectiveGrant, error) {
+	if a == nil || strings.TrimSpace(subjectID) == "" {
+		return nil, errors.New("subject is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	grants := make([]EffectiveGrant, 0)
+	for _, binding := range a.bindings {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if binding.SubjectID != subjectID {
+			continue
+		}
+		permissions, exists := a.roles[binding.RoleName]
+		if !exists {
+			continue
+		}
+		permissionList := make([]Permission, 0, len(permissions))
+		for permission := range permissions {
+			permissionList = append(permissionList, permission)
+		}
+		sort.Slice(permissionList, func(i, j int) bool { return permissionList[i] < permissionList[j] })
+		grants = append(grants, EffectiveGrant{RoleName: binding.RoleName, Scope: binding.Scope, Permissions: permissionList})
+	}
+	sort.Slice(grants, func(i, j int) bool {
+		if grants[i].Scope.Kind != grants[j].Scope.Kind {
+			return grants[i].Scope.Kind < grants[j].Scope.Kind
+		}
+		if grants[i].Scope.ID != grants[j].Scope.ID {
+			return grants[i].Scope.ID < grants[j].Scope.ID
+		}
+		return grants[i].RoleName < grants[j].RoleName
+	})
+	return grants, nil
 }
 
 func scopeContains(binding, target Scope) bool {
