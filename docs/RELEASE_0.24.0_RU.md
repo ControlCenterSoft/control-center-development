@@ -1,6 +1,6 @@
 # Control Center 0.24.0
 
-Статус: кандидат на qualification, не официальный релиз.
+Статус: **официально опубликованный исходный релиз**.
 
 Версия 0.24.0 добавляет bounded process-local защиту локального входа от password brute force и credential spraying без изменения внешнего контракта ошибки аутентификации.
 
@@ -14,4 +14,6 @@ Wrong password, неизвестный пользователь и времен�
 
 Пакет включает targeted unit/HTTP tests для account/source blocking, expiry, bounded memory и anti-enumeration поведения.
 
-Официальный выпуск 0.24.0 допускается только после deterministic qualification и release gates.
+## Граница выпуска
+
+Релиз опубликован после полного deterministic qualification. Публикация исходной версии не означает автоматическое наличие отдельного stable binary/installer той же версии; стабильный бинарный канал ведётся отдельно.
