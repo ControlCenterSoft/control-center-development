@@ -45,6 +45,7 @@ type LeaderTransferReceipt struct {
 // leader transfer rather than an unrelated failover or membership mutation.
 type LeaderTransferReceiptRequest struct {
 	Preflight        LifecyclePreflightPlan        `json:"preflight"`
+	PreflightRequest LifecyclePreflightRequest     `json:"preflight_request"`
 	BeforeMembership Snapshot                      `json:"before_membership"`
 	BeforeEvidence   TransitionRevisionEvidence    `json:"-"`
 	NextLeaderID     string                        `json:"next_leader_id"`
@@ -73,6 +74,16 @@ func BuildLeaderTransferReceipt(request LeaderTransferReceiptRequest) (LeaderTra
 	}
 	if !request.Preflight.RequiresLeaderTransfer || request.Preflight.RequiresStandaloneDowntime || request.Preflight.ClusterProfile == ProfileStandalone {
 		return LeaderTransferReceipt{}, fmt.Errorf("%w: preflight does not require a multi-node leader transfer", ErrInvalidLeaderTransferReceipt)
+	}
+	rebuilt, err := BuildLifecyclePreflight(request.PreflightRequest)
+	if err != nil {
+		return LeaderTransferReceipt{}, fmt.Errorf("%w: preflight request no longer validates: %v", ErrInvalidLeaderTransferReceipt, err)
+	}
+	if !sameLifecyclePreflightEvidence(request.Preflight, rebuilt) {
+		return LeaderTransferReceipt{}, fmt.Errorf("%w: preflight evidence does not match the supplied preflight request", ErrInvalidLeaderTransferReceipt)
+	}
+	if !sameSnapshot(request.PreflightRequest.Membership, request.BeforeMembership) || request.PreflightRequest.NextLeaderID != request.NextLeaderID {
+		return LeaderTransferReceipt{}, fmt.Errorf("%w: preflight request does not match leader-transfer evidence", ErrInvalidLeaderTransferReceipt)
 	}
 	if request.Preflight.ClusterID != request.BeforeMembership.ClusterID || request.Preflight.ClusterGeneration != request.BeforeMembership.Generation {
 		return LeaderTransferReceipt{}, fmt.Errorf("%w: preflight does not match the before membership identity", ErrInvalidLeaderTransferReceipt)
