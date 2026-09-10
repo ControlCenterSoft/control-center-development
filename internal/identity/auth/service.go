@@ -36,6 +36,7 @@ type Service struct {
 	dummyHash          string
 	sessionTTL         time.Duration
 	sessionIdleTimeout time.Duration
+	loginProtection    *LoginProtector
 	now                func() time.Time
 }
 
@@ -64,7 +65,8 @@ func NewService(users UserStore, sessions SessionStore, log audit.Logger, hasher
 	service := &Service{
 		users: users, sessions: sessions, audit: log, hasher: hasher, dummyHash: dummyHash,
 		sessionTTL: sessionTTL, sessionIdleTimeout: idleTimeout,
-		now: func() time.Time { return time.Now().UTC() },
+		loginProtection: newLoginProtector(DefaultLoginProtectionPolicy()),
+		now:             func() time.Time { return time.Now().UTC() },
 	}
 	for _, option := range options {
 		if option != nil {
@@ -78,6 +80,11 @@ func NewService(users UserStore, sessions SessionStore, log audit.Logger, hasher
 }
 func (s *Service) Login(ctx context.Context, input LoginInput) (IssuedSession, error) {
 	username := normalizeUsername(input.Username)
+	now := s.now().UTC()
+	if s.loginProtection.Blocked(username, input.SourceIP, now) {
+		_ = s.audit.Append(ctx, audit.Event{Action: "auth.login", Outcome: "denied", SourceIP: input.SourceIP, Details: map[string]any{"username": username, "reason": "invalid_credentials", "login_protection": "blocked"}})
+		return IssuedSession{}, ErrInvalidCredentials
+	}
 	user, findErr := s.users.FindUserByUsername(ctx, username)
 	hash := s.dummyHash
 	if findErr == nil {
@@ -85,10 +92,15 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (IssuedSession, e
 	}
 	valid, verifyErr := s.hasher.Verify(input.Password, hash)
 	if findErr != nil || verifyErr != nil || !valid || !user.Enabled {
-		_ = s.audit.Append(ctx, audit.Event{Action: "auth.login", Outcome: "denied", SourceIP: input.SourceIP, Details: map[string]any{"username": username, "reason": "invalid_credentials"}})
+		blocked := s.loginProtection.RecordFailure(username, input.SourceIP, now)
+		details := map[string]any{"username": username, "reason": "invalid_credentials"}
+		if blocked {
+			details["login_protection"] = "blocked"
+		}
+		_ = s.audit.Append(ctx, audit.Event{Action: "auth.login", Outcome: "denied", SourceIP: input.SourceIP, Details: details})
 		return IssuedSession{}, ErrInvalidCredentials
 	}
-	now := s.now().UTC()
+	s.loginProtection.RecordSuccess(username)
 	token, err := randomToken(32)
 	if err != nil {
 		return IssuedSession{}, err
