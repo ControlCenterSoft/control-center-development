@@ -104,32 +104,29 @@ jobs:
             exit 1
           fi
 
-          # The evidence is the repository PR diff plus non-sensitive PR metadata only.
-          # Public safety/source-integrity gates remain authoritative for secret/PII checks.
           delimiter="GEMINI_REVIEW_$(date +%s%N)_${RANDOM}"
           {
             echo "review_prompt<<${delimiter}"
-            cat <<EOF
-You are an independent supplemental code-review gate for Control Center.
-Review ONLY the bounded evidence below. Do not call tools, do not modify GitHub,
-do not request secrets or PII, and do not infer a different revision.
-
-Repository: ${REPOSITORY}
-Pull request: #${PR_NUMBER}
-EXACT head_sha: ${HEAD_SHA}
-EXACT base_sha: ${BASE_SHA}
-
-Assess correctness, regressions, security/privacy, infrastructure neutrality,
-migration/upgrade safety, test adequacy, and stated release boundaries. A PASS
-is allowed only when this exact evidence has no blocking finding. If the evidence
-is insufficient to establish a safe supplemental verdict, return BLOCK.
-
-Return EXACTLY one JSON object and no markdown, prose, tool calls, or code fences:
-{"verdict":"PASS|BLOCK","head_sha":"${HEAD_SHA}","base_sha":"${BASE_SHA}","findings":[{"severity":"blocking|warning|info","summary":"short finding"}]}
-Use an empty findings array when no material finding exists.
-
-BEGIN PR DIFF
-EOF
+            printf '%s\n' \
+              'You are an independent supplemental code-review gate for Control Center.' \
+              'Review ONLY the bounded evidence below. Do not call tools, do not modify GitHub,' \
+              'do not request secrets or PII, and do not infer a different revision.' \
+              '' \
+              "Repository: ${REPOSITORY}" \
+              "Pull request: #${PR_NUMBER}" \
+              "EXACT head_sha: ${HEAD_SHA}" \
+              "EXACT base_sha: ${BASE_SHA}" \
+              '' \
+              'Assess correctness, regressions, security/privacy, infrastructure neutrality,' \
+              'migration/upgrade safety, test adequacy, and stated release boundaries. A PASS' \
+              'is allowed only when this exact evidence has no blocking finding. If the evidence' \
+              'is insufficient to establish a safe supplemental verdict, return BLOCK.' \
+              '' \
+              'Return EXACTLY one JSON object and no markdown, prose, tool calls, or code fences:' \
+              "{\"verdict\":\"PASS|BLOCK\",\"head_sha\":\"${HEAD_SHA}\",\"base_sha\":\"${BASE_SHA}\",\"findings\":[{\"severity\":\"blocking|warning|info\",\"summary\":\"short finding\"}]}" \
+              'Use an empty findings array when no material finding exists.' \
+              '' \
+              'BEGIN PR DIFF'
             cat "${diff_file}"
             printf '\nEND PR DIFF\n'
             echo "${delimiter}"
