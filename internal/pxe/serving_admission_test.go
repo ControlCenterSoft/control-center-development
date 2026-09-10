@@ -1,8 +1,6 @@
 package pxe
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"reflect"
 	"testing"
@@ -17,22 +15,7 @@ func servingAdmissionFixture(t *testing.T, previous string) (
 	InstallMediaPublicationReceipt,
 ) {
 	t.Helper()
-	payload := []byte("verified-published-install-media")
-	digest := sha256.Sum256(payload)
-	mediaSHA := hex.EncodeToString(digest[:])
-	plan := AdmittedDeploymentPlan{PlanID: "plan"}
-	recipe := InstallMediaRecipe{RecipeID: "recipe"}
-	buildReceipt := BuiltInstallMediaReceipt{ReceiptID: "build-receipt"}
-	publicationAdmission := InstallMediaPublicationAdmission{
-		AdmissionID:           "publication-admission",
-		PlanID:                plan.PlanID,
-		ReceiptID:             buildReceipt.ReceiptID,
-		RecipeID:              recipe.RecipeID,
-		MediaSHA256:           mediaSHA,
-		MediaSize:             int64(len(payload)),
-		Target:                InstallMediaPublicationTarget{Channel: PublicationChannelPXE, Slot: "windows-stable"},
-		PreviousMediaRecipeID: previous,
-	}
+	plan, recipe, payload, buildReceipt, publicationAdmission := publicationReceiptFixture(t, previous)
 	receipt, err := BuildInstallMediaPublicationReceipt(
 		publicationAdmission,
 		plan,
@@ -48,9 +31,10 @@ func servingAdmissionFixture(t *testing.T, previous string) (
 }
 
 func TestInstallMediaServingAdmissionDeterministicAndBounded(t *testing.T) {
+	previous := digestString("previous-serving-media-recipe")
 	plan, recipe, payload, buildReceipt, publicationAdmission, receipt := servingAdmissionFixture(
 		t,
-		"previous-recipe",
+		previous,
 	)
 	first, err := BuildInstallMediaServingAdmission(
 		receipt,
@@ -83,7 +67,8 @@ func TestInstallMediaServingAdmissionDeterministicAndBounded(t *testing.T) {
 		first.PublicationAdmissionID != receipt.AdmissionID ||
 		first.MediaSHA256 != receipt.MediaSHA256 ||
 		first.MediaSize != receipt.MediaSize ||
-		first.Target != receipt.Target {
+		first.Target != receipt.Target ||
+		first.PreviousMediaRecipeID != previous {
 		t.Fatalf("serving admission did not bind exact publication evidence: %#v", first)
 	}
 	if !first.PublicationReceiptVerified ||
@@ -166,9 +151,10 @@ func TestInstallMediaServingAdmissionRejectsPublicationLineageDrift(t *testing.T
 }
 
 func TestVerifyInstallMediaServingAdmissionRejectsTampering(t *testing.T) {
+	previous := digestString("previous-serving-media-recipe")
 	plan, recipe, payload, buildReceipt, publicationAdmission, receipt := servingAdmissionFixture(
 		t,
-		"previous-recipe",
+		previous,
 	)
 	got, err := BuildInstallMediaServingAdmission(
 		receipt,
@@ -199,7 +185,7 @@ func TestVerifyInstallMediaServingAdmissionRejectsTampering(t *testing.T) {
 	}
 
 	tampered = got
-	tampered.PreviousMediaRecipeID = "different-previous-recipe"
+	tampered.PreviousMediaRecipeID = digestString("different-previous-recipe")
 	if err := VerifyInstallMediaServingAdmission(
 		tampered,
 		receipt,
