@@ -4,7 +4,7 @@ Control Center — самостоятельная платформа центр�
 
 ## Текущий статус
 
-Последний опубликованный исходный релиз Control Center — **0.12.0**.
+Последний опубликованный исходный релиз Control Center — **0.13.0**.
 
 Отдельный стабильный бинарный канал распространения на текущий момент подтверждён до **0.3.1**. Публикация исходного релиза и наличие готового бинарного дистрибутива — разные границы: для установки следует использовать только явно опубликованный и проверяемый артефакт соответствующего канала.
 
@@ -27,9 +27,9 @@ Control Center — самостоятельная платформа центр�
 - основы Inventory, Market, PXE, Automation, Domain и Integration;
 - Site-модель и безопасную автономную работу в пределах делегированного scope;
 - Network Foundation с явными зонами, Edge Gateway и staged network changes;
-- Capacity Intelligence: forecast/what-if, Placement Advice, Bottleneck Report, Capacity Horizon, Capacity Calibration и Forecast Correction.
+- Capacity Intelligence: forecast/what-if, Placement Advice, Bottleneck Report, Capacity Horizon, Capacity Calibration, Forecast Correction и Calibration Trend.
 
-Capacity Intelligence в опубликованной линии остаётся **advisory-only**: аналитический результат сам по себе не разрешает placement, migration, resize, сетевые изменения или иные инфраструктурные mutations. Forecast Correction также не использует калибровочный коэффициент меньше `1` для автоматического снижения planning workload.
+Capacity Intelligence в опубликованной линии остаётся **advisory-only**: аналитический результат сам по себе не разрешает placement, migration, resize, сетевые изменения или иные инфраструктурные mutations. Forecast Correction не использует калибровочный коэффициент меньше `1` для автоматического снижения planning workload, а Calibration Trend только оценивает устойчивость и drift calibration evidence.
 
 ## Архитектурные принципы
 
@@ -68,7 +68,7 @@ Network Management является частью Core. Поддерживаем�
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
 - [`ROADMAP.md`](ROADMAP.md) — опубликованные этапы и дальнейшее развитие;
 - [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог принятых требований;
-- [`docs/RELEASE_0.12.0_RU.md`](docs/RELEASE_0.12.0_RU.md) — состав текущего опубликованного исходного релиза.
+- [`docs/RELEASE_0.13.0_RU.md`](docs/RELEASE_0.13.0_RU.md) — состав текущего опубликованного исходного релиза.
 
 ## Локальная сборка из исходного кода
 
