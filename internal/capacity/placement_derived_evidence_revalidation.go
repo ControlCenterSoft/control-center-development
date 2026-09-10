@@ -13,23 +13,23 @@ const PlacementAdviceDerivedEvidenceRevalidationSchemaV1 = "capacity.placement-a
 // derivation inputs. It is advisory evidence only and never authorizes a
 // placement or other infrastructure mutation.
 type PlacementAdviceDerivedEvidenceRevalidation struct {
-	SchemaVersion                 string                            `json:"schema_version"`
-	RevalidationID                string                            `json:"revalidation_id"`
-	SnapshotID                    string                            `json:"snapshot_id"`
-	CurrentSnapshotID             string                            `json:"current_snapshot_id,omitempty"`
-	PlacementSnapshotID           string                            `json:"placement_snapshot_id"`
-	CurrentPlacementSnapshotID    string                            `json:"current_placement_snapshot_id"`
-	ProvenanceSnapshotID          string                            `json:"provenance_snapshot_id"`
-	CurrentProvenanceSnapshotID   string                            `json:"current_provenance_snapshot_id"`
-	DerivationFingerprint         string                            `json:"derivation_fingerprint"`
-	CurrentDerivationFingerprint  string                            `json:"current_derivation_fingerprint"`
-	Status                        PlacementAdviceRevalidationStatus `json:"status"`
-	Reason                        string                            `json:"reason"`
-	StaleNodeID                   string                            `json:"stale_node_id,omitempty"`
-	RecommendationReusable        bool                              `json:"recommendation_reusable"`
-	RecommendedAction             string                            `json:"recommended_action"`
-	AdvisoryOnly                  bool                              `json:"advisory_only"`
-	ProductionMutation            bool                              `json:"production_mutation"`
+	SchemaVersion                string                            `json:"schema_version"`
+	RevalidationID               string                            `json:"revalidation_id"`
+	SnapshotID                   string                            `json:"snapshot_id"`
+	CurrentSnapshotID            string                            `json:"current_snapshot_id,omitempty"`
+	PlacementSnapshotID          string                            `json:"placement_snapshot_id"`
+	CurrentPlacementSnapshotID   string                            `json:"current_placement_snapshot_id"`
+	ProvenanceSnapshotID         string                            `json:"provenance_snapshot_id"`
+	CurrentProvenanceSnapshotID  string                            `json:"current_provenance_snapshot_id"`
+	DerivationFingerprint        string                            `json:"derivation_fingerprint"`
+	CurrentDerivationFingerprint string                            `json:"current_derivation_fingerprint"`
+	Status                       PlacementAdviceRevalidationStatus `json:"status"`
+	Reason                       string                            `json:"reason"`
+	StaleNodeID                  string                            `json:"stale_node_id,omitempty"`
+	RecommendationReusable       bool                              `json:"recommendation_reusable"`
+	RecommendedAction            string                            `json:"recommended_action"`
+	AdvisoryOnly                 bool                              `json:"advisory_only"`
+	ProductionMutation           bool                              `json:"production_mutation"`
 }
 
 // RevalidatePlacementAdviceDerivedEvidence accepts only the strong
@@ -88,6 +88,10 @@ func RevalidatePlacementAdviceDerivedEvidence(
 	}
 
 	switch {
+	case provenanceResult.Reason == "telemetry-freshness-expired":
+		result.Reason = "telemetry-freshness-expired"
+		result.StaleNodeID = provenanceResult.StaleNodeID
+		result.RecommendedAction = "refresh-telemetry-evidence"
 	case placementResult.Reason == "placement-request-or-constraint-drift":
 		result.Reason = "placement-request-or-constraint-drift"
 	case provenanceResult.Reason == "capacity-profile-revision-drift":
@@ -96,10 +100,6 @@ func RevalidatePlacementAdviceDerivedEvidence(
 		result.RecommendedAction = "refresh-capacity-profile-evidence"
 	case provenanceResult.Reason == "telemetry-revision-drift":
 		result.Reason = "telemetry-revision-drift"
-		result.StaleNodeID = provenanceResult.StaleNodeID
-		result.RecommendedAction = "refresh-telemetry-evidence"
-	case provenanceResult.Reason == "telemetry-freshness-expired":
-		result.Reason = "telemetry-freshness-expired"
 		result.StaleNodeID = provenanceResult.StaleNodeID
 		result.RecommendedAction = "refresh-telemetry-evidence"
 	case provenanceResult.Reason == "projection-derivation-drift":
