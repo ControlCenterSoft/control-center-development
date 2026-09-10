@@ -46,6 +46,7 @@ func TestNormalizeQueryRejectsInvalidTimeWindows(t *testing.T) {
 		{From: from.Add(time.Hour), To: from},
 		{From: from, To: from.Add(MaxReadWindow + time.Nanosecond)},
 		{From: from, To: from.Add(time.Nanosecond)},
+		{From: time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC), To: time.Date(3000, 1, 1, 0, 0, 0, 0, time.UTC)},
 	} {
 		if _, err := NormalizeQuery(query); err == nil {
 			t.Fatalf("NormalizeQuery accepted invalid time window: %#v", query)

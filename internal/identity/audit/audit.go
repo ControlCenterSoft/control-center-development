@@ -160,7 +160,7 @@ func NormalizeQuery(query Query) (Query, error) {
 		if !from.Before(to) {
 			return Query{}, fmt.Errorf("audit time window requires from before to")
 		}
-		if to.Sub(from) > MaxReadWindow {
+		if to.After(from.Add(MaxReadWindow)) {
 			return Query{}, fmt.Errorf("audit time window exceeds %s", MaxReadWindow)
 		}
 		query.From = from.Truncate(time.Microsecond)
