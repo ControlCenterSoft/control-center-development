@@ -65,8 +65,10 @@ WHERE ($1::bigint IS NULL OR sequence_id < $1)
   AND ($3::text = '' OR outcome = $3)
   AND ($4::text = '' OR actor_id::text = $4)
   AND ($5::text = '' OR subject_id = $5)
+  AND ($6::text = '' OR id::text = $6)
+  AND ($7::text = '' OR correlation_id = $7)
 ORDER BY sequence_id DESC
-LIMIT $6`, before, query.Action, query.Outcome, query.ActorID, query.SubjectID, query.Limit+1)
+LIMIT $8`, before, query.Action, query.Outcome, query.ActorID, query.SubjectID, query.EventID, query.CorrelationID, query.Limit+1)
 	if err != nil {
 		return audit.Page{}, fmt.Errorf("read audit events: %w", err)
 	}
