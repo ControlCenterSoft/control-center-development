@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-placement-rebuild-satisfaction-v1.schema.json",
+  "title": "Capacity Placement Rebuild Satisfaction v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gate_id",
+    "receipt_id",
+    "source_resource_reuse_gate_id",
+    "source_headroom_envelope_id",
+    "source_derived_snapshot_id",
+    "scope_id",
+    "checked_at",
+    "checks",
+    "status",
+    "reason",
+    "recommended_action",
+    "all_requirements_satisfied",
+    "advice_recalculation_permitted",
+    "reuse_authorized",
+    "placement_authorized",
+    "advisory_only",
+    "production_mutation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "capacity.placement-rebuild-satisfaction/v1"
+    },
+    "gate_id": {
+      "type": "string",
+      "pattern": "^prsg-[a-f0-9]{24}$"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^prer-[a-f0-9]{24}$"
+    },
+    "source_resource_reuse_gate_id": {
+      "type": "string",
+      "pattern": "^prrg-[a-f0-9]{24}$"
+    },
+    "source_headroom_envelope_id": {
+      "type": "string",
+      "pattern": "^prh-[a-f0-9]{24}$"
+    },
+    "source_derived_snapshot_id": {
+      "type": "string",
+      "pattern": "^pade-[a-f0-9]{24}$"
+    },
+    "scope_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 262144,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "node_id",
+          "constraint_id",
+          "metric",
+          "target_id",
+          "required_evidence",
+          "observed_evidence",
+          "satisfied",
+          "reason"
+        ],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "constraint_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "metric": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "target_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "required_evidence": {
+            "enum": [
+              "current-measured-telemetry",
+              "profile-and-telemetry-lineage"
+            ]
+          },
+          "observed_evidence": {
+            "enum": [
+              "measured",
+              "estimated",
+              "benchmark"
+            ]
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "reason": {
+            "enum": [
+              "exact-current-measured-evidence",
+              "current-evidence-not-measured"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "observed_evidence": {
+                  "const": "measured"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "satisfied": {
+                  "const": true
+                },
+                "reason": {
+                  "const": "exact-current-measured-evidence"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "satisfied": {
+                  "const": false
+                },
+                "reason": {
+                  "const": "current-evidence-not-measured"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "status": {
+      "enum": [
+        "satisfied",
+        "blocked"
+      ]
+    },
+    "reason": {
+      "enum": [
+        "exact-current-rebuild-evidence-satisfied",
+        "current-rebuild-evidence-incomplete"
+      ]
+    },
+    "recommended_action": {
+      "enum": [
+        "recalculate-advisory-placement",
+        "collect-current-measured-evidence"
+      ]
+    },
+    "all_requirements_satisfied": {
+      "type": "boolean"
+    },
+    "advice_recalculation_permitted": {
+      "type": "boolean"
+    },
+    "reuse_authorized": {
+      "const": false
+    },
+    "placement_authorized": {
+      "const": false
+    },
+    "advisory_only": {
+      "const": true
+    },
+    "production_mutation": {
+      "const": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "satisfied"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "const": "exact-current-rebuild-evidence-satisfied"
+          },
+          "recommended_action": {
+            "const": "recalculate-advisory-placement"
+          },
+          "all_requirements_satisfied": {
+            "const": true
+          },
+          "advice_recalculation_permitted": {
+            "const": true
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason": {
+            "const": "current-rebuild-evidence-incomplete"
+          },
+          "recommended_action": {
+            "const": "collect-current-measured-evidence"
+          },
+          "all_requirements_satisfied": {
+            "const": false
+          },
+          "advice_recalculation_permitted": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}
