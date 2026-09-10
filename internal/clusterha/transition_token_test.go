@@ -81,6 +81,7 @@ func TestBuildLifecycleTransitionTokenRejectsEvidenceFromDifferentMembership(t *
 		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
 	}
 	other := request.Membership
+	other.Members = append([]Member(nil), request.Membership.Members...)
 	other.Members[2].Healthy = false
 	other.Members[2].CaughtUp = false
 	evidence, err := BootstrapTransitionRevisionEvidence(ReconcilerRevisionObservation{
