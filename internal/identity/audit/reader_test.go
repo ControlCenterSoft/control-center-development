@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -78,12 +79,51 @@ func TestMemoryLogReadFiltersExactlyAndReturnsDefensiveDetails(t *testing.T) {
 	}
 }
 
+func TestMemoryLogReadFiltersByExactEventAndCorrelationID(t *testing.T) {
+	log := NewMemoryLog()
+	for _, event := range []Event{
+		{ID: "event-a", Action: "identity.login", Outcome: "success", CorrelationID: "change-1"},
+		{ID: "event-b", Action: "identity.password", Outcome: "success", CorrelationID: "change-1"},
+		{ID: "event-c", Action: "identity.login", Outcome: "denied", CorrelationID: "change-2"},
+	} {
+		if err := log.Append(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	byEvent, err := log.Read(context.Background(), Query{EventID: "event-b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byEvent.Entries) != 1 || byEvent.Entries[0].Event.ID != "event-b" {
+		t.Fatalf("event lookup returned %#v", byEvent.Entries)
+	}
+
+	byCorrelation, err := log.Read(context.Background(), Query{CorrelationID: "change-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byCorrelation.Entries) != 2 || byCorrelation.Entries[0].Event.ID != "event-b" || byCorrelation.Entries[1].Event.ID != "event-a" {
+		t.Fatalf("correlation lookup returned %#v", byCorrelation.Entries)
+	}
+
+	exactCombination, err := log.Read(context.Background(), Query{CorrelationID: "change-1", Action: "identity.login"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(exactCombination.Entries) != 1 || exactCombination.Entries[0].Event.ID != "event-a" {
+		t.Fatalf("combined lookup returned %#v", exactCombination.Entries)
+	}
+}
+
 func TestNormalizeQueryRejectsUnboundedInputs(t *testing.T) {
 	for _, query := range []Query{
 		{Limit: MaxReadLimit + 1},
 		{Limit: -1},
 		{BeforeSequenceID: -1},
 		{Action: string(make([]byte, 193))},
+		{EventID: strings.Repeat("e", 65)},
+		{CorrelationID: strings.Repeat("c", 257)},
 	} {
 		if _, err := NormalizeQuery(query); err == nil {
 			t.Fatalf("NormalizeQuery accepted invalid query: %#v", query)
