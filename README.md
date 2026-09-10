@@ -1,64 +1,80 @@
 # Control Center
 
-Control Center — централизованная платформа управления инфраструктурой с типизированной, проверяемой и аудируемой моделью исполнения.
+Control Center — самостоятельная платформа централизованного управления серверной и пользовательской ИТ-инфраструктурой с типизированной, проверяемой и аудируемой моделью выполнения операций.
 
-Текущий кодовый baseline: **0.6.0**. Номер версии изменяется только отдельным релизным процессом после реализации и тестирования.
+## Текущий статус
 
-## Источник истины разработки
+Последний опубликованный исходный релиз Control Center — **0.11.0**.
 
-Нормативным источником истины для текущей разработки является ветка `main` этого репозитория: `ControlCenterSoft/control-center-development`.
+Отдельный стабильный бинарный канал распространения на текущий момент подтверждён до **0.3.1**. Публикация исходного релиза и наличие готового бинарного дистрибутива — разные границы: для установки следует использовать только явно опубликованный и проверяемый артефакт соответствующего канала.
 
-Перед продолжением разработки необходимо читать:
+Функции более новых версий считаются предварительными до официальной публикации соответствующего релиза.
 
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
-2. [`ROADMAP.md`](ROADMAP.md) — правильная последовательность внедрения и первый незакрытый архитектурный этап;
-3. [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог уже принятых требований.
+## Возможности опубликованной исходной линии
 
-Правило: команда «продолжай разработку» должна сначала сверять актуальный `main`, активные PR и первый незакрытый этап `ROADMAP.md`, а затем реализовывать следующий совместимый Task Packet.
+Накопительная линия Control Center включает:
 
-`ControlCenterSoft/control-center-stable` — стабильный релизный канал. `ControlCenterSoft/control-center` — публичный сайт/витрина. Эти репозитории не являются архитектурным source of truth продукта.
-
-Google Drive содержит подробную продуктовую/эксплуатационную документацию и должен быть синхронизирован с этими нормативными файлами. Выявленное противоречие между реализацией и документацией должно быть устранено до развития конфликтующего контракта.
-
-## Возможности текущего baseline
-
-- HTTP/JSON API и health/readiness endpoints;
-- локальная identity/session модель;
-- deny-by-default RBAC;
+- HTTP/JSON API, health и readiness;
+- локальную identity/session модель и deny-by-default RBAC;
 - append-oriented audit;
 - PostgreSQL-backed durable state;
 - immutable configuration revisions;
-- policy/risk/approval-aware Changes;
+- Changes с учётом политики, риска и approval;
 - durable Jobs с leases, retries и idempotency;
-- allowlisted typed Worker actions;
-- resource state/health;
-- Agent enrollment/heartbeat foundations;
-- Inventory/Market/PXE/Automation/Domain/Integration foundations;
-- non-root runtime.
+- allowlisted typed actions вместо произвольного удалённого shell;
+- состояние и health управляемых ресурсов;
+- основы enrollment/heartbeat для узлов;
+- основы Inventory, Market, PXE, Automation, Domain и Integration;
+- Site-модель и безопасную автономную работу в пределах делегированного scope;
+- Network Foundation с явными зонами, Edge Gateway и staged network changes;
+- Capacity Intelligence: forecast/what-if, Placement Advice, Bottleneck Report, Capacity Horizon и Capacity Calibration.
 
-Целевая распределённая ролевая, кластерная, Capacity, Lifecycle/Recovery, Network/Edge и Enterprise Market архитектура описана в нормативных документах выше и внедряется поэтапно, а не одним несовместимым скачком.
+Capacity Intelligence в опубликованной линии остаётся **advisory-only**: аналитический результат сам по себе не разрешает placement, migration, resize, сетевые изменения или иные инфраструктурные mutations.
 
-## Модель разработки
+## Архитектурные принципы
 
-Разработка ведётся параллельно, но общие контракты Identity/RBAC/State/Jobs/Agent/Market/Network/Recovery не должны иметь независимых несовместимых реализаций в разных ветках.
+Control Center разделяет Desired State и Actual State. Канонический путь изменения состояния:
 
-Pull request должен оставлять `main` зелёным и проходить предусмотренные форматирование, vet/race, unit/integration/security/failure/build gates.
+`Запрос → Валидация → Авторизация → План → Change → Job → типизированное действие → Проверка → Actual State → Audit`
 
-В репозитории запрещены credentials, приватная топология инфраструктуры, production data, приватные deployment endpoints и секреты.
+Опасная операция должна иметь понятные risk, preflight, verification и recovery/rollback semantics. Успешное завершение команды или Job не считается доказательством результата без проверки фактического состояния.
 
-## Локальная проверка
+## Single-node и multi-node/HA
 
-```bash
-make ci
-```
+Single-node является самостоятельным способом использования Control Center и не требует второго сервера.
 
-## Локальная сборка
+Целевая архитектура предусматривает multi-node, распределение ролей, maintenance/drain, replacement/decommission, восстановление и HA. Конкретный HA-профиль считается поддерживаемым только после его реализации, проверки quorum/fencing/failover/recovery и официальной публикации соответствующей версии. Наличие нескольких узлов или архитектурных контрактов само по себе не является доказательством production HA.
+
+## Сеть
+
+Network Management является частью Core. Поддерживаемая модель предусматривает multi-NIC, WAN/LAN и другие зоны, VLAN/bonding там, где это реализовано, routing, DNS/NTP и firewall policy.
+
+Наличие WAN+LAN не включает routing, forwarding, NAT или port-forwarding автоматически. Такие возможности требуют отдельного явного разрешения и безопасного Change. Рискованные сетевые изменения должны применяться staged с проверкой связности и rollback.
+
+## Core и Market
+
+**Core** содержит обязательные платформенные функции: Identity/RBAC, Desired/Actual State, Changes/Jobs, Node/Role/Lifecycle, Network, Monitoring/Health, Audit, Backup/Recovery contracts, Capacity Planner foundation и общие security boundaries.
+
+**Market** содержит устанавливаемые инфраструктурные возможности. Модуль должен иметь явную identity, compatibility/dependency metadata, permissions/capabilities, network/storage requirements, capacity profile и lifecycle. Зафиксированные направления включают Directory Services с поддерживаемыми Samba AD/FreeIPA providers, DNS/DHCP, PXE Windows/Linux, Software Automation Windows/Linux, Inventory/Compliance, File Services, Monitoring и Backup.
+
+## Первый вход
+
+Для опубликованной исходной линии начиная с 0.6.0 после чистой установки создаётся локальный пользователь `admin` с первоначальным паролем `admin`. При первом входе пароль необходимо сменить; до смены обычная работа с системой запрещена. При обновлении существующий пользовательский пароль `admin` сохраняется и не сбрасывается к первоначальному значению.
+
+Отдельный бинарный выпуск 0.3.1 относится к более ранней bootstrap-модели аутентификации; при эксплуатации этого бинарного выпуска необходимо следовать его собственной release-документации.
+
+## Документация
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
+- [`ROADMAP.md`](ROADMAP.md) — опубликованные этапы и дальнейшее развитие;
+- [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог принятых требований;
+- [`docs/RELEASE_0.11.0_RU.md`](docs/RELEASE_0.11.0_RU.md) — состав текущего опубликованного исходного релиза.
+
+## Локальная сборка из исходного кода
 
 ```bash
 make build
 ./bin/control-center
 ```
 
-## Первый вход
-
-На пустой установке Control Center создаёт локального пользователя `admin` с одноразовым начальным паролем `admin`. Первая сессия позволяет только проверить состояние сессии, сменить пароль или выйти. До смены пароля обычная работа запрещена. Обновление установленной системы никогда не заменяет существующий пароль пользователя и не восстанавливает начальный credential.
+Готовый production-дистрибутив следует брать только из явно опубликованного бинарного канала и проверять согласно сопровождающей его release-документации.
