@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-placement-advice-reuse-consumption-v1.schema.json",
+  "title": "Capacity Placement Advice Reuse Consumption v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "consumption_id",
+    "decision_id",
+    "decision_revalidation_id",
+    "current_revalidation_id",
+    "snapshot_id",
+    "placement_snapshot_id",
+    "current_placement_snapshot_id",
+    "provenance_snapshot_id",
+    "current_provenance_snapshot_id",
+    "derivation_fingerprint",
+    "current_derivation_fingerprint",
+    "current_evidence_status",
+    "current_recommendation_reusable",
+    "status",
+    "reason",
+    "recommended_action",
+    "reuse_allowed",
+    "advisory_only",
+    "placement_authorized",
+    "production_mutation"
+  ],
+  "properties": {
+    "schema_version": {"const": "capacity.placement-advice-reuse-consumption/v1"},
+    "consumption_id": {"type": "string", "pattern": "^parc-[a-f0-9]{24}$"},
+    "decision_id": {"type": "string", "pattern": "^pard-[a-f0-9]{24}$"},
+    "decision_revalidation_id": {"type": "string", "pattern": "^padr-[a-f0-9]{24}$"},
+    "current_revalidation_id": {"type": "string", "pattern": "^padr-[a-f0-9]{24}$"},
+    "snapshot_id": {"type": "string", "pattern": "^pade-[a-f0-9]{24}$"},
+    "current_snapshot_id": {"type": "string", "pattern": "^pade-[a-f0-9]{24}$"},
+    "placement_snapshot_id": {"type": "string", "pattern": "^pas-[a-f0-9]{24}$"},
+    "current_placement_snapshot_id": {"type": "string", "pattern": "^pas-[a-f0-9]{24}$"},
+    "provenance_snapshot_id": {"type": "string", "minLength": 1},
+    "current_provenance_snapshot_id": {"type": "string", "minLength": 1},
+    "derivation_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "current_derivation_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "current_evidence_status": {"enum": ["current", "stale"]},
+    "current_recommendation_reusable": {"type": "boolean"},
+    "status": {"enum": ["allowed", "blocked"]},
+    "reason": {"type": "string", "minLength": 1},
+    "recommended_action": {"type": "string", "minLength": 1},
+    "reuse_allowed": {"type": "boolean"},
+    "advisory_only": {"const": true},
+    "placement_authorized": {"const": false},
+    "production_mutation": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "allowed"}}, "required": ["status"]},
+      "then": {
+        "required": ["current_snapshot_id"],
+        "properties": {
+          "current_evidence_status": {"const": "current"},
+          "current_recommendation_reusable": {"const": true},
+          "reason": {"const": "exact-current-reuse-decision-consumable"},
+          "recommended_action": {"const": "none"},
+          "reuse_allowed": {"const": true}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "blocked"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "reuse_allowed": {"const": false},
+          "recommended_action": {"not": {"const": "none"}}
+        }
+      }
+    }
+  ]
+}
