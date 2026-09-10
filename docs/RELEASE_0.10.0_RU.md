@@ -1,7 +1,5 @@
 # Control Center 0.10.0
 
-Статус: активная ветка разработки, не официальный релиз.
-
 Версия 0.10 продолжает Capacity Planner и добавляет прогнозируемый горизонт
 исчерпания безопасной ёмкости. Модель связывает уже рассчитанный workload
 forecast с отказоустойчивой fleet assessment и отвечает на вопрос, сколько
@@ -53,4 +51,3 @@ Capacity Horizon остаётся аналитическим evidence:
 
 Версия 0.10 сохраняет накопленные возможности Capacity Planner: прогноз и
 what-if, безопасную fleet assessment, advisory placement и bottleneck-анализ.
-Development qualification сама по себе не означает выпуск официального релиза.
