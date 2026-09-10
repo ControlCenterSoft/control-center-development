@@ -126,6 +126,19 @@ func TestPlacementAdviceReuseDecisionBlocksCurrentButNonReusableEvidence(t *test
 	}
 }
 
+func TestPlacementAdviceReuseDecisionRejectsCurrentLineageDrift(t *testing.T) {
+	revalidation := placementReuseDecisionFixture(t)
+	decision, err := EvaluatePlacementAdviceReuse(revalidation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision.CurrentDerivationFingerprint = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	decision.DecisionID = placementAdviceReuseDecisionID(decision)
+	if err := ValidatePlacementAdviceReuseDecision(decision); !errors.Is(err, ErrInvalidRecommendation) {
+		t.Fatalf("current lineage drift error = %v", err)
+	}
+}
+
 func TestPlacementAdviceReuseDecisionRejectsTamperedInputAndAuthority(t *testing.T) {
 	revalidation := placementReuseDecisionFixture(t)
 	unsafe := revalidation
