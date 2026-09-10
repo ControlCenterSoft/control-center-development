@@ -21,6 +21,15 @@ const (
 	maxAuditDetailNodes           = 512
 	maxAuditDetailCollectionItems = 128
 	maxAuditDetailStringBytes     = 4096
+
+	maxAuditEventIDBytes       = 64
+	maxAuditActionBytes        = 192
+	maxAuditOutcomeBytes       = 32
+	maxAuditActorIDBytes       = 64
+	maxAuditSubjectIDBytes     = 512
+	maxAuditSourceIPBytes      = 64
+	maxAuditCorrelationIDBytes = 512
+	maxAuditHashBytes          = 64
 )
 
 type Event struct {
@@ -64,11 +73,12 @@ func (l *MemoryLog) Append(ctx context.Context, event Event) error {
 	return nil
 }
 func Prepare(event Event, previousHash string) (Event, error) {
-	if strings.TrimSpace(event.Action) == "" || strings.TrimSpace(event.Outcome) == "" {
-		return Event{}, fmt.Errorf("audit action and outcome are required")
-	}
+	event = normalizeEventFields(event)
 	if event.ID == "" {
 		event.ID = randomID()
+	}
+	if err := validateEventFields(event); err != nil {
+		return Event{}, err
 	}
 	if event.OccurredAt.IsZero() {
 		event.OccurredAt = time.Now().UTC().Truncate(time.Microsecond)
@@ -81,6 +91,9 @@ func Prepare(event Event, previousHash string) (Event, error) {
 	}
 	event.Details = redacted
 	event.PreviousHash = previousHash
+	if len(event.PreviousHash) > maxAuditHashBytes {
+		return Event{}, fmt.Errorf("audit previous_hash exceeds %d-byte limit", maxAuditHashBytes)
+	}
 	event.Hash, err = hashEvent(event)
 	if err != nil {
 		return Event{}, err
@@ -116,6 +129,45 @@ func (l *MemoryLog) Records() []Event {
 	result := make([]Event, len(l.records))
 	copy(result, l.records)
 	return result
+}
+
+func normalizeEventFields(event Event) Event {
+	event.ID = strings.TrimSpace(event.ID)
+	event.Action = strings.TrimSpace(event.Action)
+	event.Outcome = strings.TrimSpace(event.Outcome)
+	event.ActorID = strings.TrimSpace(event.ActorID)
+	event.SubjectID = strings.TrimSpace(event.SubjectID)
+	event.SourceIP = strings.TrimSpace(event.SourceIP)
+	event.CorrelationID = strings.TrimSpace(event.CorrelationID)
+	return event
+}
+
+func validateEventFields(event Event) error {
+	fields := []struct {
+		name     string
+		value    string
+		maxBytes int
+		required bool
+	}{
+		{name: "id", value: event.ID, maxBytes: maxAuditEventIDBytes, required: true},
+		{name: "action", value: event.Action, maxBytes: maxAuditActionBytes, required: true},
+		{name: "outcome", value: event.Outcome, maxBytes: maxAuditOutcomeBytes, required: true},
+		{name: "actor_id", value: event.ActorID, maxBytes: maxAuditActorIDBytes},
+		{name: "subject_id", value: event.SubjectID, maxBytes: maxAuditSubjectIDBytes},
+		{name: "source_ip", value: event.SourceIP, maxBytes: maxAuditSourceIPBytes},
+		{name: "correlation_id", value: event.CorrelationID, maxBytes: maxAuditCorrelationIDBytes},
+		{name: "previous_hash", value: event.PreviousHash, maxBytes: maxAuditHashBytes},
+		{name: "hash", value: event.Hash, maxBytes: maxAuditHashBytes},
+	}
+	for _, field := range fields {
+		if field.required && strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("audit %s is required", field.name)
+		}
+		if len(field.value) > field.maxBytes {
+			return fmt.Errorf("audit %s exceeds %d-byte limit", field.name, field.maxBytes)
+		}
+	}
+	return nil
 }
 
 var sensitiveKey = regexp.MustCompile(`(?i)(password|passwd|secret|token|authorization|cookie|api[-_]?key|private[-_]?key|credential)`)
@@ -346,6 +398,9 @@ func redactValue(value any) any {
 	}
 }
 func hashEvent(event Event) (string, error) {
+	if err := validateEventFields(event); err != nil {
+		return "", err
+	}
 	if event.Details != nil {
 		if err := validateDetailShape(reflect.ValueOf(event.Details), 1, &detailBudget{}, make(map[visit]bool)); err != nil {
 			return "", err
