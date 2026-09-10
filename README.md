@@ -2,55 +2,35 @@
 
 Control Center — централизованная платформа управления инфраструктурой с типизированной, проверяемой и аудируемой моделью исполнения.
 
-Текущий кодовый baseline: **0.6.0**. Номер версии изменяется только отдельным релизным процессом после реализации и тестирования.
+Текущий опубликованный исходный релиз: **0.17.0**. Отдельный стабильный бинарный канал распространения на момент этой редакции подтверждён до **0.3.1**; опубликованный исходный релиз и готовый бинарный пакет не следует смешивать.
 
-## Источник истины разработки
+## Документация
 
-Нормативным источником истины для текущей разработки является ветка `main` этого репозитория: `ControlCenterSoft/control-center-development`.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — продуктовая архитектура и обязательные инварианты;
+- [`ROADMAP.md`](ROADMAP.md) — опубликованная и ближайшая продуктовая линия;
+- [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог принятых требований.
 
-Перед продолжением разработки необходимо читать:
+## Возможности опубликованной линии
 
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
-2. [`ROADMAP.md`](ROADMAP.md) — правильная последовательность внедрения и первый незакрытый архитектурный этап;
-3. [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог уже принятых требований.
+Core включает HTTP/JSON API и health/readiness, локальную identity/session модель, deny-by-default RBAC, аудит, PostgreSQL-backed durable state, immutable configuration revisions, policy/risk/approval-aware Changes, durable Jobs, типизированные действия, resource state/health, Agent enrollment/heartbeat foundations и общие Inventory/Market/PXE/Automation/Domain/Integration contracts.
 
-Правило: команда «продолжай разработку» должна сначала сверять актуальный `main`, активные PR и первый незакрытый этап `ROADMAP.md`, а затем реализовывать следующий совместимый Task Packet.
+В опубликованной линии Capacity Planner последовательно добавлены forecast/what-if, Placement Advice, Bottleneck Report, Capacity Horizon, Calibration, Forecast Correction, Calibration Trend, benchmark-backed Workload Profile, bounded nonlinear Workload Curve, Workload Curve Efficiency и в **0.17.0** — Workload Scale Scenario/Scale Options. Эти Capacity-функции являются advisory-only: они не разрешают автоматический placement, resize, migration, rebalance или иное изменение production-инфраструктуры.
 
-`ControlCenterSoft/control-center-stable` — стабильный релизный канал. `ControlCenterSoft/control-center` — публичный сайт/витрина. Эти репозитории не являются архитектурным source of truth продукта.
+## Архитектурная модель
 
-Google Drive содержит подробную продуктовую/эксплуатационную документацию и должен быть синхронизирован с этими нормативными файлами. Выявленное противоречие между реализацией и документацией должно быть устранено до развития конфликтующего контракта.
+Control Center поддерживает самостоятельный single-node профиль и целевую multi-node/HA модель с разделением ролей, Desired State и Actual State, управляемым lifecycle узлов, recovery, Network Management и Capacity Planner. Наличие архитектурного контракта не означает, что конкретный HA/failover профиль уже сертифицирован для опубликованной версии; поддержка считается доступной только там, где она явно подтверждена документацией соответствующего релиза.
 
-## Возможности текущего baseline
+Network Management является частью Core: multi-NIC, WAN/LAN и другие зоны, routing, VLAN/bonding там, где это поддерживается, DNS/NTP, firewall и staged changes с проверкой связности и rollback. NAT/port-forwarding включаются только явно; наличие WAN+LAN само по себе не превращает узел в шлюз.
 
-- HTTP/JSON API и health/readiness endpoints;
-- локальная identity/session модель;
-- deny-by-default RBAC;
-- append-oriented audit;
-- PostgreSQL-backed durable state;
-- immutable configuration revisions;
-- policy/risk/approval-aware Changes;
-- durable Jobs с leases, retries и idempotency;
-- allowlisted typed Worker actions;
-- resource state/health;
-- Agent enrollment/heartbeat foundations;
-- Inventory/Market/PXE/Automation/Domain/Integration foundations;
-- non-root runtime.
+Lifecycle охватывает enrollment, maintenance, drain, replacement/decommission и recovery. Для опасных операций должны быть заранее определены риск, проверка результата и rollback/recovery path. Stateful workloads требуют provider-specific migration/recovery semantics.
 
-Целевая распределённая ролевая, кластерная, Capacity, Lifecycle/Recovery, Network/Edge и Enterprise Market архитектура описана в нормативных документах выше и внедряется поэтапно, а не одним несовместимым скачком.
+Market содержит устанавливаемые инфраструктурные возможности и не смешивается с Core. Для модуля должны быть определены compatibility/dependencies, permissions, network/storage requirements, capacity profile и lifecycle Install → Configure → Health → Update → Migrate/Drain → Backup → Restore → Remove; failover добавляется только когда он фактически поддерживается provider.
 
-## Модель разработки
+## Первый вход
 
-Разработка ведётся параллельно, но общие контракты Identity/RBAC/State/Jobs/Agent/Market/Network/Recovery не должны иметь независимых несовместимых реализаций в разных ветках.
+Для опубликованной исходной линии **0.6.0–0.17.0** на чистой установке создаётся локальный пользователь `admin` с первоначальным паролем `admin`. Первая сессия допускает только обязательные действия, необходимые для смены первоначального пароля; до смены обычная работа запрещена. При обновлении существующий пользовательский пароль не сбрасывается и не заменяется первоначальным credential.
 
-Pull request должен оставлять `main` зелёным и проходить предусмотренные форматирование, vet/race, unit/integration/security/failure/build gates.
-
-В репозитории запрещены credentials, приватная топология инфраструктуры, production data, приватные deployment endpoints и секреты.
-
-## Локальная проверка
-
-```bash
-make ci
-```
+Отдельный бинарный stable-выпуск **0.3.1** использует более раннюю bootstrap-модель аутентификации; при эксплуатации этого бинарного выпуска следует применять его собственную release-документацию.
 
 ## Локальная сборка
 
@@ -58,7 +38,3 @@ make ci
 make build
 ./bin/control-center
 ```
-
-## Первый вход
-
-На пустой установке Control Center создаёт локального пользователя `admin` с одноразовым начальным паролем `admin`. Первая сессия позволяет только проверить состояние сессии, сменить пароль или выйти. До смены пароля обычная работа запрещена. Обновление установленной системы никогда не заменяет существующий пароль пользователя и не восстанавливает начальный credential.
