@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Control Center Audit Event Read API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     Bounded, permission-gated read contract for append-only Control Center audit
     events. This contract is read-only and does not modify audit history.
@@ -16,8 +16,12 @@ paths:
         audit.events.read permission. Filters are exact matches, including
         event_id and correlation_id. Optional time filtering requires both from
         and to, uses an inclusive from and exclusive to boundary, and is limited
-        to at most 31 days. Pagination uses an opaque cursor; clients must not
-        parse or construct cursors.
+        to at most 31 days. New pagination cursors are opaque, HMAC-authenticated,
+        and bound to the authenticated session plus the normalized query shape,
+        including limit, exact filters, and time window. A cursor therefore cannot
+        be reused with a different query or session. Legacy v1 cursors remain
+        accepted only for unfiltered reads so existing unfiltered pagination can
+        finish safely; filtered pagination must restart to obtain a v2 cursor.
       parameters:
         - name: limit
           in: query
@@ -30,7 +34,11 @@ paths:
         - name: cursor
           in: query
           required: false
-          description: Opaque cursor returned as next_cursor by a previous response.
+          description: >-
+            Opaque cursor returned as next_cursor by a previous response. A v2
+            cursor must be reused only by the same authenticated session and with
+            the same normalized limit, filters, and from/to window. Legacy v1
+            cursors are accepted only when no filters or time window are supplied.
           schema:
             type: string
             minLength: 1
@@ -114,13 +122,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuditEventPage'
         '400':
-          description: Invalid, ambiguous, repeated, unsupported, or unbounded query.
+          description: Invalid, ambiguous, repeated, unsupported, unbounded, or cursor/query-mismatched request.
         '401':
           description: Authentication is required.
         '403':
           description: Password change is required or audit.events.read is denied.
         '503':
-          description: Audit storage/read or required read-evidence recording is unavailable.
+          description: Audit storage/read, cursor generation, or required read-evidence recording is unavailable.
 components:
   schemas:
     AuditEventPage:
@@ -136,7 +144,11 @@ components:
             $ref: '#/components/schemas/AuditEvent'
         next_cursor:
           type: string
-          description: Opaque cursor for the next older page; omitted when no page remains.
+          maxLength: 128
+          description: >-
+            Opaque cursor for the next older page; omitted when no page remains.
+            New cursors are bound to the issuing authenticated session and the
+            normalized query shape and must not be parsed or modified by clients.
     AuditEvent:
       type: object
       additionalProperties: false
