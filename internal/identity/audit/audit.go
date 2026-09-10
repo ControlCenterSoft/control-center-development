@@ -84,6 +84,9 @@ func Prepare(event Event, previousHash string) (Event, error) {
 	if err := validateEventFields(event); err != nil {
 		return Event{}, err
 	}
+	if err := validateAuditHash("previous_hash", previousHash, true); err != nil {
+		return Event{}, err
+	}
 	if event.OccurredAt.IsZero() {
 		event.OccurredAt = time.Now().UTC().Truncate(time.Microsecond)
 	} else {
@@ -95,9 +98,6 @@ func Prepare(event Event, previousHash string) (Event, error) {
 	}
 	event.Details = redacted
 	event.PreviousHash = previousHash
-	if len(event.PreviousHash) > maxAuditHashBytes {
-		return Event{}, fmt.Errorf("audit previous_hash exceeds %d-byte limit", maxAuditHashBytes)
-	}
 	event.Hash, err = hashEvent(event)
 	if err != nil {
 		return Event{}, err
@@ -105,6 +105,15 @@ func Prepare(event Event, previousHash string) (Event, error) {
 	return event, nil
 }
 func Verify(event Event, expectedPreviousHash string) error {
+	if err := validateAuditHash("expected_previous_hash", expectedPreviousHash, true); err != nil {
+		return err
+	}
+	if err := validateAuditHash("previous_hash", event.PreviousHash, true); err != nil {
+		return err
+	}
+	if err := validateAuditHash("hash", event.Hash, false); err != nil {
+		return err
+	}
 	if event.OccurredAt.IsZero() {
 		return fmt.Errorf("audit timestamp is required")
 	}
@@ -122,7 +131,7 @@ func Verify(event Event, expectedPreviousHash string) error {
 	if err != nil {
 		return err
 	}
-	if event.Hash == "" || computedHash != event.Hash {
+	if computedHash != event.Hash {
 		return fmt.Errorf("audit event hash mismatch")
 	}
 	return nil
@@ -205,6 +214,25 @@ func validateEventFields(event Event) error {
 		}
 		if len(field.value) > field.maxBytes {
 			return fmt.Errorf("audit %s exceeds %d-byte limit", field.name, field.maxBytes)
+		}
+	}
+	return nil
+}
+
+func validateAuditHash(name, value string, allowEmpty bool) error {
+	if value == "" {
+		if allowEmpty {
+			return nil
+		}
+		return fmt.Errorf("audit %s is required", name)
+	}
+	if len(value) != maxAuditHashBytes {
+		return fmt.Errorf("audit %s must be %d lowercase SHA-256 hex characters", name, maxAuditHashBytes)
+	}
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return fmt.Errorf("audit %s must be %d lowercase SHA-256 hex characters", name, maxAuditHashBytes)
 		}
 	}
 	return nil
