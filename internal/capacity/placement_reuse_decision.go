@@ -112,6 +112,9 @@ func validatePlacementAdviceReuseDecision(result PlacementAdviceReuseDecision) e
 	if result.Status == PlacementAdviceReuseAllowed {
 		if !result.ReuseAllowed || result.CurrentSnapshotID == "" ||
 			result.CurrentSnapshotID != result.SnapshotID ||
+			result.CurrentPlacementSnapshotID != result.PlacementSnapshotID ||
+			result.CurrentProvenanceSnapshotID != result.ProvenanceSnapshotID ||
+			result.CurrentDerivationFingerprint != result.DerivationFingerprint ||
 			result.Reason != "exact-current-derived-evidence-reusable" ||
 			result.RecommendedAction != "none" {
 			return fmt.Errorf("%w: inconsistent allowed placement reuse decision", ErrInvalidRecommendation)
