@@ -164,7 +164,10 @@ func validateEventFields(event Event) error {
 		{name: "hash", value: event.Hash, maxBytes: maxAuditHashBytes},
 	}
 	for _, field := range fields {
-		if field.required && strings.TrimSpace(field.value) == "" {
+		if field.value != strings.TrimSpace(field.value) {
+			return fmt.Errorf("audit %s is not canonical", field.name)
+		}
+		if field.required && field.value == "" {
 			return fmt.Errorf("audit %s is required", field.name)
 		}
 		if len(field.value) > field.maxBytes {
