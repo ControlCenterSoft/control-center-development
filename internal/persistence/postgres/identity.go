@@ -62,17 +62,27 @@ func (s *IdentityStore) SetLastLogin(ctx context.Context, id string, at time.Tim
 	return requireAffected(result, err, auth.ErrNotFound)
 }
 func (s *IdentityStore) CreateSession(ctx context.Context, session auth.Session, expectedPasswordHash string) error {
-	result, err := s.db.ExecContext(ctx, `INSERT INTO cc_auth_sessions (id,user_id,token_digest,credential_version,created_at,expires_at,source_ip,user_agent) SELECT $1::uuid,id,$3,$4,$5,$6,NULLIF($7,'')::inet,$8 FROM cc_local_users WHERE id=$2::uuid AND password_hash=$9`, session.ID, session.UserID, session.TokenDigest, session.CredentialVersion.UTC(), session.CreatedAt.UTC(), session.ExpiresAt.UTC(), session.SourceIP, session.UserAgent, expectedPasswordHash)
+	lastActivity := session.LastActivityAt
+	if lastActivity.IsZero() {
+		lastActivity = session.CreatedAt
+	}
+	result, err := s.db.ExecContext(ctx, `INSERT INTO cc_auth_sessions (id,user_id,token_digest,credential_version,created_at,last_activity_at,expires_at,source_ip,user_agent) SELECT $1::uuid,id,$3,$4,$5,$6,$7,NULLIF($8,'')::inet,$9 FROM cc_local_users WHERE id=$2::uuid AND password_hash=$10`, session.ID, session.UserID, session.TokenDigest, session.CredentialVersion.UTC(), session.CreatedAt.UTC(), lastActivity.UTC(), session.ExpiresAt.UTC(), session.SourceIP, session.UserAgent, expectedPasswordHash)
 	if isUniqueViolation(err) {
 		return auth.ErrConflict
 	}
 	return requireAffected(result, err, auth.ErrConflict)
 }
 func (s *IdentityStore) FindSessionByDigest(ctx context.Context, digest string) (auth.Session, error) {
+	return scanSession(s.db.QueryRowContext(ctx, `SELECT id::text,user_id::text,token_digest,credential_version,created_at,last_activity_at,expires_at,revoked_at,host(source_ip),user_agent FROM cc_auth_sessions WHERE token_digest=$1`, digest))
+}
+func (s *IdentityStore) FindSessionForUserByID(ctx context.Context, userID, sessionID string) (auth.Session, error) {
+	return scanSession(s.db.QueryRowContext(ctx, `SELECT id::text,user_id::text,token_digest,credential_version,created_at,last_activity_at,expires_at,revoked_at,host(source_ip),user_agent FROM cc_auth_sessions WHERE user_id=$1::uuid AND id=$2::uuid`, userID, sessionID))
+}
+func scanSession(row *sql.Row) (auth.Session, error) {
 	var session auth.Session
 	var revoked sql.NullTime
 	var sourceIP sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,user_id::text,token_digest,credential_version,created_at,expires_at,revoked_at,host(source_ip),user_agent FROM cc_auth_sessions WHERE token_digest=$1`, digest).Scan(&session.ID, &session.UserID, &session.TokenDigest, &session.CredentialVersion, &session.CreatedAt, &session.ExpiresAt, &revoked, &sourceIP, &session.UserAgent)
+	err := row.Scan(&session.ID, &session.UserID, &session.TokenDigest, &session.CredentialVersion, &session.CreatedAt, &session.LastActivityAt, &session.ExpiresAt, &revoked, &sourceIP, &session.UserAgent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.Session{}, auth.ErrNotFound
 	}
@@ -88,8 +98,44 @@ func (s *IdentityStore) FindSessionByDigest(ctx context.Context, digest string) 
 	}
 	return session, nil
 }
+func (s *IdentityStore) ListActiveSessionsForUser(ctx context.Context, userID string, now time.Time) ([]auth.Session, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,user_id::text,token_digest,credential_version,created_at,last_activity_at,expires_at,revoked_at,host(source_ip),user_agent FROM cc_auth_sessions WHERE user_id=$1::uuid AND revoked_at IS NULL AND expires_at>$2 ORDER BY created_at DESC,id ASC`, userID, now.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]auth.Session, 0)
+	for rows.Next() {
+		var session auth.Session
+		var revoked sql.NullTime
+		var sourceIP sql.NullString
+		if err := rows.Scan(&session.ID, &session.UserID, &session.TokenDigest, &session.CredentialVersion, &session.CreatedAt, &session.LastActivityAt, &session.ExpiresAt, &revoked, &sourceIP, &session.UserAgent); err != nil {
+			return nil, err
+		}
+		if revoked.Valid {
+			value := revoked.Time.UTC()
+			session.RevokedAt = &value
+		}
+		if sourceIP.Valid {
+			session.SourceIP = sourceIP.String
+		}
+		result = append(result, session)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *IdentityStore) TouchSessionByDigest(ctx context.Context, digest string, at time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE cc_auth_sessions SET last_activity_at=GREATEST(last_activity_at,$2) WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2`, digest, at.UTC())
+	return requireAffected(result, err, auth.ErrNotFound)
+}
 func (s *IdentityStore) RevokeSessionByDigest(ctx context.Context, digest string, at time.Time) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE cc_auth_sessions SET revoked_at=COALESCE(revoked_at,$2) WHERE token_digest=$1`, digest, at.UTC())
+	return requireAffected(result, err, auth.ErrNotFound)
+}
+func (s *IdentityStore) RevokeSessionForUserByID(ctx context.Context, userID, sessionID string, at time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE cc_auth_sessions SET revoked_at=$3 WHERE user_id=$1::uuid AND id=$2::uuid AND revoked_at IS NULL AND expires_at>$3`, userID, sessionID, at.UTC())
 	return requireAffected(result, err, auth.ErrNotFound)
 }
 func (s *IdentityStore) RevokeSessionsForUser(ctx context.Context, userID string, at time.Time) (int, error) {
