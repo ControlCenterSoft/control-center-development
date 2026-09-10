@@ -181,7 +181,8 @@ func TestRedactOverBudgetAuditDetailsReturnsSafeMarker(t *testing.T) {
 
 func TestPrepareCanonicalizesTimestampBeforeHash(t *testing.T) {
 	inputTime := time.Date(2026, 9, 8, 12, 34, 56, 123456789, time.FixedZone("test", 3*60*60))
-	prepared, err := Prepare(Event{ID: "event-1", OccurredAt: inputTime, Action: "identity.login", Outcome: "success"}, "previous-hash")
+	previousHash := strings.Repeat("a", maxAuditHashBytes)
+	prepared, err := Prepare(Event{ID: "event-1", OccurredAt: inputTime, Action: "identity.login", Outcome: "success"}, previousHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,12 +190,12 @@ func TestPrepareCanonicalizesTimestampBeforeHash(t *testing.T) {
 	if prepared.OccurredAt != wantTime {
 		t.Fatalf("canonical timestamp = %s, want %s", prepared.OccurredAt, wantTime)
 	}
-	if err := Verify(prepared, "previous-hash"); err != nil {
+	if err := Verify(prepared, previousHash); err != nil {
 		t.Fatalf("prepared event did not verify: %v", err)
 	}
 	postgresRoundTrip := prepared
 	postgresRoundTrip.OccurredAt = time.UnixMicro(prepared.OccurredAt.UnixMicro()).UTC()
-	if err := Verify(postgresRoundTrip, "previous-hash"); err != nil {
+	if err := Verify(postgresRoundTrip, previousHash); err != nil {
 		t.Fatalf("PostgreSQL-microsecond round trip changed hash: %v", err)
 	}
 }
@@ -210,7 +211,7 @@ func TestVerifyRejectsBrokenAuditChain(t *testing.T) {
 	if err := Verify(second, first.Hash); err != nil {
 		t.Fatal(err)
 	}
-	if err := Verify(second, "wrong-predecessor"); err == nil {
+	if err := Verify(second, strings.Repeat("b", maxAuditHashBytes)); err == nil {
 		t.Fatal("Verify accepted a broken predecessor link")
 	}
 	second.Outcome = "tampered"
