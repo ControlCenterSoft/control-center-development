@@ -34,38 +34,38 @@ type LifecycleRecoveryRollbackPlanRequest struct {
 // authorize the rollback CAS itself; a later audited executor must obtain a
 // fresh, single-use execution capability after revalidation.
 type LifecycleRecoveryRollbackPlan struct {
-	SchemaVersion                    string                         `json:"schema_version"`
-	RollbackPlanID                   string                         `json:"rollback_plan_id"`
-	RecoveryHandoffID                string                         `json:"recovery_handoff_id"`
-	AdmissionID                      string                         `json:"admission_id"`
-	LifecycleHandoffID               string                         `json:"lifecycle_handoff_id"`
-	OriginalLifecyclePlanID          string                         `json:"original_lifecycle_plan_id"`
-	NodeID                           string                         `json:"node_id"`
-	ObservedLifecycleState           nodelifecycle.State            `json:"observed_lifecycle_state"`
-	RollbackTargetState              nodelifecycle.State            `json:"rollback_target_state"`
-	RollbackTransitionType           nodelifecycle.TransitionType   `json:"rollback_transition_type"`
-	ExpectedLifecycleGeneration      uint64                         `json:"expected_lifecycle_generation"`
-	PlannedLifecycleGeneration       uint64                         `json:"planned_lifecycle_generation"`
-	ExpectedLifecycleResourceVersion string                         `json:"expected_lifecycle_resource_version"`
-	ClusterID                        string                         `json:"cluster_id"`
-	ClusterGeneration                uint64                         `json:"cluster_generation"`
-	MembershipSnapshotID             string                         `json:"membership_snapshot_id"`
-	RevisionEvidenceID               string                         `json:"revision_evidence_id"`
-	Revision                         TransitionRevision             `json:"revision"`
-	CurrentQuorum                    int                            `json:"current_quorum"`
-	CurrentHealthyVotes              int                            `json:"current_healthy_votes"`
-	CurrentReadyVotes                int                            `json:"current_ready_votes"`
+	SchemaVersion                    string                        `json:"schema_version"`
+	RollbackPlanID                   string                        `json:"rollback_plan_id"`
+	RecoveryHandoffID                string                        `json:"recovery_handoff_id"`
+	AdmissionID                      string                        `json:"admission_id"`
+	LifecycleHandoffID               string                        `json:"lifecycle_handoff_id"`
+	OriginalLifecyclePlanID          string                        `json:"original_lifecycle_plan_id"`
+	NodeID                           string                        `json:"node_id"`
+	ObservedLifecycleState           nodelifecycle.State           `json:"observed_lifecycle_state"`
+	RollbackTargetState              nodelifecycle.State           `json:"rollback_target_state"`
+	RollbackTransitionType           nodelifecycle.TransitionType  `json:"rollback_transition_type"`
+	ExpectedLifecycleGeneration      uint64                        `json:"expected_lifecycle_generation"`
+	PlannedLifecycleGeneration       uint64                        `json:"planned_lifecycle_generation"`
+	ExpectedLifecycleResourceVersion string                        `json:"expected_lifecycle_resource_version"`
+	ClusterID                        string                        `json:"cluster_id"`
+	ClusterGeneration                uint64                        `json:"cluster_generation"`
+	MembershipSnapshotID             string                        `json:"membership_snapshot_id"`
+	RevisionEvidenceID               string                        `json:"revision_evidence_id"`
+	Revision                         TransitionRevision            `json:"revision"`
+	CurrentQuorum                    int                           `json:"current_quorum"`
+	CurrentHealthyVotes              int                           `json:"current_healthy_votes"`
+	CurrentReadyVotes                int                           `json:"current_ready_votes"`
 	RequiredEvidence                 []nodelifecycle.EvidenceCheck `json:"required_evidence"`
-	StandaloneDowntimeBound          bool                           `json:"standalone_downtime_bound"`
-	Accepted                         bool                           `json:"accepted"`
-	PlanOnly                         bool                           `json:"plan_only"`
-	AuditedChangeJobRequired         bool                           `json:"audited_change_job_required"`
-	ExecutionAuthorized              bool                           `json:"execution_authorized"`
-	LifecycleStateMutationAuthorized bool                           `json:"lifecycle_state_mutation_authorized"`
-	MembershipMutationAuthorized     bool                           `json:"membership_mutation_authorized"`
-	FailoverAuthorized               bool                           `json:"failover_authorized"`
-	GenericCommandAuthorized         bool                           `json:"generic_command_authorized"`
-	HostMutationAuthorized           bool                           `json:"host_mutation_authorized"`
+	StandaloneDowntimeBound          bool                          `json:"standalone_downtime_bound"`
+	Accepted                         bool                          `json:"accepted"`
+	PlanOnly                         bool                          `json:"plan_only"`
+	AuditedChangeJobRequired         bool                          `json:"audited_change_job_required"`
+	ExecutionAuthorized              bool                          `json:"execution_authorized"`
+	LifecycleStateMutationAuthorized bool                          `json:"lifecycle_state_mutation_authorized"`
+	MembershipMutationAuthorized     bool                          `json:"membership_mutation_authorized"`
+	FailoverAuthorized               bool                          `json:"failover_authorized"`
+	GenericCommandAuthorized         bool                          `json:"generic_command_authorized"`
+	HostMutationAuthorized           bool                          `json:"host_mutation_authorized"`
 }
 
 // BuildLifecycleRecoveryRollbackPlan seals a bounded rollback-planning proof.
