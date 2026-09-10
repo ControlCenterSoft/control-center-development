@@ -1,7 +1,5 @@
 # Control Center 0.16.0
 
-Статус: кандидат на qualification, не официальный релиз.
-
 Версия 0.16 продолжает bounded nonlinear Workload Curve 0.15 и добавляет отдельный анализ предельной эффективности масштабирования внутри уже измеренного диапазона. Цель — обнаруживать diminishing returns до рекомендации наращивания ресурсов и не трактовать рост resource factor как гарантированно пропорциональный рост безопасной нагрузки.
 
 ## Workload Curve Efficiency
@@ -18,6 +16,8 @@
 
 Если относительная эффективность любого последующего сегмента падает ниже заданной policy, результат получает состояние `diminishing-returns` и рекомендацию сначала исследовать bottleneck, а не автоматически увеличивать ресурсы. Недостаточный confidence приводит к `collect-evidence`. Непригодная исходная кривая или отсутствие положительного базового прироста блокируют отчёт fail-closed.
 
+Анализ дополнительно отклоняет malformed ready-curve evidence с недостаточным числом точек, не возрастающие resource-factor segments и нечисловые/бесконечные производные значения. Для каждого сегмента границы safe workload привязаны к соответствующим левой и правой измеренным точкам.
+
 ## Границы безопасности
 
 Efficiency Report является только аналитическим evidence:
@@ -30,6 +30,4 @@ Efficiency Report является только аналитическим evide
 - не экстраполирует capacity за пределы измеренной кривой;
 - не создаёт автоматического разрешения на масштабирование или закупку оборудования.
 
-Добавлены проверки deterministic report identity, выявления diminishing returns, достаточной эффективности, fail-closed confidence policy и tamper detection exact curve evidence. JSON contract закрыт для неизвестных полей и фиксирует non-mutation boundary.
-
-Официальный выпуск 0.16.0 допускается только после отдельной qualification и release gates.
+Добавлены проверки deterministic report identity, выявления diminishing returns, достаточной эффективности, fail-closed confidence policy, malformed/non-increasing evidence и tamper detection exact curve evidence. JSON contract закрыт для неизвестных полей и фиксирует non-mutation boundary.
