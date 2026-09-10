@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-workload-scale-advice-revalidation-v1.schema.json",
+  "title": "Capacity Workload Scale Advice Revalidation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "revalidation_id",
+    "snapshot_id",
+    "current_snapshot_id",
+    "advice_id",
+    "current_advice_id",
+    "curve_id",
+    "current_curve_id",
+    "efficiency_report_id",
+    "current_efficiency_report_id",
+    "options_id",
+    "current_options_id",
+    "bottleneck_report_id",
+    "current_bottleneck_report_id",
+    "status",
+    "reason",
+    "recommendation_reusable",
+    "recommended_action",
+    "advisory_only",
+    "production_mutation"
+  ],
+  "properties": {
+    "schema_version": {"const": "capacity.workload-scale-advice-revalidation/v1"},
+    "revalidation_id": {"type": "string", "pattern": "^wsar-[a-f0-9]{24}$"},
+    "snapshot_id": {"type": "string", "pattern": "^wsas-[a-f0-9]{24}$"},
+    "current_snapshot_id": {"type": "string", "pattern": "^wsas-[a-f0-9]{24}$"},
+    "advice_id": {"type": "string", "pattern": "^wsba-[a-f0-9]{24}$"},
+    "current_advice_id": {"type": "string", "pattern": "^wsba-[a-f0-9]{24}$"},
+    "curve_id": {"type": "string", "pattern": "^wlc-[a-f0-9]{24}$"},
+    "current_curve_id": {"type": "string", "pattern": "^wlc-[a-f0-9]{24}$"},
+    "efficiency_report_id": {"type": "string", "pattern": "^wce-[a-f0-9]{24}$"},
+    "current_efficiency_report_id": {"type": "string", "pattern": "^wce-[a-f0-9]{24}$"},
+    "options_id": {"type": "string", "pattern": "^wso-[a-f0-9]{24}$"},
+    "current_options_id": {"type": "string", "pattern": "^wso-[a-f0-9]{24}$"},
+    "bottleneck_report_id": {"type": "string", "pattern": "^br-[a-f0-9]{24}$"},
+    "current_bottleneck_report_id": {"type": "string", "pattern": "^br-[a-f0-9]{24}$"},
+    "status": {"enum": ["current", "stale"]},
+    "reason": {
+      "enum": [
+        "exact-evidence-current",
+        "curve-evidence-drift",
+        "efficiency-evidence-drift",
+        "scale-options-evidence-drift",
+        "bottleneck-evidence-drift",
+        "advice-decision-drift",
+        "snapshot-identity-drift"
+      ]
+    },
+    "recommendation_reusable": {"type": "boolean"},
+    "recommended_action": {"enum": ["none", "rebuild-advice-from-current-evidence"]},
+    "advisory_only": {"const": true},
+    "production_mutation": {"const": false}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "stale"}}},
+      "then": {
+        "properties": {
+          "recommendation_reusable": {"const": false},
+          "recommended_action": {"const": "rebuild-advice-from-current-evidence"}
+        }
+      }
+    }
+  ]
+}

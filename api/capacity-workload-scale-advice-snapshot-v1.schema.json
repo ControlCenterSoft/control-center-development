@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-workload-scale-advice-snapshot-v1.schema.json",
+  "title": "Capacity Workload Scale Advice Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "curve_id",
+    "efficiency_report_id",
+    "options_id",
+    "bottleneck_report_id",
+    "advice_fingerprint",
+    "advice",
+    "advisory_only",
+    "production_mutation"
+  ],
+  "properties": {
+    "schema_version": {"const": "capacity.workload-scale-advice-snapshot/v1"},
+    "snapshot_id": {"type": "string", "pattern": "^wsas-[a-f0-9]{24}$"},
+    "curve_id": {"type": "string", "pattern": "^wlc-[a-f0-9]{24}$"},
+    "efficiency_report_id": {"type": "string", "pattern": "^wce-[a-f0-9]{24}$"},
+    "options_id": {"type": "string", "pattern": "^wso-[a-f0-9]{24}$"},
+    "bottleneck_report_id": {"type": "string", "pattern": "^br-[a-f0-9]{24}$"},
+    "advice_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "advice": {"$ref": "capacity-workload-scale-bottleneck-advice-v1.schema.json"},
+    "advisory_only": {"const": true},
+    "production_mutation": {"const": false}
+  }
+}
