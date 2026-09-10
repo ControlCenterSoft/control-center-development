@@ -148,7 +148,7 @@ func TestMarketUpdateClaimPostgresCASAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	var schemaReady bool
 	if err := db.QueryRowContext(ctx, `SELECT to_regclass('cc_market_update_jobs') IS NOT NULL
         AND to_regclass('cc_market_update_job_claim_journal') IS NOT NULL`).Scan(&schemaReady); err != nil || !schemaReady {
