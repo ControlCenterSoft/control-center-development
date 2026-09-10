@@ -14,27 +14,27 @@ import (
 const PlacementAdviceSchemaV1 = "capacity.placement-advice/v1"
 
 type PlacementRequest struct {
-	ScopeID                    string                 `json:"scope_id"`
-	RequiredRole               corecontracts.NodeRole `json:"required_role"`
-	WorkloadUnit               WorkloadUnit           `json:"workload_unit"`
-	IncrementalWorkload        float64                `json:"incremental_workload"`
-	FailureReserveNodes        int                    `json:"failure_reserve_nodes"`
-	MinimumNodeReservePercent  float64                `json:"minimum_node_reserve_percent"`
+	ScopeID                   string                 `json:"scope_id"`
+	RequiredRole              corecontracts.NodeRole `json:"required_role"`
+	WorkloadUnit              WorkloadUnit           `json:"workload_unit"`
+	IncrementalWorkload       float64                `json:"incremental_workload"`
+	FailureReserveNodes       int                    `json:"failure_reserve_nodes"`
+	MinimumNodeReservePercent float64                `json:"minimum_node_reserve_percent"`
 }
 
 type PlacementCandidate struct {
-	NodeID                    string     `json:"node_id"`
-	Eligible                  bool       `json:"eligible"`
-	Reason                    string     `json:"reason"`
-	CurrentWorkload           float64    `json:"current_workload"`
-	ProjectedWorkload         float64    `json:"projected_workload"`
-	SafeCapacity              float64    `json:"safe_capacity"`
-	TechnicalLimit            float64    `json:"technical_limit"`
-	SafeReserve               float64    `json:"safe_reserve"`
-	SafeReservePercent        float64    `json:"safe_reserve_percent"`
-	TechnicalReserve          float64    `json:"technical_reserve"`
-	BottleneckReservePercent  float64    `json:"bottleneck_reserve_percent"`
-	Confidence                Confidence `json:"confidence"`
+	NodeID                   string     `json:"node_id"`
+	Eligible                 bool       `json:"eligible"`
+	Reason                   string     `json:"reason"`
+	CurrentWorkload          float64    `json:"current_workload"`
+	ProjectedWorkload        float64    `json:"projected_workload"`
+	SafeCapacity             float64    `json:"safe_capacity"`
+	TechnicalLimit           float64    `json:"technical_limit"`
+	SafeReserve              float64    `json:"safe_reserve"`
+	SafeReservePercent       float64    `json:"safe_reserve_percent"`
+	TechnicalReserve         float64    `json:"technical_reserve"`
+	BottleneckReservePercent float64    `json:"bottleneck_reserve_percent"`
+	Confidence               Confidence `json:"confidence"`
 }
 
 type PlacementAdvice struct {
