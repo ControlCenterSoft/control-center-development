@@ -39,6 +39,8 @@ type Query struct {
 	Outcome          string
 	ActorID          string
 	SubjectID        string
+	EventID          string
+	CorrelationID    string
 }
 
 type Entry struct {
@@ -129,6 +131,8 @@ func NormalizeQuery(query Query) (Query, error) {
 	query.Outcome = strings.TrimSpace(query.Outcome)
 	query.ActorID = strings.TrimSpace(query.ActorID)
 	query.SubjectID = strings.TrimSpace(query.SubjectID)
+	query.EventID = strings.TrimSpace(query.EventID)
+	query.CorrelationID = strings.TrimSpace(query.CorrelationID)
 	if len(query.Action) > 192 {
 		return Query{}, fmt.Errorf("audit action filter is too long")
 	}
@@ -138,6 +142,12 @@ func NormalizeQuery(query Query) (Query, error) {
 	if len(query.ActorID) > 128 || len(query.SubjectID) > 256 {
 		return Query{}, fmt.Errorf("audit identity filter is too long")
 	}
+	if len(query.EventID) > 64 {
+		return Query{}, fmt.Errorf("audit event id filter is too long")
+	}
+	if len(query.CorrelationID) > 256 {
+		return Query{}, fmt.Errorf("audit correlation id filter is too long")
+	}
 	return query, nil
 }
 
@@ -145,7 +155,9 @@ func queryMatches(event Event, query Query) bool {
 	return (query.Action == "" || event.Action == query.Action) &&
 		(query.Outcome == "" || event.Outcome == query.Outcome) &&
 		(query.ActorID == "" || event.ActorID == query.ActorID) &&
-		(query.SubjectID == "" || event.SubjectID == query.SubjectID)
+		(query.SubjectID == "" || event.SubjectID == query.SubjectID) &&
+		(query.EventID == "" || event.ID == query.EventID) &&
+		(query.CorrelationID == "" || event.CorrelationID == query.CorrelationID)
 }
 
 func Prepare(event Event, previousHash string) (Event, error) {
