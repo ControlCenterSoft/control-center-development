@@ -28,19 +28,19 @@ type WorkloadScaleScenarioRequest struct {
 }
 
 type WorkloadScaleScenario struct {
-	SchemaVersion         string                      `json:"schema_version"`
-	ScenarioID            string                      `json:"scenario_id"`
-	CurveID               string                      `json:"curve_id"`
-	EfficiencyReportID    string                      `json:"efficiency_report_id"`
+	SchemaVersion         string                       `json:"schema_version"`
+	ScenarioID            string                       `json:"scenario_id"`
+	CurveID               string                       `json:"curve_id"`
+	EfficiencyReportID    string                       `json:"efficiency_report_id"`
 	Request               WorkloadScaleScenarioRequest `json:"request"`
-	EstimatedSafeWorkload *float64                    `json:"estimated_safe_workload,omitempty"`
-	HeadroomWorkload      *float64                    `json:"headroom_workload,omitempty"`
-	HeadroomPercent       *float64                    `json:"headroom_percent,omitempty"`
-	Status                WorkloadScaleScenarioStatus `json:"status"`
-	Reason                string                      `json:"reason"`
-	RecommendedAction     string                      `json:"recommended_action"`
-	AdvisoryOnly          bool                        `json:"advisory_only"`
-	ProductionMutation    bool                        `json:"production_mutation"`
+	EstimatedSafeWorkload *float64                     `json:"estimated_safe_workload,omitempty"`
+	HeadroomWorkload      *float64                     `json:"headroom_workload,omitempty"`
+	HeadroomPercent       *float64                     `json:"headroom_percent,omitempty"`
+	Status                WorkloadScaleScenarioStatus  `json:"status"`
+	Reason                string                       `json:"reason"`
+	RecommendedAction     string                       `json:"recommended_action"`
+	AdvisoryOnly          bool                         `json:"advisory_only"`
+	ProductionMutation    bool                         `json:"production_mutation"`
 }
 
 // EvaluateWorkloadScaleScenario evaluates demand only inside a measured workload
@@ -136,12 +136,12 @@ func newWorkloadScaleScenario(curve WorkloadCurve, efficiency WorkloadCurveEffic
 	encoded, _ := json.Marshal(canonical)
 	digest := sha256.Sum256(encoded)
 	return WorkloadScaleScenario{
-		SchemaVersion: WorkloadScaleScenarioSchemaV1,
-		ScenarioID: "wss-" + hex.EncodeToString(digest[:])[:24],
-		CurveID: curve.CurveID,
+		SchemaVersion:      WorkloadScaleScenarioSchemaV1,
+		ScenarioID:         "wss-" + hex.EncodeToString(digest[:])[:24],
+		CurveID:            curve.CurveID,
 		EfficiencyReportID: efficiency.ReportID,
-		Request: request,
-		AdvisoryOnly: true,
+		Request:            request,
+		AdvisoryOnly:       true,
 		ProductionMutation: false,
 	}
 }
