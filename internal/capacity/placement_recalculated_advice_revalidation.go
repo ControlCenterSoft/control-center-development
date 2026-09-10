@@ -79,7 +79,7 @@ func RevalidatePlacementRecalculatedAdviceSupersession(
 		supersession.NewPlacementSnapshotID != derived.Placement.SnapshotID ||
 		supersession.NewAdviceID != derived.Placement.Advice.AdviceID ||
 		supersession.NewHeadroomEnvelopeID != envelope.EnvelopeID ||
-		supersesion.ScopeID != derived.Placement.Advice.ScopeID ||
+		supersession.ScopeID != derived.Placement.Advice.ScopeID ||
 		supersession.ScopeID != envelope.ScopeID ||
 		envelope.DerivedSnapshotID != derived.SnapshotID ||
 		envelope.PlacementSnapshotID != derived.Placement.SnapshotID ||
@@ -87,7 +87,7 @@ func RevalidatePlacementRecalculatedAdviceSupersession(
 		!envelope.EvaluatedAt.Equal(supersession.RecalculatedAt) {
 		return PlacementRecalculatedAdviceRevalidationGate{}, fmt.Errorf(
 			"%w: recalculated advice lineage does not match exact fresh artifacts",
-				ErrInvalidRecommendation,
+			ErrInvalidRecommendation,
 		)
 	}
 
@@ -104,13 +104,13 @@ func RevalidatePlacementRecalculatedAdviceSupersession(
 
 	result := PlacementRecalculatedAdviceRevalidationGate{
 		SchemaVersion:           PlacementRecalculatedAdviceRevalidationSchemaV1,
-		SupersessionID:          supersesion.SupersesionID,
+		SupersessionID:          supersession.SupersessionID,
 		DerivedSnapshotID:       derived.SnapshotID,
 		PlacementSnapshotID:     derived.Placement.SnapshotID,
 		AdviceID:                derived.Placement.Advice.AdviceID,
 		HeadroomEnvelopeID:      envelope.EnvelopeID,
 		ResourceFreshnessGateID: freshness.GateID,
-		ScopeID:                  supersession.ScopeID,
+		ScopeID:                 supersession.ScopeID,
 		CheckedAt:               checkedAt,
 		Status:                  PlacementRecalculatedAdviceBlocked,
 		RecommendedNodeID:       supersession.RecommendedNodeID,
@@ -128,7 +128,6 @@ func RevalidatePlacementRecalculatedAdviceSupersession(
 		result.Reason = "recalculated-advice-evidence-stale"
 		result.RecommendedAction = "collect-current-placement-evidence"
 	} else if !freshness.AllCurrent || !freshness.AdviceReusePermitted {
-		result.Status = PlacementRecalculatedAdviceBlocked
 		result.Reason = "recalculated-advice-evidence-degraded"
 		result.RecommendedAction = "collect-measured-placement-evidence"
 	} else if supersession.Action == ActionNone && supersession.RecommendedNodeID != "" {
@@ -144,15 +143,16 @@ func RevalidatePlacementRecalculatedAdviceSupersession(
 		}
 		result.SafetyScoreBand = candidate.ScoreBand
 		result.EffectiveSafetyMarginPct = candidate.EffectiveSafetyMarginPercent
-		if candidate.Eligible && candidate.ScoreBand == PlacementSafetyHeadroom &&
-		candidate.EffectiveSafetyMarginPercent > floatTolerance(candidate.EffectiveSafetyMarginPercent) {
-		result.Status = PlacementRecalculatedAdviceCurrent
-		result.FreshReuseDecisionEligible = true
-		result.Reason = "recalculated-advice-current-with-safe-headroom"
-		result.RecommendedAction = "evaluate-fresh-reuse-decision"
+		if candidate.Eligible &&
+			candidate.ScoreBand == PlacementSafetyHeadroom &&
+			candidate.EffectiveSafetyMarginPercent >
+				floatTolerance(candidate.EffectiveSafetyMarginPercent) {
+			result.Status = PlacementRecalculatedAdviceCurrent
+			result.FreshReuseDecisionEligible = true
+			result.Reason = "recalculated-advice-current-with-safe-headroom"
+			result.RecommendedAction = "evaluate-fresh-reuse-decision"
 		} else {
 			result.Reason = "recalculated-advice-safety-headroom-not-positive"
-			result.RecommendedAction = "review-capacity-or-evidence-action"
 		}
 	}
 
@@ -221,7 +221,10 @@ func validatePlacementRecalculatedAdviceRevalidationGate(
 	if gate.SchemaVersion != PlacementRecalculatedAdviceRevalidationSchemaV1 ||
 		gate.SourceReuseAuthorized || gate.ReuseAuthorized || gate.PlacementAuthorized ||
 		!gate.AdvisoryOnly || gate.ProductionMutation {
-		return fmt.Errorf("%w: unsafe recalculated advice revalidation", ErrInvalidRecommendation)
+		return fmt.Errorf(
+			"%w: unsafe recalculated advice revalidation",
+			ErrInvalidRecommendation,
+		)
 	}
 	if gate.RevalidationID == "" || gate.SupersessionID == "" ||
 		gate.DerivedSnapshotID == "" || gate.PlacementSnapshotID == "" ||
@@ -229,7 +232,10 @@ func validatePlacementRecalculatedAdviceRevalidationGate(
 		gate.ResourceFreshnessGateID == "" || gate.ScopeID == "" ||
 		gate.CheckedAt.IsZero() || gate.CheckedAt.Location() != time.UTC ||
 		gate.Reason == "" || gate.RecommendedAction == "" {
-		return fmt.Errorf("%w: incomplete recalculated advice revalidation", ErrInvalidRecommendation)
+		return fmt.Errorf(
+			"%w: incomplete recalculated advice revalidation",
+			ErrInvalidRecommendation,
+		)
 	}
 
 	switch gate.Status {
@@ -239,24 +245,40 @@ func validatePlacementRecalculatedAdviceRevalidationGate(
 			gate.EffectiveSafetyMarginPct <= floatTolerance(gate.EffectiveSafetyMarginPct) ||
 			gate.Reason != "recalculated-advice-current-with-safe-headroom" ||
 			gate.RecommendedAction != "evaluate-fresh-reuse-decision" {
-			return fmt.Errorf("%w: inconsistent current recalculated advice", ErrInvalidRecommendation)
+			return fmt.Errorf(
+				"%w: inconsistent current recalculated advice",
+				ErrInvalidRecommendation,
+			)
 		}
 	case PlacementRecalculatedAdviceStale:
 		if gate.FreshReuseDecisionEligible ||
 			gate.Reason != "recalculated-advice-evidence-stale" ||
 			gate.RecommendedAction != "collect-current-placement-evidence" {
-			return fmt.Errorf("%w: inconsistent stale recalculated advice", ErrInvalidRecommendation)
+			return fmt.Errorf(
+				"%w: inconsistent stale recalculated advice",
+				ErrInvalidRecommendation,
+			)
 		}
 	case PlacementRecalculatedAdviceBlocked:
-		if gate.FreshReuseDecisionEligible || gate.RecommendedAction == "evaluate-fresh-reuse-decision" {
-			return fmt.Errorf("%w: inconsistent blocked recalculated advice", ErrInvalidRecommendation)
+		if gate.FreshReuseDecisionEligible ||
+			gate.RecommendedAction == "evaluate-fresh-reuse-decision" {
+			return fmt.Errorf(
+				"%w: inconsistent blocked recalculated advice",
+				ErrInvalidRecommendation,
+			)
 		}
 	default:
-		return fmt.Errorf("%w: invalid recalculated advice status", ErrInvalidRecommendation)
+		return fmt.Errorf(
+			"%w: invalid recalculated advice status",
+			ErrInvalidRecommendation,
+		)
 	}
 
 	if placementRecalculatedAdviceRevalidationID(gate) != gate.RevalidationID {
-		return fmt.Errorf("%w: recalculated advice revalidation integrity mismatch", ErrInvalidRecommendation)
+		return fmt.Errorf(
+			"%w: recalculated advice revalidation integrity mismatch",
+			ErrInvalidRecommendation,
+		)
 	}
 	return nil
 }
