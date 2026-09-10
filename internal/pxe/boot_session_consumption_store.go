@@ -195,7 +195,7 @@ func validateBootSessionConsumptionStoreReceipt(receipt BootSessionConsumptionRe
 		}
 	}
 	for _, value := range []string{receipt.RequestID, receipt.MachineID, receipt.AttemptID, receipt.ConsumerID} {
-		if value == "" || value != strings.TrimSpace(value) || len(value) > 256 {
+		if !validBootSessionIdentity(value) {
 			return fmt.Errorf("%w: receipt contains invalid bounded identity", ErrBootSessionConsumptionStore)
 		}
 	}
