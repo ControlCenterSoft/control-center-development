@@ -50,8 +50,8 @@ type ModuleUpdateJobApplyReceipt struct {
 type ModuleUpdateJobApplyPersistenceState struct {
 	Record          ModuleUpdateJobRecord            `json:"record"`
 	ClaimJournal    ModuleUpdateJobClaimJournalEntry `json:"claim_journal"`
-	ApplyReceipt    ModuleUpdateJobApplyReceipt       `json:"apply_receipt"`
-	HasApplyReceipt bool                              `json:"has_apply_receipt"`
+	ApplyReceipt    ModuleUpdateJobApplyReceipt      `json:"apply_receipt"`
+	HasApplyReceipt bool                             `json:"has_apply_receipt"`
 }
 
 type ModuleUpdateJobApplyCommitResult struct {
