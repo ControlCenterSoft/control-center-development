@@ -99,6 +99,9 @@ func canonicalizeAuditDetailsForPostgres(ctx context.Context, tx *sql.Tx, detail
 	if err != nil {
 		return nil, fmt.Errorf("encode audit details for PostgreSQL canonicalization: %w", err)
 	}
+	if err := validateAuditJSONBCanonicalSize(details, len(payload)); err != nil {
+		return nil, err
+	}
 	var canonical string
 	if err := tx.QueryRowContext(ctx, `SELECT ($1::jsonb)::text`, string(payload)).Scan(&canonical); err != nil {
 		return nil, fmt.Errorf("canonicalize audit details as PostgreSQL jsonb: %w", err)
