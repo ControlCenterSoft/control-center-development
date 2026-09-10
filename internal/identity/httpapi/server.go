@@ -56,6 +56,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	s.mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	s.mux.Handle("GET /api/v1/auth/session", s.Authenticate(http.HandlerFunc(s.session)))
+	s.mux.Handle("GET /api/v1/auth/session-policy", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.sessionPolicy))))
 	s.mux.Handle("POST /api/v1/auth/password", s.Authenticate(http.HandlerFunc(s.changePassword)))
 	s.mux.Handle("GET /api/v1/auth/sessions", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.listSessions))))
 	s.mux.Handle("DELETE /api/v1/auth/sessions/{sessionID}", s.Authenticate(s.RequirePasswordCurrent(http.HandlerFunc(s.revokeSession))))
@@ -195,6 +196,22 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 	principal, _ := PrincipalFromContext(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"session": principal.Session, "password_change_required": principal.PasswordChangeRequired})
+}
+
+func (s *Server) sessionPolicy(w http.ResponseWriter, r *http.Request) {
+	principal, _ := PrincipalFromContext(r.Context())
+	policy, err := s.auth.SessionSecurityPolicy(r.Context(), auth.SessionSecurityPolicyInput{
+		UserID: principal.Identity.ID, SourceIP: remoteIP(r),
+	})
+	if err != nil {
+		if errors.Is(err, auth.ErrUnauthenticated) {
+			writeError(w, r, http.StatusUnauthorized, "authentication_required", "Authentication is required")
+			return
+		}
+		writeError(w, r, http.StatusServiceUnavailable, "session_policy_unavailable", "Session security policy is temporarily unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"policy": policy})
 }
 
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
