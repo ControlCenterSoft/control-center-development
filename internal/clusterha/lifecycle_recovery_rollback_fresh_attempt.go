@@ -177,14 +177,7 @@ func RevalidateLifecycleRecoveryRollbackFreshAttempt(
 }
 
 func classifyLifecycleRecoveryRollbackFreshAttemptError(err error) error {
-	if errors.Is(err, ErrStaleLifecycleRecoveryRollbackFreshAdmissionGate) ||
-		errors.Is(err, ErrStaleLifecycleRecoveryRollbackReconciliation) ||
-		errors.Is(err, ErrStaleLifecycleRecoveryRollbackAdmission) ||
-		errors.Is(err, ErrStaleLifecycleRecoveryRollbackPlan) ||
-		errors.Is(err, ErrStaleLifecycleExecutionRecovery) ||
-		errors.Is(err, ErrStaleLifecycleExecutionAdmission) ||
-		errors.Is(err, ErrStaleLifecycleHandoff) ||
-		errors.Is(err, ErrStaleTransitionRevisionEvidence) {
+	if errors.Is(err, ErrStaleLifecycleRecoveryRollbackFreshAdmissionGate) {
 		return fmt.Errorf("%w: %v", ErrStaleLifecycleRecoveryRollbackFreshAttempt, err)
 	}
 	return fmt.Errorf("%w: %v", ErrInvalidLifecycleRecoveryRollbackFreshAttempt, err)
