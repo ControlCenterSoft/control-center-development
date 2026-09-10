@@ -155,13 +155,18 @@ func NormalizeQuery(query Query) (Query, error) {
 		return Query{}, fmt.Errorf("audit time window requires both from and to")
 	}
 	if !query.From.IsZero() {
-		query.From = query.From.UTC().Truncate(time.Microsecond)
-		query.To = query.To.UTC().Truncate(time.Microsecond)
-		if !query.From.Before(query.To) {
+		from := query.From.UTC()
+		to := query.To.UTC()
+		if !from.Before(to) {
 			return Query{}, fmt.Errorf("audit time window requires from before to")
 		}
-		if query.To.Sub(query.From) > MaxReadWindow {
+		if to.Sub(from) > MaxReadWindow {
 			return Query{}, fmt.Errorf("audit time window exceeds %s", MaxReadWindow)
+		}
+		query.From = from.Truncate(time.Microsecond)
+		query.To = to.Truncate(time.Microsecond)
+		if !query.From.Before(query.To) {
+			return Query{}, fmt.Errorf("audit time window is below PostgreSQL timestamp precision")
 		}
 	}
 	return query, nil
