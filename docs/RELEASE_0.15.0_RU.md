@@ -1,7 +1,5 @@
 # Control Center 0.15.0
 
-Статус: кандидат на qualification, не официальный релиз.
-
 Версия 0.15 продолжает benchmark-backed Workload Profile 0.14 и добавляет
 bounded nonlinear capacity curve. Цель — учитывать, что рост безопасной
 производительности не обязан быть линейным относительно роста ресурсов, но не
@@ -11,7 +9,7 @@ bounded nonlinear capacity curve. Цель — учитывать, что рос
 
 `internal/capacity/workload_curve.go` принимает от 3 до 64 точек, каждая из
 которых связывает конкретный `capacity.workload-profile/v1` evidence с
-нормализованным resource factor и безопасной workload boundary.
+нормализированным resource factor и безопасной workload boundary.
 
 Точки канонизируются по resource factor, а идентификаторы точек, исходных
 профилей и scale factors обязаны быть уникальными. Curve ID детерминирован и
@@ -56,5 +54,3 @@ Workload Curve и Estimate являются только аналитическ�
 для exact curve evidence.
 
 JSON contracts закрыты к неизвестным полям и фиксируют non-mutation boundary.
-Официальный выпуск 0.15.0 допускается только после отдельной qualification и
-release gates.
