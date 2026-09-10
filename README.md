@@ -1,64 +1,59 @@
 # Control Center
 
-Control Center — централизованная платформа управления инфраструктурой с типизированной, проверяемой и аудируемой моделью исполнения.
+Control Center — самостоятельная платформа централизованного управления инфраструктурой с проверяемой моделью Desired State / Actual State, ролевым доступом, аудитом и безопасным жизненным циклом изменений.
 
-Текущий кодовый baseline: **0.6.0**. Номер версии изменяется только отдельным релизным процессом после реализации и тестирования.
+## Текущий релизный статус
 
-## Источник истины разработки
+- опубликованный исходный релиз: **0.24.0**;
+- отдельный стабильный бинарный канал: **0.3.1**.
 
-Нормативным источником истины для текущей разработки является ветка `main` этого репозитория: `ControlCenterSoft/control-center-development`.
+Эти линии различаются: публикация исходного релиза не означает, что для той же версии уже опубликован готовый stable binary/installer. Для установки следует использовать только явно опубликованный и проверяемый дистрибутив соответствующего канала.
 
-Перед продолжением разработки необходимо читать:
+## Core
 
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
-2. [`ROADMAP.md`](ROADMAP.md) — правильная последовательность внедрения и первый незакрытый архитектурный этап;
-3. [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог уже принятых требований.
+К обязательному ядру Control Center относятся:
 
-Правило: команда «продолжай разработку» должна сначала сверять актуальный `main`, активные PR и первый незакрытый этап `ROADMAP.md`, а затем реализовывать следующий совместимый Task Packet.
-
-`ControlCenterSoft/control-center-stable` — стабильный релизный канал. `ControlCenterSoft/control-center` — публичный сайт/витрина. Эти репозитории не являются архитектурным source of truth продукта.
-
-Google Drive содержит подробную продуктовую/эксплуатационную документацию и должен быть синхронизирован с этими нормативными файлами. Выявленное противоречие между реализацией и документацией должно быть устранено до развития конфликтующего контракта.
-
-## Возможности текущего baseline
-
-- HTTP/JSON API и health/readiness endpoints;
-- локальная identity/session модель;
-- deny-by-default RBAC;
-- append-oriented audit;
+- локальная Identity и deny-by-default RBAC;
+- обязательная смена первоначального пароля после чистой установки;
+- сессии, их инвентаризация и отзыв;
+- append-oriented Audit;
 - PostgreSQL-backed durable state;
-- immutable configuration revisions;
-- policy/risk/approval-aware Changes;
-- durable Jobs с leases, retries и idempotency;
-- allowlisted typed Worker actions;
-- resource state/health;
-- Agent enrollment/heartbeat foundations;
-- Inventory/Market/PXE/Automation/Domain/Integration foundations;
-- non-root runtime.
+- Desired State / Actual State;
+- типизированные Changes и Jobs с проверяемым результатом;
+- модель узлов, ролей и их lifecycle;
+- Network Management с multi-NIC, зонами, routing, DNS/NTP и firewall policy;
+- backup/recovery contracts;
+- Monitoring/Health;
+- Capacity Planner и advisory-рекомендации по ресурсам и размещению.
 
-Целевая распределённая ролевая, кластерная, Capacity, Lifecycle/Recovery, Network/Edge и Enterprise Market архитектура описана в нормативных документах выше и внедряется поэтапно, а не одним несовместимым скачком.
+Начиная с 0.23.0 пользователь может безопасно просматривать собственные назначения RBAC через read-only self-introspection API. В 0.24.0 добавлена ограниченная process-local защита локального входа от password brute force и credential spraying без раскрытия существования учётной записи.
 
-## Модель разработки
+## Single-node, multi-node и HA
 
-Разработка ведётся параллельно, но общие контракты Identity/RBAC/State/Jobs/Agent/Market/Network/Recovery не должны иметь независимых несовместимых реализаций в разных ветках.
+Single-node является самостоятельным поддерживаемым способом использования Control Center. Отказ единственного узла делает management plane недоступным до восстановления, поэтому single-node не следует считать HA.
 
-Pull request должен оставлять `main` зелёным и проходить предусмотренные форматирование, vet/race, unit/integration/security/failure/build gates.
+Multi-node и HA рассматриваются как отдельные проверяемые профили. Наличие соответствующих контрактов в архитектуре не означает автоматически доказанный production failover. Quorum, fencing, replication, switchover и другие HA-возможности считаются поддерживаемыми только для явно опубликованного и проверенного профиля.
 
-В репозитории запрещены credentials, приватная топология инфраструктуры, production data, приватные deployment endpoints и секреты.
+## Lifecycle и восстановление
 
-## Локальная проверка
+Для узлов и сервисов используются управляемые операции maintenance, drain, replacement и decommission. Stateful workload нельзя переносить как обычный stateless сервис: для него требуется совместимый provider-specific migration/recovery path.
 
-```bash
-make ci
-```
+Перед опасными изменениями должны быть известны ожидаемое изменение, риск и blast radius, preflight-проверки, способ проверки результата и rollback/recovery path. Recovery рассматривается как самостоятельная подсистема; backup без проверенного restore не считается достаточным доказательством готовности к восстановлению.
 
-## Локальная сборка
+## Сеть
 
-```bash
-make build
-./bin/control-center
-```
+Control Center предусматривает first-class управление сетью, включая multi-NIC, WAN/LAN и другие назначаемые зоны, VLAN/bonding там, где они поддерживаются, routing, DNS/NTP и firewall policy. NAT и port-forwarding не включаются автоматически и требуют явного назначения. Опасные сетевые изменения должны применяться staged-способом с проверкой связности и возможностью отката.
+
+## Capacity Planner
+
+Capacity Planner использует профили нагрузок, фактическую телеметрию, ограничения CPU/RAM/storage/network, тренды и failure reserve. Его задача — отвечать на три практических вопроса: сколько ресурсов безопасно доступно сейчас, когда закончится резерв и что требуется изменить. Текущие Capacity-возможности являются advisory-only и сами по себе не разрешают автоматические инфраструктурные изменения.
+
+## Market
+
+Market содержит устанавливаемые инфраструктурные возможности и не смешивается с Core. Для каждого модуля должны быть определены identity, compatibility/dependencies, permissions, network/storage requirements, capacity profile и lifecycle `Install → Configure → Health → Update → Migrate/Drain → Backup → Restore → Remove`; Failover добавляется только для действительно поддерживаемого provider.
+
+К целевым направлениям Market относятся Directory Services (включая Samba AD и FreeIPA в применимых сценариях), DNS/DHCP, PXE для Windows и Linux, Software Automation для Windows и Linux, Inventory/Compliance, File Services, Monitoring и Backup providers.
 
 ## Первый вход
 
-На пустой установке Control Center создаёт локального пользователя `admin` с одноразовым начальным паролем `admin`. Первая сессия позволяет только проверить состояние сессии, сменить пароль или выйти. До смены пароля обычная работа запрещена. Обновление установленной системы никогда не заменяет существующий пароль пользователя и не восстанавливает начальный credential.
+В опубликованной исходной линии после чистой установки создаётся локальный пользователь `admin` с первоначальным паролем `admin`. Первая сессия ограничена до смены пароля: обычная работа разрешается только после задания нового пароля. При обновлении существующий пользовательский пароль не должен сбрасываться обратно к `admin`.
