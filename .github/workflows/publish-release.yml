@@ -52,8 +52,16 @@ jobs:
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "${RELEASE_TAG} is already published"
+          if existing_body="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.body' 2>/dev/null)"; then
+            desired_body="$(cat "$RELEASE_NOTES")"
+            if [[ "$existing_body" == "$desired_body" ]]; then
+              echo "${RELEASE_TAG} is already published and metadata is current"
+              exit 0
+            fi
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Control Center ${RELEASE_VERSION}" \
+              --notes-file "$RELEASE_NOTES"
             exit 0
           fi
 
