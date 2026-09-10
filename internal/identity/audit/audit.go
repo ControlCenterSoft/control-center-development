@@ -77,6 +77,10 @@ func Prepare(event Event, previousHash string) (Event, error) {
 	if event.ID == "" {
 		event.ID = randomID()
 	}
+	// Chain fields are derived by Prepare. Ignore any caller-supplied values so
+	// existing callers that reuse Event values cannot influence chain linkage.
+	event.PreviousHash = ""
+	event.Hash = ""
 	if err := validateEventFields(event); err != nil {
 		return Event{}, err
 	}
