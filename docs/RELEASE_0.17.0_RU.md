@@ -1,6 +1,6 @@
 # Control Center 0.17.0
 
-Статус: активная ветка разработки, не официальный релиз.
+Статус: официальный опубликованный исходный релиз.
 
 Версия 0.17 продолжает nonlinear Workload Curve 0.15 и Efficiency Report 0.16, добавляя bounded scale-scenario evaluation. Новый контур отвечает на вопрос, помещается ли заданная плановая нагрузка с требуемым headroom на конкретном resource factor, но только внутри реально измеренной benchmark-кривой.
 
@@ -48,4 +48,4 @@ Scale Scenario и Scale Options остаются аналитическим evid
 
 Добавлены проверки безопасного сценария, недостаточного headroom, сохранения diminishing-returns warning, запрета extrapolation и tamper detection для exact Efficiency Report. Для Scale Options дополнительно проверяются детерминированность независимо от порядка входа, выбор минимального безопасного resource factor, отсутствие выбора при collect-evidence, недостаточная ёмкость, duplicate factor и несовместимые demand targets. JSON contracts закрыты для неизвестных полей.
 
-Официальный выпуск 0.17.0 допускается только после отдельной qualification и release gates.
+Версия 0.17.0 опубликована после прохождения обязательных deterministic qualification/release gates. Публикация исходного релиза не означает автоматическое продвижение отдельного бинарного stable-канала.
