@@ -131,8 +131,41 @@ func (l *MemoryLog) Records() []Event {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	result := make([]Event, len(l.records))
-	copy(result, l.records)
+	for i := range l.records {
+		result[i] = cloneEvent(l.records[i])
+	}
 	return result
+}
+
+func cloneEvent(event Event) Event {
+	event.Details = cloneDetailMap(event.Details)
+	return event
+}
+
+func cloneDetailMap(input map[string]any) map[string]any {
+	if input == nil {
+		return nil
+	}
+	result := make(map[string]any, len(input))
+	for key, value := range input {
+		result[key] = cloneDetailValue(value)
+	}
+	return result
+}
+
+func cloneDetailValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneDetailMap(typed)
+	case []any:
+		result := make([]any, len(typed))
+		for i := range typed {
+			result[i] = cloneDetailValue(typed[i])
+		}
+		return result
+	default:
+		return typed
+	}
 }
 
 func normalizeEventFields(event Event) Event {
