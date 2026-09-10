@@ -73,6 +73,22 @@ func TestPrepareAcceptsTopLevelAuditFieldBoundaries(t *testing.T) {
 	}
 }
 
+func TestPrepareIgnoresCallerSuppliedChainFields(t *testing.T) {
+	prepared, err := Prepare(Event{
+		ID:           "event-123",
+		Action:       "auth.login",
+		Outcome:      "success",
+		PreviousHash: strings.Repeat("p", maxAuditHashBytes+1),
+		Hash:         strings.Repeat("h", maxAuditHashBytes+1),
+	}, "")
+	if err != nil {
+		t.Fatalf("Prepare rejected caller-supplied chain fields that should be replaced: %v", err)
+	}
+	if prepared.PreviousHash != "" || prepared.Hash == "" || len(prepared.Hash) != maxAuditHashBytes {
+		t.Fatalf("Prepare did not derive chain fields: %#v", prepared)
+	}
+}
+
 func TestPrepareRejectsOversizedPreviousHash(t *testing.T) {
 	_, err := Prepare(Event{ID: "event-123", Action: "auth.login", Outcome: "success"}, strings.Repeat("f", maxAuditHashBytes+1))
 	if err == nil || !strings.Contains(err.Error(), "previous_hash") {
