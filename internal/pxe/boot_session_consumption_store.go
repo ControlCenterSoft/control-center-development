@@ -1,6 +1,8 @@
 package pxe
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,6 +201,32 @@ func validateBootSessionConsumptionStoreReceipt(receipt BootSessionConsumptionRe
 	}
 	if receipt.MediaSize <= 0 || receipt.ConsumedAtUnix <= 0 {
 		return fmt.Errorf("%w: receipt contains invalid media or consumption bounds", ErrBootSessionConsumptionStore)
+	}
+
+	digestInput := bootSessionConsumptionReceiptDigest{
+		ReceiptVersion:   receipt.ReceiptVersion,
+		AdmissionID:      receipt.AdmissionID,
+		ReplayKey:        receipt.ReplayKey,
+		RequestID:        receipt.RequestID,
+		MachineID:        receipt.MachineID,
+		AttemptID:        receipt.AttemptID,
+		ConsumerID:       receipt.ConsumerID,
+		PlanID:           receipt.PlanID,
+		ServingReceiptID: receipt.ServingReceiptID,
+		MediaSHA256:      receipt.MediaSHA256,
+		MediaSize:        receipt.MediaSize,
+		Target:           receipt.Target,
+		ConsumedAtUnix:   receipt.ConsumedAtUnix,
+		RollbackAction:   receipt.RollbackAction,
+		RecoveryAction:   receipt.RecoveryAction,
+	}
+	encoded, err := json.Marshal(digestInput)
+	if err != nil {
+		return fmt.Errorf("%w: encode receipt integrity digest: %v", ErrBootSessionConsumptionStore, err)
+	}
+	digest := sha256.Sum256(encoded)
+	if receipt.ReceiptID != hex.EncodeToString(digest[:]) {
+		return fmt.Errorf("%w: receipt integrity digest does not match durable evidence", ErrBootSessionConsumptionStore)
 	}
 	return nil
 }
