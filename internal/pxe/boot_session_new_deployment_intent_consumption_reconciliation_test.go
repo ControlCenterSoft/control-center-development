@@ -190,15 +190,15 @@ func newDeploymentIntentReconciliationFixture(
 	evidence := BootSessionNewDeploymentIntentConsumptionEvidence{
 		IntentReceipt: intentReceipt, NewAdmission: admission, Intent: fixture.intent,
 		TerminalReconciliation: fixture.terminalReconciliation,
-		TerminalConsumption: fixture.terminalConsumption, Readmission: fixture.readmission,
+		TerminalConsumption:    fixture.terminalConsumption, Readmission: fixture.readmission,
 		Previous: fixture.previous, PreviousCandidate: fixture.previousCandidate,
 		PreviousReconciliation: fixture.previousReconciliation,
-		TerminalAdmission: fixture.terminalAdmission, TerminalCandidate: fixture.terminalCandidate,
+		TerminalAdmission:      fixture.terminalAdmission, TerminalCandidate: fixture.terminalCandidate,
 		ServingReceipt: fixture.servingReceipt, Plan: fixture.plan, CurrentMedia: fixture.payload,
 	}
 	request := BootSessionConsumptionRequest{
-		AttemptID: "attempt-new-deployment-intent-reconcile-0001",
-		ConsumerID: "pxe-handoff-consumer-reconcile-0001",
+		AttemptID:      "attempt-new-deployment-intent-reconcile-0001",
+		ConsumerID:     "pxe-handoff-consumer-reconcile-0001",
 		ConsumedAtUnix: admission.IssuedAtUnix + 1,
 	}
 	source, err := consumeBootSessionNewDeploymentIntentFixture(

@@ -13,8 +13,7 @@ var ErrBootSessionNewDeploymentIntentConsumptionReconciliation = errors.New(
 	"PXE new deployment intent consumption reconciliation failed",
 )
 
-const bootSessionNewDeploymentIntentConsumptionReconciliationVersion =
-	"boot-session-new-deployment-intent-consumption-reconciliation-v1"
+const bootSessionNewDeploymentIntentConsumptionReconciliationVersion = "boot-session-new-deployment-intent-consumption-reconciliation-v1"
 
 // BootSessionNewDeploymentIntentConsumptionEvidence is the exact immutable
 // evidence needed to revalidate the new-intent boundary before observing its
@@ -290,7 +289,7 @@ func verifyNewDeploymentIntentConsumptionEvidence(
 		source.ProvisioningAuthorized || source.SecretInjectionAuthorized ||
 		source.HostMutation || source.NetworkMutation || source.ProductionMutation ||
 		!source.RecoveryRequired || source.RecoveryAction !=
-			"reconcile-new-deployment-intent-replay-key-before-any-further-admission" ||
+		"reconcile-new-deployment-intent-replay-key-before-any-further-admission" ||
 		source.IntentReceiptID != evidence.IntentReceipt.ReceiptID ||
 		source.IntentID != evidence.IntentReceipt.IntentID ||
 		source.AdmissionID != evidence.NewAdmission.AdmissionID ||
@@ -301,8 +300,8 @@ func verifyNewDeploymentIntentConsumptionEvidence(
 		)
 	}
 	request := BootSessionConsumptionRequest{
-		AttemptID: source.ConsumptionReceipt.AttemptID,
-		ConsumerID: source.ConsumptionReceipt.ConsumerID,
+		AttemptID:      source.ConsumptionReceipt.AttemptID,
+		ConsumerID:     source.ConsumptionReceipt.ConsumerID,
 		ConsumedAtUnix: source.ConsumptionReceipt.ConsumedAtUnix,
 	}
 	if err := VerifyBootSessionConsumptionReceipt(
@@ -353,24 +352,24 @@ func newBootSessionNewDeploymentIntentConsumptionReconciliation(
 	expiresAt := evidence.NewAdmission.ExpiresAtUnix
 	digestInput := bootSessionNewDeploymentIntentConsumptionReconciliationDigest{
 		ReconciliationVersion: bootSessionNewDeploymentIntentConsumptionReconciliationVersion,
-		State: state, IntentReceiptID: evidence.IntentReceipt.ReceiptID,
+		State:                 state, IntentReceiptID: evidence.IntentReceipt.ReceiptID,
 		IntentID: evidence.IntentReceipt.IntentID, AdmissionID: evidence.NewAdmission.AdmissionID,
-		ReplayKey: evidence.NewAdmission.ReplayKey,
+		ReplayKey:                     evidence.NewAdmission.ReplayKey,
 		CandidateConsumptionReceiptID: source.ConsumptionReceipt.ReceiptID,
-		ObservedReceiptID: observedReceiptID, ObservedAtUnix: observedAtUnix,
+		ObservedReceiptID:             observedReceiptID, ObservedAtUnix: observedAtUnix,
 		AdmissionExpiresAtUnix: expiresAt, AdmissionExpired: observedAtUnix >= expiresAt,
 		RecoveryRequired: recoveryRequired, RecoveryAction: recoveryAction,
 	}
 	encoded, _ := json.Marshal(digestInput)
 	digest := sha256.Sum256(encoded)
 	return BootSessionNewDeploymentIntentConsumptionReconciliation{
-		ReconciliationID: hex.EncodeToString(digest[:]),
+		ReconciliationID:      hex.EncodeToString(digest[:]),
 		ReconciliationVersion: bootSessionNewDeploymentIntentConsumptionReconciliationVersion,
-		State: state, IntentReceiptID: evidence.IntentReceipt.ReceiptID,
+		State:                 state, IntentReceiptID: evidence.IntentReceipt.ReceiptID,
 		IntentID: evidence.IntentReceipt.IntentID, AdmissionID: evidence.NewAdmission.AdmissionID,
-		ReplayKey: evidence.NewAdmission.ReplayKey,
+		ReplayKey:                     evidence.NewAdmission.ReplayKey,
 		CandidateConsumptionReceiptID: source.ConsumptionReceipt.ReceiptID,
-		ObservedReceiptID: observedReceiptID, ObservedAtUnix: observedAtUnix,
+		ObservedReceiptID:             observedReceiptID, ObservedAtUnix: observedAtUnix,
 		AdmissionExpiresAtUnix: expiresAt, AdmissionExpired: observedAtUnix >= expiresAt,
 		CurrentAdmissionReusable: false, FreshAdmissionAuthorized: false,
 		FurtherReadmissionAuthorized: false, AutomaticRetryAuthorized: false,
