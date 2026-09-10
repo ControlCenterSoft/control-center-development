@@ -16,6 +16,7 @@ import (
 const (
 	DefaultReadLimit = 50
 	MaxReadLimit     = 100
+	MaxReadWindow    = 31 * 24 * time.Hour
 )
 
 type Event struct {
@@ -41,6 +42,8 @@ type Query struct {
 	SubjectID        string
 	EventID          string
 	CorrelationID    string
+	From             time.Time
+	To               time.Time
 }
 
 type Entry struct {
@@ -148,6 +151,19 @@ func NormalizeQuery(query Query) (Query, error) {
 	if len(query.CorrelationID) > 256 {
 		return Query{}, fmt.Errorf("audit correlation id filter is too long")
 	}
+	if query.From.IsZero() != query.To.IsZero() {
+		return Query{}, fmt.Errorf("audit time window requires both from and to")
+	}
+	if !query.From.IsZero() {
+		query.From = query.From.UTC().Truncate(time.Microsecond)
+		query.To = query.To.UTC().Truncate(time.Microsecond)
+		if !query.From.Before(query.To) {
+			return Query{}, fmt.Errorf("audit time window requires from before to")
+		}
+		if query.To.Sub(query.From) > MaxReadWindow {
+			return Query{}, fmt.Errorf("audit time window exceeds %s", MaxReadWindow)
+		}
+	}
 	return query, nil
 }
 
@@ -157,7 +173,9 @@ func queryMatches(event Event, query Query) bool {
 		(query.ActorID == "" || event.ActorID == query.ActorID) &&
 		(query.SubjectID == "" || event.SubjectID == query.SubjectID) &&
 		(query.EventID == "" || event.ID == query.EventID) &&
-		(query.CorrelationID == "" || event.CorrelationID == query.CorrelationID)
+		(query.CorrelationID == "" || event.CorrelationID == query.CorrelationID) &&
+		(query.From.IsZero() || !event.OccurredAt.Before(query.From)) &&
+		(query.To.IsZero() || event.OccurredAt.Before(query.To))
 }
 
 func Prepare(event Event, previousHash string) (Event, error) {

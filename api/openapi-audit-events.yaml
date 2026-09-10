@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Control Center Audit Event Read API
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     Bounded, permission-gated read contract for append-only Control Center audit
     events. This contract is read-only and does not modify audit history.
@@ -14,8 +14,10 @@ paths:
         Returns audit events newest first. Access requires an authenticated
         session with a completed first-login password change and the global
         audit.events.read permission. Filters are exact matches, including
-        event_id and correlation_id. Pagination uses an opaque cursor; clients
-        must not parse or construct cursors.
+        event_id and correlation_id. Optional time filtering requires both from
+        and to, uses an inclusive from and exclusive to boundary, and is limited
+        to at most 31 days. Pagination uses an opaque cursor; clients must not
+        parse or construct cursors.
       parameters:
         - name: limit
           in: query
@@ -79,9 +81,29 @@ paths:
             type: string
             minLength: 1
             maxLength: 256
+        - name: from
+          in: query
+          required: false
+          description: >-
+            Inclusive RFC 3339 lower time bound. Must be supplied together with
+            to. The complete requested time window may not exceed 31 days.
+          schema:
+            type: string
+            format: date-time
+            maxLength: 64
+        - name: to
+          in: query
+          required: false
+          description: >-
+            Exclusive RFC 3339 upper time bound. Must be supplied together with
+            from. The complete requested time window may not exceed 31 days.
+          schema:
+            type: string
+            format: date-time
+            maxLength: 64
       responses:
         '200':
-          description: Bounded page of audit events matching all supplied exact filters.
+          description: Bounded page of audit events matching all supplied filters.
           headers:
             Cache-Control:
               schema:

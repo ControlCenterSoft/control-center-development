@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"control-center/internal/identity/audit"
 )
@@ -53,6 +54,7 @@ func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 			"limit": query.Limit, "returned": len(events), "action": query.Action,
 			"outcome": query.Outcome, "actor_id": query.ActorID, "subject_id": query.SubjectID,
 			"event_id": query.EventID, "correlation_id": query.CorrelationID,
+			"from": auditTimeBound(query.From), "to": auditTimeBound(query.To),
 		},
 	}); err != nil {
 		writeError(w, r, http.StatusServiceUnavailable, "audit_evidence_unavailable", "Audit read evidence could not be recorded")
@@ -64,7 +66,7 @@ func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 func parseAuditQuery(values url.Values) (audit.Query, error) {
 	allowed := map[string]struct{}{
 		"limit": {}, "cursor": {}, "action": {}, "outcome": {}, "actor_id": {}, "subject_id": {},
-		"event_id": {}, "correlation_id": {},
+		"event_id": {}, "correlation_id": {}, "from": {}, "to": {},
 	}
 	for key, entries := range values {
 		if _, ok := allowed[key]; !ok || len(entries) != 1 {
@@ -94,7 +96,35 @@ func parseAuditQuery(values url.Values) (audit.Query, error) {
 		}
 		query.BeforeSequenceID = sequenceID
 	}
+
+	rawFrom := strings.TrimSpace(values.Get("from"))
+	rawTo := strings.TrimSpace(values.Get("to"))
+	if rawFrom != "" || rawTo != "" {
+		if rawFrom == "" || rawTo == "" {
+			return audit.Query{}, fmt.Errorf("audit time window requires both from and to")
+		}
+		if len(rawFrom) > 64 || len(rawTo) > 64 {
+			return audit.Query{}, fmt.Errorf("audit time bound is too long")
+		}
+		from, err := time.Parse(time.RFC3339Nano, rawFrom)
+		if err != nil {
+			return audit.Query{}, fmt.Errorf("invalid audit from timestamp: %w", err)
+		}
+		to, err := time.Parse(time.RFC3339Nano, rawTo)
+		if err != nil {
+			return audit.Query{}, fmt.Errorf("invalid audit to timestamp: %w", err)
+		}
+		query.From = from
+		query.To = to
+	}
 	return audit.NormalizeQuery(query)
+}
+
+func auditTimeBound(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func encodeAuditCursor(sequenceID int64) string {
