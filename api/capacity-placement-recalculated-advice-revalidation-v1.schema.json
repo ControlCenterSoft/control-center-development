@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-placement-recalculated-advice-revalidation-v1.schema.json",
+  "title": "Capacity Placement Recalculated Advice Revalidation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "revalidation_id",
+    "supersession_id",
+    "derived_snapshot_id",
+    "placement_snapshot_id",
+    "advice_id",
+    "headroom_envelope_id",
+    "resource_freshness_gate_id",
+    "scope_id",
+    "checked_at",
+    "status",
+    "effective_safety_margin_percent",
+    "fresh_reuse_decision_eligible",
+    "source_reuse_authorized",
+    "reuse_authorized",
+    "placement_authorized",
+    "advisory_only",
+    "production_mutation",
+    "reason",
+    "recommended_action"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "capacity.placement-recalculated-advice-revalidation/v1"
+    },
+    "revalidation_id": {
+      "type": "string",
+      "pattern": "^prar-[a-f0-9]{24}$"
+    },
+    "supersession_id": {
+      "type": "string",
+      "pattern": "^pras-[a-f0-9]{24}$"
+    },
+    "derived_snapshot_id": {
+      "type": "string",
+      "pattern": "^pade-[a-f0-9]{24}$"
+    },
+    "placement_snapshot_id": {
+      "type": "string",
+      "pattern": "^pas-[a-f0-9]{24}$"
+    },
+    "advice_id": {
+      "type": "string",
+      "pattern": "^pa-[a-f0-9]{24}$"
+    },
+    "headroom_envelope_id": {
+      "type": "string",
+      "pattern": "^prh-[a-f0-9]{24}$"
+    },
+    "resource_freshness_gate_id": {
+      "type": "string",
+      "pattern": "^prhg-[a-f0-9]{24}$"
+    },
+    "scope_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["current", "stale", "blocked"]
+    },
+    "recommended_node_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "safety_score_band": {
+      "enum": ["blocked", "boundary", "headroom"]
+    },
+    "effective_safety_margin_percent": {
+      "type": "number"
+    },
+    "fresh_reuse_decision_eligible": {
+      "type": "boolean"
+    },
+    "source_reuse_authorized": {
+      "const": false
+    },
+    "reuse_authorized": {
+      "const": false
+    },
+    "placement_authorized": {
+      "const": false
+    },
+    "advisory_only": {
+      "const": true
+    },
+    "production_mutation": {
+      "const": false
+    },
+    "reason": {
+      "enum": [
+        "recalculated-advice-current-with-safe-headroom",
+        "recalculated-advice-evidence-stale",
+        "recalculated-advice-evidence-degraded",
+        "recalculated-advice-has-no-safe-placement",
+        "recalculated-advice-safety-headroom-not-positive"
+      ]
+    },
+    "recommended_action": {
+      "enum": [
+        "evaluate-fresh-reuse-decision",
+        "collect-current-placement-evidence",
+        "collect-measured-placement-evidence",
+        "review-capacity-or-evidence-action"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "current"}}},
+      "then": {
+        "required": ["recommended_node_id", "safety_score_band"],
+        "properties": {
+          "fresh_reuse_decision_eligible": {"const": true},
+          "safety_score_band": {"const": "headroom"},
+          "effective_safety_margin_percent": {"exclusiveMinimum": 0},
+          "reason": {"const": "recalculated-advice-current-with-safe-headroom"},
+          "recommended_action": {"const": "evaluate-fresh-reuse-decision"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["stale", "blocked"]}}},
+      "then": {
+        "properties": {
+          "fresh_reuse_decision_eligible": {"const": false}
+        }
+      }
+    }
+  ]
+}
