@@ -114,6 +114,9 @@ func canonicalizeAuditDetailsForPostgres(ctx context.Context, tx *sql.Tx, detail
 }
 
 func decodeAuditDetails(payload string) (map[string]any, error) {
+	if err := validateStoredAuditDetailsSize(len(payload)); err != nil {
+		return nil, err
+	}
 	decoder := json.NewDecoder(strings.NewReader(payload))
 	decoder.UseNumber()
 	var details map[string]any
