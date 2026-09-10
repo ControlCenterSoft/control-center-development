@@ -91,8 +91,8 @@ func TestReconcileBootSessionConsumptionDefinitelyAbsentRequiresFreshAdmission(t
 	}
 	if first.State != BootSessionConsumptionReconciledDefinitelyAbsent ||
 		!first.OldAdmissionExpired || first.OldAdmissionReusable || !first.FreshAdmissionRequired || !first.FreshServingEvidenceRequired ||
-		first.BootHandoffAuthorized || first.ReplayAuthorized || first.ProvisioningAuthorized ||
-		first.SecretInjectionAuthorized || first.HostMutation || first.NetworkMutation ||
+		first.FreshAdmissionAuthorized || first.BootHandoffAuthorized || first.ReplayAuthorized || first.ProvisioningAuthorized ||
+		first.SecretInjectionAuthorized || first.HostMutation || first.NetworkMutation || first.ProductionMutation ||
 		!first.RecoveryRequired || first.RecoveryAction != "reissue-new-session-from-fresh-serving-evidence" {
 		t.Fatalf("absent reconciliation weakened recovery boundary: %#v", first)
 	}
@@ -114,7 +114,8 @@ func TestReconcileBootSessionConsumptionAbsentBeforeExpiryDoesNotPermitReissue(t
 	}
 	if decision.State != BootSessionConsumptionReconciledDefinitelyAbsent || decision.OldAdmissionExpired ||
 		decision.OldAdmissionReusable || decision.FreshAdmissionRequired || decision.FreshServingEvidenceRequired ||
-		decision.BootHandoffAuthorized || decision.ReplayAuthorized || !decision.RecoveryRequired ||
+		decision.FreshAdmissionAuthorized || decision.BootHandoffAuthorized || decision.ReplayAuthorized ||
+		decision.ProductionMutation || !decision.RecoveryRequired ||
 		decision.RecoveryAction != "wait-for-old-admission-expiry-before-reissuing-session" {
 		t.Fatalf("unexpired absent state permitted unsafe reissue: %#v", decision)
 	}
@@ -138,8 +139,8 @@ func TestReconcileBootSessionConsumptionConsumedNeverAuthorizesReplay(t *testing
 		t.Fatalf("consumed reconciliation lost durable receipt lineage: %#v", decision)
 	}
 	if !decision.OldAdmissionExpired || decision.OldAdmissionReusable || !decision.FreshAdmissionRequired || !decision.FreshServingEvidenceRequired ||
-		decision.BootHandoffAuthorized || decision.ReplayAuthorized || decision.ProvisioningAuthorized ||
-		decision.SecretInjectionAuthorized || decision.HostMutation || decision.NetworkMutation ||
+		decision.FreshAdmissionAuthorized || decision.BootHandoffAuthorized || decision.ReplayAuthorized || decision.ProvisioningAuthorized ||
+		decision.SecretInjectionAuthorized || decision.HostMutation || decision.NetworkMutation || decision.ProductionMutation ||
 		decision.RecoveryRequired || decision.RecoveryAction != "do-not-reuse-consumed-session" {
 		t.Fatalf("consumed reconciliation granted unsafe authority: %#v", decision)
 	}
@@ -173,7 +174,8 @@ func TestReconcileBootSessionConsumptionDifferentAttemptStillConsumed(t *testing
 	if decision.State != BootSessionConsumptionReconciledConsumed || decision.ObservedReceiptID != persisted.ReceiptID {
 		t.Fatalf("existing valid consumption was not authoritative: %#v", decision)
 	}
-	if decision.BootHandoffAuthorized || decision.ReplayAuthorized || decision.OldAdmissionReusable {
+	if decision.FreshAdmissionAuthorized || decision.BootHandoffAuthorized || decision.ReplayAuthorized ||
+		decision.ProductionMutation || decision.OldAdmissionReusable {
 		t.Fatalf("different-attempt reconciliation enabled replay: %#v", decision)
 	}
 }
@@ -208,8 +210,8 @@ func TestReconcileBootSessionConsumptionAmbiguousStoreFailsClosed(t *testing.T) 
 	}
 	if decision.State != BootSessionConsumptionReconciledAmbiguous ||
 		decision.OldAdmissionReusable || decision.FreshAdmissionRequired || decision.FreshServingEvidenceRequired ||
-		decision.BootHandoffAuthorized || decision.ReplayAuthorized || decision.ProvisioningAuthorized ||
-		decision.SecretInjectionAuthorized || decision.HostMutation || decision.NetworkMutation ||
+		decision.FreshAdmissionAuthorized || decision.BootHandoffAuthorized || decision.ReplayAuthorized || decision.ProvisioningAuthorized ||
+		decision.SecretInjectionAuthorized || decision.HostMutation || decision.NetworkMutation || decision.ProductionMutation ||
 		!decision.RecoveryRequired || decision.RecoveryAction != "operator-reconcile-durable-consumption-store" {
 		t.Fatalf("ambiguous reconciliation did not fail closed: %#v", decision)
 	}
@@ -226,8 +228,46 @@ func TestReconcileBootSessionConsumptionRejectsUnknownObservationState(t *testin
 		t.Fatalf("unknown store state was accepted: decision=%#v err=%v", decision, err)
 	}
 	if decision.State != BootSessionConsumptionReconciledAmbiguous || decision.FreshAdmissionRequired ||
-		decision.BootHandoffAuthorized || decision.ReplayAuthorized || !decision.RecoveryRequired {
+		decision.FreshAdmissionAuthorized || decision.BootHandoffAuthorized || decision.ReplayAuthorized ||
+		decision.ProductionMutation || !decision.RecoveryRequired {
 		t.Fatalf("unknown observation did not fail closed: %#v", decision)
+	}
+}
+
+func TestVerifyBootSessionConsumptionReconciliationRejectsAuthorityAndDigestDrift(t *testing.T) {
+	admission, candidate := bootSessionConsumptionReconciliationFixture(t, "attempt-reconcile-verify")
+	store, err := NewDirectoryBootSessionConsumptionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := ReconcileBootSessionConsumption(store, candidate, admission, admission.ExpiresAtUnix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyBootSessionConsumptionReconciliation(decision); err != nil {
+		t.Fatalf("valid reconciliation rejected: %v", err)
+	}
+
+	unsafe := []BootSessionConsumptionReconciliation{decision, decision, decision, decision}
+	unsafe[0].FreshAdmissionAuthorized = true
+	unsafe[1].BootHandoffAuthorized = true
+	unsafe[2].ProductionMutation = true
+	unsafe[3].OldAdmissionReusable = true
+	for _, tampered := range unsafe {
+		if err := VerifyBootSessionConsumptionReconciliation(tampered); !errors.Is(err, ErrBootSessionConsumptionReconciliation) {
+			t.Fatalf("authority tampering was accepted: %#v err=%v", tampered, err)
+		}
+	}
+
+	drift := decision
+	drift.RecoveryAction = "caller-selected-recovery"
+	if err := VerifyBootSessionConsumptionReconciliation(drift); !errors.Is(err, ErrBootSessionConsumptionReconciliation) {
+		t.Fatalf("digest/semantic drift was accepted: %v", err)
+	}
+	expiryDrift := decision
+	expiryDrift.OldAdmissionExpired = false
+	if err := VerifyBootSessionConsumptionReconciliation(expiryDrift); !errors.Is(err, ErrBootSessionConsumptionReconciliation) {
+		t.Fatalf("expiry evidence drift was accepted: %v", err)
 	}
 }
 

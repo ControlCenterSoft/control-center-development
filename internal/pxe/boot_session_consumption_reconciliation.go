@@ -41,16 +41,19 @@ type BootSessionConsumptionReconciliation struct {
 	CandidateReceiptID           string                                    `json:"candidateReceiptId"`
 	ObservedReceiptID            string                                    `json:"observedReceiptId,omitempty"`
 	ObservedAtUnix               int64                                     `json:"observedAtUnix"`
+	AdmissionExpiresAtUnix       int64                                     `json:"admissionExpiresAtUnix"`
 	OldAdmissionExpired          bool                                      `json:"oldAdmissionExpired"`
 	OldAdmissionReusable         bool                                      `json:"oldAdmissionReusable"`
 	FreshAdmissionRequired       bool                                      `json:"freshAdmissionRequired"`
 	FreshServingEvidenceRequired bool                                      `json:"freshServingEvidenceRequired"`
+	FreshAdmissionAuthorized     bool                                      `json:"freshAdmissionAuthorized"`
 	BootHandoffAuthorized        bool                                      `json:"bootHandoffAuthorized"`
 	ReplayAuthorized             bool                                      `json:"replayAuthorized"`
 	ProvisioningAuthorized       bool                                      `json:"provisioningAuthorized"`
 	SecretInjectionAuthorized    bool                                      `json:"secretInjectionAuthorized"`
 	HostMutation                 bool                                      `json:"hostMutation"`
 	NetworkMutation              bool                                      `json:"networkMutation"`
+	ProductionMutation           bool                                      `json:"productionMutation"`
 	RecoveryRequired             bool                                      `json:"recoveryRequired"`
 	RecoveryAction               string                                    `json:"recoveryAction"`
 }
@@ -63,6 +66,7 @@ type bootSessionConsumptionReconciliationDigest struct {
 	CandidateReceiptID           string                                    `json:"candidateReceiptId"`
 	ObservedReceiptID            string                                    `json:"observedReceiptId,omitempty"`
 	ObservedAtUnix               int64                                     `json:"observedAtUnix"`
+	AdmissionExpiresAtUnix       int64                                     `json:"admissionExpiresAtUnix"`
 	OldAdmissionExpired          bool                                      `json:"oldAdmissionExpired"`
 	FreshAdmissionRequired       bool                                      `json:"freshAdmissionRequired"`
 	FreshServingEvidenceRequired bool                                      `json:"freshServingEvidenceRequired"`
@@ -136,6 +140,7 @@ func ReconcileBootSessionConsumption(
 			candidate,
 			"",
 			observedAtUnix,
+			admission.ExpiresAtUnix,
 			observedAtUnix >= admission.ExpiresAtUnix,
 			false,
 			false,
@@ -155,7 +160,7 @@ func ReconcileBootSessionConsumption(
 	case BootSessionConsumptionReconciledConsumed:
 		if observation.Existing == nil {
 			return bootSessionConsumptionReconciliationAmbiguous(
-				candidate, observedAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
+				candidate, observedAtUnix, admission.ExpiresAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
 				"consumed observation omitted persisted receipt",
 			)
 		}
@@ -167,7 +172,7 @@ func ReconcileBootSessionConsumption(
 		}
 		if err := VerifyBootSessionConsumptionReceipt(existing, existingRequest, admission); err != nil {
 			return bootSessionConsumptionReconciliationAmbiguous(
-				candidate, observedAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
+				candidate, observedAtUnix, admission.ExpiresAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
 				"persisted receipt no longer matches exact admission",
 			)
 		}
@@ -176,6 +181,7 @@ func ReconcileBootSessionConsumption(
 			candidate,
 			existing.ReceiptID,
 			observedAtUnix,
+			admission.ExpiresAtUnix,
 			observedAtUnix >= admission.ExpiresAtUnix,
 			true,
 			true,
@@ -185,7 +191,7 @@ func ReconcileBootSessionConsumption(
 	case BootSessionConsumptionReconciledDefinitelyAbsent:
 		if observation.Existing != nil {
 			return bootSessionConsumptionReconciliationAmbiguous(
-				candidate, observedAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
+				candidate, observedAtUnix, admission.ExpiresAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
 				"absent observation unexpectedly included persisted receipt",
 			)
 		}
@@ -196,6 +202,7 @@ func ReconcileBootSessionConsumption(
 				candidate,
 				"",
 				observedAtUnix,
+				admission.ExpiresAtUnix,
 				false,
 				false,
 				false,
@@ -208,6 +215,7 @@ func ReconcileBootSessionConsumption(
 			candidate,
 			"",
 			observedAtUnix,
+			admission.ExpiresAtUnix,
 			true,
 			true,
 			true,
@@ -216,7 +224,7 @@ func ReconcileBootSessionConsumption(
 		)
 	default:
 		return bootSessionConsumptionReconciliationAmbiguous(
-			candidate, observedAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
+			candidate, observedAtUnix, admission.ExpiresAtUnix, observedAtUnix >= admission.ExpiresAtUnix,
 			"unrecognized durable observation state",
 		)
 	}
@@ -225,6 +233,7 @@ func ReconcileBootSessionConsumption(
 func bootSessionConsumptionReconciliationAmbiguous(
 	candidate BootSessionConsumptionReceipt,
 	observedAtUnix int64,
+	admissionExpiresAtUnix int64,
 	oldAdmissionExpired bool,
 	reason string,
 ) (BootSessionConsumptionReconciliation, error) {
@@ -233,6 +242,7 @@ func bootSessionConsumptionReconciliationAmbiguous(
 		candidate,
 		"",
 		observedAtUnix,
+		admissionExpiresAtUnix,
 		oldAdmissionExpired,
 		false,
 		false,
@@ -250,6 +260,7 @@ func newBootSessionConsumptionReconciliation(
 	candidate BootSessionConsumptionReceipt,
 	observedReceiptID string,
 	observedAtUnix int64,
+	admissionExpiresAtUnix int64,
 	oldAdmissionExpired bool,
 	freshAdmissionRequired bool,
 	freshServingEvidenceRequired bool,
@@ -264,6 +275,7 @@ func newBootSessionConsumptionReconciliation(
 		CandidateReceiptID:           candidate.ReceiptID,
 		ObservedReceiptID:            observedReceiptID,
 		ObservedAtUnix:               observedAtUnix,
+		AdmissionExpiresAtUnix:       admissionExpiresAtUnix,
 		OldAdmissionExpired:          oldAdmissionExpired,
 		FreshAdmissionRequired:       freshAdmissionRequired,
 		FreshServingEvidenceRequired: freshServingEvidenceRequired,
@@ -277,7 +289,7 @@ func newBootSessionConsumptionReconciliation(
 	}
 	digest := sha256.Sum256(encoded)
 
-	return BootSessionConsumptionReconciliation{
+	decision := BootSessionConsumptionReconciliation{
 		ReconciliationID:             hex.EncodeToString(digest[:]),
 		ReconciliationVersion:        bootSessionConsumptionReconciliationVersion,
 		State:                        state,
@@ -286,17 +298,104 @@ func newBootSessionConsumptionReconciliation(
 		CandidateReceiptID:           candidate.ReceiptID,
 		ObservedReceiptID:            observedReceiptID,
 		ObservedAtUnix:               observedAtUnix,
+		AdmissionExpiresAtUnix:       admissionExpiresAtUnix,
 		OldAdmissionExpired:          oldAdmissionExpired,
 		OldAdmissionReusable:         false,
 		FreshAdmissionRequired:       freshAdmissionRequired,
 		FreshServingEvidenceRequired: freshServingEvidenceRequired,
+		FreshAdmissionAuthorized:     false,
 		BootHandoffAuthorized:        false,
 		ReplayAuthorized:             false,
 		ProvisioningAuthorized:       false,
 		SecretInjectionAuthorized:    false,
 		HostMutation:                 false,
 		NetworkMutation:              false,
+		ProductionMutation:           false,
 		RecoveryRequired:             recoveryRequired,
 		RecoveryAction:               recoveryAction,
-	}, nil
+	}
+	if err := VerifyBootSessionConsumptionReconciliation(decision); err != nil {
+		return BootSessionConsumptionReconciliation{}, err
+	}
+	return decision, nil
+}
+
+func VerifyBootSessionConsumptionReconciliation(
+	decision BootSessionConsumptionReconciliation,
+) error {
+	if decision.ReconciliationVersion != bootSessionConsumptionReconciliationVersion ||
+		!bootSessionConsumptionCanonicalSHA256(decision.ReconciliationID) ||
+		!bootSessionConsumptionCanonicalSHA256(decision.AdmissionID) ||
+		!bootSessionConsumptionCanonicalSHA256(decision.ReplayKey) ||
+		!bootSessionConsumptionCanonicalSHA256(decision.CandidateReceiptID) {
+		return fmt.Errorf("%w: invalid reconciliation identity or version", ErrBootSessionConsumptionReconciliation)
+	}
+	if decision.ObservedReceiptID != "" && !bootSessionConsumptionCanonicalSHA256(decision.ObservedReceiptID) {
+		return fmt.Errorf("%w: observed receipt identity must be canonical SHA-256", ErrBootSessionConsumptionReconciliation)
+	}
+	if decision.ObservedAtUnix <= 0 || decision.AdmissionExpiresAtUnix <= 0 ||
+		decision.OldAdmissionExpired != (decision.ObservedAtUnix >= decision.AdmissionExpiresAtUnix) {
+		return fmt.Errorf("%w: inconsistent admission expiry evidence", ErrBootSessionConsumptionReconciliation)
+	}
+	if decision.OldAdmissionReusable || decision.FreshAdmissionAuthorized ||
+		decision.BootHandoffAuthorized || decision.ReplayAuthorized || decision.ProvisioningAuthorized ||
+		decision.SecretInjectionAuthorized || decision.HostMutation || decision.NetworkMutation ||
+		decision.ProductionMutation {
+		return fmt.Errorf("%w: reconciliation must not grant deployment authority", ErrBootSessionConsumptionReconciliation)
+	}
+
+	switch decision.State {
+	case BootSessionConsumptionReconciledConsumed:
+		if decision.ObservedReceiptID == "" || !decision.FreshAdmissionRequired ||
+			!decision.FreshServingEvidenceRequired || decision.RecoveryRequired ||
+			decision.RecoveryAction != "do-not-reuse-consumed-session" {
+			return fmt.Errorf("%w: invalid consumed reconciliation semantics", ErrBootSessionConsumptionReconciliation)
+		}
+	case BootSessionConsumptionReconciledDefinitelyAbsent:
+		if decision.ObservedReceiptID != "" || !decision.RecoveryRequired {
+			return fmt.Errorf("%w: invalid absent reconciliation evidence", ErrBootSessionConsumptionReconciliation)
+		}
+		if decision.OldAdmissionExpired {
+			if !decision.FreshAdmissionRequired || !decision.FreshServingEvidenceRequired ||
+				decision.RecoveryAction != "reissue-new-session-from-fresh-serving-evidence" {
+				return fmt.Errorf("%w: expired absent reconciliation must require fresh evidence", ErrBootSessionConsumptionReconciliation)
+			}
+		} else if decision.FreshAdmissionRequired || decision.FreshServingEvidenceRequired ||
+			decision.RecoveryAction != "wait-for-old-admission-expiry-before-reissuing-session" {
+			return fmt.Errorf("%w: unexpired absent reconciliation must wait for expiry", ErrBootSessionConsumptionReconciliation)
+		}
+	case BootSessionConsumptionReconciledAmbiguous:
+		if decision.ObservedReceiptID != "" || decision.FreshAdmissionRequired ||
+			decision.FreshServingEvidenceRequired || !decision.RecoveryRequired ||
+			decision.RecoveryAction != "operator-reconcile-durable-consumption-store" {
+			return fmt.Errorf("%w: ambiguous reconciliation must fail closed", ErrBootSessionConsumptionReconciliation)
+		}
+	default:
+		return fmt.Errorf("%w: unknown reconciliation state", ErrBootSessionConsumptionReconciliation)
+	}
+
+	digestInput := bootSessionConsumptionReconciliationDigest{
+		ReconciliationVersion:        decision.ReconciliationVersion,
+		State:                        decision.State,
+		AdmissionID:                  decision.AdmissionID,
+		ReplayKey:                    decision.ReplayKey,
+		CandidateReceiptID:           decision.CandidateReceiptID,
+		ObservedReceiptID:            decision.ObservedReceiptID,
+		ObservedAtUnix:               decision.ObservedAtUnix,
+		AdmissionExpiresAtUnix:       decision.AdmissionExpiresAtUnix,
+		OldAdmissionExpired:          decision.OldAdmissionExpired,
+		FreshAdmissionRequired:       decision.FreshAdmissionRequired,
+		FreshServingEvidenceRequired: decision.FreshServingEvidenceRequired,
+		RecoveryRequired:             decision.RecoveryRequired,
+		RecoveryAction:               decision.RecoveryAction,
+	}
+	encoded, err := json.Marshal(digestInput)
+	if err != nil {
+		return fmt.Errorf("%w: encode reconciliation verification evidence: %v", ErrBootSessionConsumptionReconciliation, err)
+	}
+	digest := sha256.Sum256(encoded)
+	if decision.ReconciliationID != hex.EncodeToString(digest[:]) {
+		return fmt.Errorf("%w: reconciliation digest drift", ErrBootSessionConsumptionReconciliation)
+	}
+	return nil
 }
