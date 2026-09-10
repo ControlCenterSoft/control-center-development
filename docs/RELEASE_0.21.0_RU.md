@@ -1,6 +1,6 @@
 # Control Center 0.21.0
 
-Статус: кандидат на qualification, не официальный релиз.
+Статус: официальный опубликованный исходный релиз.
 
 Версия 0.21.0 продолжает advisory-only Capacity Planner и добавляет единый детерминированный gate повторного использования placement advice, связывающий strong-evidence revalidation с freshness каждого resource constraint.
 
@@ -27,4 +27,4 @@ Reuse Gate остаётся только advisory/evidence-контролем:
 
 Добавлены тесты allowed/blocked verdict, resource-staleness, strong-evidence block, lineage drift, tamper detection и JSON-contract semantics.
 
-Официальный выпуск 0.21.0 допускается только после отдельной qualification и release gates.
+Релиз опубликован после обязательной qualification и release gates.
