@@ -36,9 +36,9 @@ type ModuleUpdateJobRollbackClaim struct {
 // is appended exactly once under the admission's exact state/journal revision.
 type ModuleUpdateJobRollbackClaimPersistenceState struct {
 	Source            ModuleUpdateJobVerificationPersistenceState `json:"source"`
-	RollbackAdmission ModuleUpdateJobRollbackAdmission             `json:"rollback_admission"`
-	Claim             ModuleUpdateJobRollbackClaim                 `json:"claim"`
-	HasClaim          bool                                         `json:"has_claim"`
+	RollbackAdmission ModuleUpdateJobRollbackAdmission            `json:"rollback_admission"`
+	Claim             ModuleUpdateJobRollbackClaim                `json:"claim"`
+	HasClaim          bool                                        `json:"has_claim"`
 }
 
 // ModuleUpdateJobRollbackClaimCommitResult is evidence only. Neither first
