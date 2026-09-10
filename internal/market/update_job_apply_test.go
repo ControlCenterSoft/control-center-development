@@ -3,7 +3,7 @@ package market
 import "testing"
 
 func TestCommitModuleUpdateJobApplySuccessCASDeterministicAndSafe(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	first, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 2, "snapshot:market-42")
 	if err != nil {
@@ -46,7 +46,7 @@ func TestCommitModuleUpdateJobApplySuccessCASDeterministicAndSafe(t *testing.T) 
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASExactReplayIsIdempotent(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	first, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 2, "snapshot:market-42")
 	if err != nil {
@@ -65,7 +65,7 @@ func TestCommitModuleUpdateJobApplySuccessCASExactReplayIsIdempotent(t *testing.
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASRequiresMigrationSnapshot(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	for _, snapshotID := range []string{"", " snapshot:market-42", "../../snapshot $(id)"} {
 		if _, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 2, snapshotID); err == nil {
@@ -75,7 +75,7 @@ func TestCommitModuleUpdateJobApplySuccessCASRequiresMigrationSnapshot(t *testin
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASApplicationOnlyRejectsSnapshotEvidence(t *testing.T) {
-	admission := testApplicationOnlyUpdateAdmission()
+	admission := testApplyAdmission(false)
 	state := testClaimedApplyState(t, admission)
 	if _, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 2, "snapshot:not-required"); err == nil {
 		t.Fatal("expected application-only update to reject unrelated snapshot evidence")
@@ -90,7 +90,7 @@ func TestCommitModuleUpdateJobApplySuccessCASApplicationOnlyRejectsSnapshotEvide
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASRejectsStaleVersion(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	if _, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 1, "snapshot:market-42"); err == nil {
 		t.Fatal("expected stale state-version rejection")
@@ -98,7 +98,7 @@ func TestCommitModuleUpdateJobApplySuccessCASRejectsStaleVersion(t *testing.T) {
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASRejectsClaimJournalDrift(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	state.ClaimJournal.WorkerID = "worker-02"
 	if _, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 2, "snapshot:market-42"); err == nil {
@@ -107,7 +107,7 @@ func TestCommitModuleUpdateJobApplySuccessCASRejectsClaimJournalDrift(t *testing
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASRejectsAdmissionDrift(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	drifted := admission
 	drifted.BundleSHA256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -118,7 +118,7 @@ func TestCommitModuleUpdateJobApplySuccessCASRejectsAdmissionDrift(t *testing.T)
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASRejectsPersistedReceiptTampering(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	state := testClaimedApplyState(t, admission)
 	first, err := CommitModuleUpdateJobApplySuccessCAS(state, admission, 2, "snapshot:market-42")
 	if err != nil {
@@ -132,7 +132,7 @@ func TestCommitModuleUpdateJobApplySuccessCASRejectsPersistedReceiptTampering(t 
 }
 
 func TestCommitModuleUpdateJobApplySuccessCASRejectsUnprovenState(t *testing.T) {
-	admission := testUpdateAdmission()
+	admission := testApplyAdmission(true)
 	record, err := PrepareModuleUpdateJobRecord(admission)
 	if err != nil {
 		t.Fatal(err)
@@ -143,11 +143,28 @@ func TestCommitModuleUpdateJobApplySuccessCASRejectsUnprovenState(t *testing.T) 
 	}
 }
 
-func testApplicationOnlyUpdateAdmission() ModuleUpdateJobAdmission {
-	admission := testUpdateAdmission()
-	admission.MigrationCount = 0
-	admission.RequirePreMigrationSnapshot = false
-	admission.RollbackMode = "RESTORE_PREVIOUS_VERSION"
+func testApplyAdmission(withMigration bool) ModuleUpdateJobAdmission {
+	admission := ModuleUpdateJobAdmission{
+		JobID:                   "market-job:apply-fixture",
+		LifecycleIdempotencyKey: "market-lifecycle:apply-fixture",
+		BundleID:                "market-update-bundle:apply-fixture",
+		BundleIdempotencyKey:    "market-update:apply-fixture",
+		ModuleID:                "inventory-agent",
+		CurrentVersion:          "1.4.0",
+		TargetVersion:           "1.5.0",
+		Generation:              7,
+		BundleSHA256:            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		BundleSizeBytes:         4096,
+		RollbackMode:            "RESTORE_PREVIOUS_VERSION",
+		PreserveUserData:        true,
+		PreserveSecretMaterial:  true,
+		ExecutionAuthorized:     false,
+	}
+	if withMigration {
+		admission.MigrationCount = 1
+		admission.RequirePreMigrationSnapshot = true
+		admission.RollbackMode = "RESTORE_PREVIOUS_VERSION_AND_DATA_SNAPSHOT"
+	}
 	admission.AdmissionID = moduleUpdateJobAdmissionID(admission)
 	return admission
 }
