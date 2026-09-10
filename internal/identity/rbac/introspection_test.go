@@ -32,7 +32,7 @@ func TestEffectiveGrantsAreDeterministicAndSubjectScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []EffectiveGrant{
-		{RoleName: "site-reader", Scope: Scope{Kind: ScopeSite, ID: "site-b"}, Permissions: []Permission{PermissionOverviewRead, PermissionResourcesRead}},
+		{RoleName: "site-reader", Scope: Scope{Kind: ScopeSite, ID: "site-b"}, Permissions: []Permission{PermissionResourcesRead, PermissionOverviewRead}},
 		{RoleName: "tenant-auditor", Scope: Scope{Kind: ScopeTenant, ID: "tenant-a"}, Permissions: []Permission{PermissionAuditRead}},
 	}
 	if !reflect.DeepEqual(got, want) {
