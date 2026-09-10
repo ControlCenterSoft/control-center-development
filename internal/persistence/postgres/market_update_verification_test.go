@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -214,16 +215,34 @@ func TestMarketUpdateVerificationPostgresCASAndRestart(t *testing.T) {
 		t.Fatalf("database must be migrated through 0011: ready=%v err=%v", schemaReady, err)
 	}
 
-	admission := marketUpdateClaimTestAdmission(t, "verification-adapter")
+	moduleID := fmt.Sprintf("verification-adapter-%d", time.Now().UnixNano())
+	admission := marketUpdateClaimTestAdmission(t, moduleID)
 	record, err := market.PrepareModuleUpdateJobRecord(admission)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_market_update_job_verification_journal WHERE record_id=$1`, record.RecordID)
-		_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_market_update_job_apply_journal WHERE record_id=$1`, record.RecordID)
-		_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_market_update_job_claim_journal WHERE record_id=$1`, record.RecordID)
-		_, _ = db.ExecContext(context.Background(), `DELETE FROM cc_market_update_jobs WHERE record_id=$1`, record.RecordID)
+		cleanupCtx := context.Background()
+		tx, err := db.BeginTx(cleanupCtx, nil)
+		if err != nil {
+			t.Errorf("begin verification cleanup: %v", err)
+			return
+		}
+		defer tx.Rollback()
+		for _, query := range []string{
+			`DELETE FROM cc_market_update_job_verification_journal WHERE record_id=$1`,
+			`DELETE FROM cc_market_update_job_apply_journal WHERE record_id=$1`,
+			`DELETE FROM cc_market_update_job_claim_journal WHERE record_id=$1`,
+			`DELETE FROM cc_market_update_jobs WHERE record_id=$1`,
+		} {
+			if _, err := tx.ExecContext(cleanupCtx, query, record.RecordID); err != nil {
+				t.Errorf("verification cleanup failed: %v", err)
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			t.Errorf("commit verification cleanup: %v", err)
+		}
 	})
 
 	claimRepository, err := NewMarketUpdateJobClaimRepository(db)
