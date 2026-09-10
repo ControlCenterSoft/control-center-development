@@ -1,12 +1,12 @@
 # Control Center 0.19.0
 
-Статус: кандидат на qualification, не официальный релиз.
+Статус: **официально опубликованный исходный релиз** от 10.09.2026.
 
-Версия 0.19.0 продолжает advisory-only Capacity Planner и расширяет объяснимость Placement Advice: вместо одного итогового bottleneck теперь доступен детерминированный вектор resource headroom по всем квалифицированным ограничениям каждого кандидата.
+Версия 0.19.0 продолжает advisory-only Capacity Planner и расширяет объяснимость Placement Advice: вместо одного итогового bottleneck доступен детерминированный вектор resource headroom по всем квалифицированным ограничениям каждого кандидата.
 
 ## Placement Resource Headroom
 
-Новый `internal/capacity/placement_resource_headroom.go` формирует `capacity.placement-resource-headroom/v1` из точного набора входных derivation evidence, исходного `PlacementRequest` и времени оценки.
+`internal/capacity/placement_resource_headroom.go` формирует `capacity.placement-resource-headroom/v1` из точного набора входных derivation evidence, исходного `PlacementRequest` и времени оценки.
 
 Для каждого placement-кандидата результат содержит:
 
@@ -35,4 +35,4 @@ Placement Resource Headroom является только объясняющим
 
 Добавлены тесты полноты и детерминированного порядка resource vector, выбора limiting constraint, boundary/overload, tamper detection, stale derived evidence и свойства, что effective safety margin не превышает входные ограничения.
 
-Официальный выпуск 0.19.0 допускается только после отдельной qualification и release gates.
+Исходный релиз 0.19.0 опубликован как GitHub Release `v0.19.0`. Отдельный stable-binary канал имеет собственную версионную идентичность и не должен автоматически отождествляться с исходным релизом.
