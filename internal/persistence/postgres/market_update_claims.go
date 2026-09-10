@@ -290,7 +290,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 	return err
 }
 
-func (t *sqlMarketUpdateClaimTx) Commit() error    { return t.tx.Commit() }
+func (t *sqlMarketUpdateClaimTx) Commit() error   { return t.tx.Commit() }
 func (t *sqlMarketUpdateClaimTx) Rollback() error { return t.tx.Rollback() }
 
 type marketClaimScanner interface{ Scan(...any) error }
