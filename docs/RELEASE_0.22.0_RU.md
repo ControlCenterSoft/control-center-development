@@ -1,6 +1,6 @@
 # Control Center 0.22.0
 
-Статус: кандидат на qualification, не официальный релиз.
+Статус: официальный исходный релиз, опубликован 10.09.2026.
 
 Версия 0.22.0 добавляет завершённый контур безопасности локальных пользовательских сессий Control Center: ограниченный абсолютный срок жизни, idle timeout, просмотр эффективной политики, инвентаризацию и отзыв собственных сессий с durable persistence и обязательным Audit.
 
@@ -14,7 +14,7 @@
 
 Контур включает инвентаризацию собственных действующих сессий и их отзыв. Состояние `last_activity_at` сохраняется в durable session storage, поэтому рестарт Control Center не обнуляет idle timeout и не восстанавливает истёкшую сессию.
 
-Для PostgreSQL добавлена миграция `0009_auth_session_activity` и qualification-тесты установки/обновления схемы и persistence поведения.
+Для PostgreSQL добавлена миграция `0009_auth_session_activity` и проверены сценарии чистой установки, поддерживаемого обновления и persistence поведения на поддерживаемой PostgreSQL-матрице.
 
 ## Audit и безопасность
 
@@ -24,4 +24,4 @@ First-login ограничение сохраняется: до обязател
 
 Добавлены unit, HTTP API, persistence и migration tests для TTL/idle policy, session inventory, activity persistence, revocation и fail-closed audit semantics.
 
-Официальный выпуск 0.22.0 допускается только после отдельной qualification и release gates.
+Релиз опубликован только после успешного прохождения обязательных deterministic qualification gates на exact release SHA и повторной проверки merge-SHA в `main`.
