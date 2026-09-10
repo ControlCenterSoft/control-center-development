@@ -7,7 +7,7 @@ import (
 )
 
 func TestMarketUpdateRollbackClaimMigrationSealsSingleUseEvidence(t *testing.T) {
-	up := readMarketRollbackClaimMigration(t, "0012_market_update_job_rollback_claims.up.sql")
+	up := readMarketRollbackClaimMigration(t, "0013_market_update_job_rollback_claims.up.sql")
 	for _, required := range []string{
 		"CREATE TABLE IF NOT EXISTS cc_market_update_job_rollback_claims",
 		"rollback_admission_id text NOT NULL UNIQUE",
@@ -26,13 +26,13 @@ func TestMarketUpdateRollbackClaimMigrationSealsSingleUseEvidence(t *testing.T) 
 		"UNIQUE (record_id, claim_sequence)",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0012 up migration lacks %q", required)
+			t.Fatalf("0013 up migration lacks %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateRollbackClaimMigrationBindsFailedVerification(t *testing.T) {
-	up := readMarketRollbackClaimMigration(t, "0012_market_update_job_rollback_claims.up.sql")
+	up := readMarketRollbackClaimMigration(t, "0013_market_update_job_rollback_claims.up.sql")
 	for _, required := range []string{
 		"CREATE CONSTRAINT TRIGGER cc_market_update_job_rollback_claim_pair",
 		"DEFERRABLE INITIALLY DEFERRED",
@@ -50,13 +50,13 @@ func TestMarketUpdateRollbackClaimMigrationBindsFailedVerification(t *testing.T)
 		"Market update rollback claim does not match durable failed-verification evidence",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0012 does not bind rollback claim evidence: missing %q", required)
+			t.Fatalf("0013 does not bind rollback claim evidence: missing %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateRollbackClaimMigrationDowngradeFailsClosed(t *testing.T) {
-	down := strings.ToUpper(readMarketRollbackClaimMigration(t, "0012_market_update_job_rollback_claims.down.sql"))
+	down := strings.ToUpper(readMarketRollbackClaimMigration(t, "0013_market_update_job_rollback_claims.down.sql"))
 	for _, required := range []string{
 		"EXISTS (SELECT 1 FROM CC_MARKET_UPDATE_JOB_ROLLBACK_CLAIMS LIMIT 1)",
 		"RAISE EXCEPTION 'CANNOT DOWNGRADE WHILE MARKET UPDATE ROLLBACK CLAIM EVIDENCE EXISTS'",
@@ -65,16 +65,16 @@ func TestMarketUpdateRollbackClaimMigrationDowngradeFailsClosed(t *testing.T) {
 		"DROP TABLE IF EXISTS CC_MARKET_UPDATE_JOB_ROLLBACK_CLAIMS",
 	} {
 		if !strings.Contains(down, required) {
-			t.Fatalf("0012 down migration lacks %q", required)
+			t.Fatalf("0013 down migration lacks %q", required)
 		}
 	}
 	if strings.Contains(down, "CASCADE") {
-		t.Fatal("0012 down migration must not cascade")
+		t.Fatal("0013 down migration must not cascade")
 	}
 }
 
 func TestMarketUpdateRollbackClaimMigrationIsMarketScoped(t *testing.T) {
-	up := strings.ToUpper(readMarketRollbackClaimMigration(t, "0012_market_update_job_rollback_claims.up.sql"))
+	up := strings.ToUpper(readMarketRollbackClaimMigration(t, "0013_market_update_job_rollback_claims.up.sql"))
 	for _, forbidden := range []string{
 		"CC_LOCAL_USERS",
 		"CC_AUTH_SESSIONS",
@@ -83,7 +83,7 @@ func TestMarketUpdateRollbackClaimMigrationIsMarketScoped(t *testing.T) {
 		"CASCADE",
 	} {
 		if strings.Contains(up, forbidden) {
-			t.Fatalf("0012 Market migration widens scope with %q", forbidden)
+			t.Fatalf("0013 Market migration widens scope with %q", forbidden)
 		}
 	}
 }

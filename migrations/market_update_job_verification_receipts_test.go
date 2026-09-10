@@ -7,7 +7,7 @@ import (
 )
 
 func TestMarketUpdateVerificationReceiptMigrationSealsAtomicCompletion(t *testing.T) {
-	up := readMarketVerificationMigration(t, "0011_market_update_job_verification_receipts.up.sql")
+	up := readMarketVerificationMigration(t, "0012_market_update_job_verification_receipts.up.sql")
 	for _, required := range []string{
 		"state IN ('PREPARED', 'RUNNING', 'VERIFYING', 'SUCCEEDED', 'ROLLING_BACK')",
 		"state IN ('SUCCEEDED', 'ROLLING_BACK')",
@@ -31,13 +31,13 @@ func TestMarketUpdateVerificationReceiptMigrationSealsAtomicCompletion(t *testin
 		"Market update verification record and receipt evidence do not match",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0011 up migration lacks %q", required)
+			t.Fatalf("0012 up migration lacks %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateVerificationReceiptMigrationPreservesRollbackSafety(t *testing.T) {
-	up := readMarketVerificationMigration(t, "0011_market_update_job_verification_receipts.up.sql")
+	up := readMarketVerificationMigration(t, "0012_market_update_job_verification_receipts.up.sql")
 	for _, required := range []string{
 		"REFERENCES cc_market_update_job_apply_journal(receipt_id) ON DELETE RESTRICT",
 		"AND NOT rollback_required_now",
@@ -48,13 +48,13 @@ func TestMarketUpdateVerificationReceiptMigrationPreservesRollbackSafety(t *test
 		"AND NOT v.production_mutation_allowed",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0011 does not preserve verification safety: missing %q", required)
+			t.Fatalf("0012 does not preserve verification safety: missing %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateVerificationReceiptMigrationDowngradeFailsClosed(t *testing.T) {
-	down := strings.ToUpper(readMarketVerificationMigration(t, "0011_market_update_job_verification_receipts.down.sql"))
+	down := strings.ToUpper(readMarketVerificationMigration(t, "0012_market_update_job_verification_receipts.down.sql"))
 	for _, required := range []string{
 		"EXISTS (SELECT 1 FROM CC_MARKET_UPDATE_JOB_VERIFICATION_JOURNAL LIMIT 1)",
 		"WHERE STATE IN ('SUCCEEDED', 'ROLLING_BACK')",
@@ -63,16 +63,16 @@ func TestMarketUpdateVerificationReceiptMigrationDowngradeFailsClosed(t *testing
 		"CHECK (STATE IN ('PREPARED', 'RUNNING', 'VERIFYING'))",
 	} {
 		if !strings.Contains(down, required) {
-			t.Fatalf("0011 down migration lacks %q", required)
+			t.Fatalf("0012 down migration lacks %q", required)
 		}
 	}
 	if strings.Contains(down, "CASCADE") {
-		t.Fatal("0011 down migration must not cascade")
+		t.Fatal("0012 down migration must not cascade")
 	}
 }
 
 func TestMarketUpdateVerificationReceiptMigrationIsMarketScoped(t *testing.T) {
-	up := strings.ToUpper(readMarketVerificationMigration(t, "0011_market_update_job_verification_receipts.up.sql"))
+	up := strings.ToUpper(readMarketVerificationMigration(t, "0012_market_update_job_verification_receipts.up.sql"))
 	for _, forbidden := range []string{
 		"CC_LOCAL_USERS",
 		"CC_AUTH_SESSIONS",
@@ -81,7 +81,7 @@ func TestMarketUpdateVerificationReceiptMigrationIsMarketScoped(t *testing.T) {
 		"CASCADE",
 	} {
 		if strings.Contains(up, forbidden) {
-			t.Fatalf("0011 Market migration widens scope with %q", forbidden)
+			t.Fatalf("0012 Market migration widens scope with %q", forbidden)
 		}
 	}
 }

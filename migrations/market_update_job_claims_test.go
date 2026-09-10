@@ -7,7 +7,7 @@ import (
 )
 
 func TestMarketUpdateJobClaimMigrationSealsAtomicPair(t *testing.T) {
-	up := readMarketClaimMigration(t, "0009_market_update_job_claims.up.sql")
+	up := readMarketClaimMigration(t, "0010_market_update_job_claims.up.sql")
 	for _, required := range []string{
 		"CREATE TABLE IF NOT EXISTS cc_market_update_jobs",
 		"CREATE TABLE IF NOT EXISTS cc_market_update_job_claim_journal",
@@ -24,13 +24,13 @@ func TestMarketUpdateJobClaimMigrationSealsAtomicPair(t *testing.T) {
 		"Market update job claim record and journal evidence do not match",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0009 up migration lacks %q", required)
+			t.Fatalf("0010 up migration lacks %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateJobClaimMigrationIsScopedAndFailClosed(t *testing.T) {
-	up := strings.ToUpper(readMarketClaimMigration(t, "0009_market_update_job_claims.up.sql"))
+	up := strings.ToUpper(readMarketClaimMigration(t, "0010_market_update_job_claims.up.sql"))
 	for _, forbidden := range []string{
 		"ALTER TABLE CC_LOCAL_USERS",
 		"ALTER TABLE CC_AUTH_SESSIONS",
@@ -41,11 +41,11 @@ func TestMarketUpdateJobClaimMigrationIsScopedAndFailClosed(t *testing.T) {
 		"CASCADE",
 	} {
 		if strings.Contains(up, forbidden) {
-			t.Fatalf("0009 Market migration widens scope with %q", forbidden)
+			t.Fatalf("0010 Market migration widens scope with %q", forbidden)
 		}
 	}
 
-	down := strings.ToUpper(readMarketClaimMigration(t, "0009_market_update_job_claims.down.sql"))
+	down := strings.ToUpper(readMarketClaimMigration(t, "0010_market_update_job_claims.down.sql"))
 	for _, required := range []string{
 		"EXISTS (SELECT 1 FROM CC_MARKET_UPDATE_JOB_CLAIM_JOURNAL LIMIT 1)",
 		"EXISTS (SELECT 1 FROM CC_MARKET_UPDATE_JOBS LIMIT 1)",
@@ -54,16 +54,16 @@ func TestMarketUpdateJobClaimMigrationIsScopedAndFailClosed(t *testing.T) {
 		"DROP TABLE IF EXISTS CC_MARKET_UPDATE_JOBS",
 	} {
 		if !strings.Contains(down, required) {
-			t.Fatalf("0009 down migration lacks %q", required)
+			t.Fatalf("0010 down migration lacks %q", required)
 		}
 	}
 	if strings.Contains(down, "CASCADE") {
-		t.Fatal("0009 down migration must not cascade")
+		t.Fatal("0010 down migration must not cascade")
 	}
 }
 
 func TestMarketUpdateJobClaimMigrationRejectsTornDurableShapes(t *testing.T) {
-	up := readMarketClaimMigration(t, "0009_market_update_job_claims.up.sql")
+	up := readMarketClaimMigration(t, "0010_market_update_job_claims.up.sql")
 	for _, required := range []string{
 		"state = 'PREPARED'",
 		"journal_count <> 0",
@@ -76,7 +76,7 @@ func TestMarketUpdateJobClaimMigrationRejectsTornDurableShapes(t *testing.T) {
 		"j.to_state_version = persisted_state_version",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0009 does not fail closed for torn claim evidence: missing %q", required)
+			t.Fatalf("0010 does not fail closed for torn claim evidence: missing %q", required)
 		}
 	}
 }

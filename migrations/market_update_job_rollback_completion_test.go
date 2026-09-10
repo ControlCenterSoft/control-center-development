@@ -7,7 +7,7 @@ import (
 )
 
 func TestMarketUpdateRollbackCompletionMigrationSealsAtomicAttemptConsumption(t *testing.T) {
-	up := readMarketRollbackCompletionMigration(t, "0013_market_update_job_rollback_completion.up.sql")
+	up := readMarketRollbackCompletionMigration(t, "0014_market_update_job_rollback_completion.up.sql")
 	for _, required := range []string{
 		"CREATE TABLE IF NOT EXISTS cc_market_update_job_rollback_completion_journal",
 		"attempt_id text NOT NULL UNIQUE",
@@ -28,13 +28,13 @@ func TestMarketUpdateRollbackCompletionMigrationSealsAtomicAttemptConsumption(t 
 		"attempt jsonb NOT NULL CHECK (jsonb_typeof(attempt) = 'object')",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0013 up migration lacks %q", required)
+			t.Fatalf("0014 up migration lacks %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateRollbackCompletionMigrationBindsTerminalLifecycle(t *testing.T) {
-	up := readMarketRollbackCompletionMigration(t, "0013_market_update_job_rollback_completion.up.sql")
+	up := readMarketRollbackCompletionMigration(t, "0014_market_update_job_rollback_completion.up.sql")
 	for _, required := range []string{
 		"from_state text NOT NULL CHECK (from_state = 'ROLLING_BACK')",
 		"to_state_version bigint NOT NULL CHECK (to_state_version = from_state_version + 1)",
@@ -54,13 +54,13 @@ func TestMarketUpdateRollbackCompletionMigrationBindsTerminalLifecycle(t *testin
 		"Market update rollback completion attempt JSON lineage mismatch",
 	} {
 		if !strings.Contains(up, required) {
-			t.Fatalf("0013 does not bind terminal rollback evidence: missing %q", required)
+			t.Fatalf("0014 does not bind terminal rollback evidence: missing %q", required)
 		}
 	}
 }
 
 func TestMarketUpdateRollbackCompletionMigrationDowngradeFailsClosed(t *testing.T) {
-	down := strings.ToUpper(readMarketRollbackCompletionMigration(t, "0013_market_update_job_rollback_completion.down.sql"))
+	down := strings.ToUpper(readMarketRollbackCompletionMigration(t, "0014_market_update_job_rollback_completion.down.sql"))
 	for _, required := range []string{
 		"EXISTS (SELECT 1 FROM CC_MARKET_UPDATE_JOB_ROLLBACK_COMPLETION_JOURNAL LIMIT 1)",
 		"RAISE EXCEPTION 'CANNOT DOWNGRADE WHILE MARKET UPDATE ROLLBACK COMPLETION EVIDENCE EXISTS'",
@@ -69,16 +69,16 @@ func TestMarketUpdateRollbackCompletionMigrationDowngradeFailsClosed(t *testing.
 		"DROP TABLE IF EXISTS CC_MARKET_UPDATE_JOB_ROLLBACK_COMPLETION_JOURNAL",
 	} {
 		if !strings.Contains(down, required) {
-			t.Fatalf("0013 down migration lacks %q", required)
+			t.Fatalf("0014 down migration lacks %q", required)
 		}
 	}
 	if strings.Contains(down, "CASCADE") {
-		t.Fatal("0013 down migration must not cascade")
+		t.Fatal("0014 down migration must not cascade")
 	}
 }
 
 func TestMarketUpdateRollbackCompletionMigrationIsMarketScoped(t *testing.T) {
-	up := strings.ToUpper(readMarketRollbackCompletionMigration(t, "0013_market_update_job_rollback_completion.up.sql"))
+	up := strings.ToUpper(readMarketRollbackCompletionMigration(t, "0014_market_update_job_rollback_completion.up.sql"))
 	for _, forbidden := range []string{
 		"CC_LOCAL_USERS",
 		"CC_AUTH_SESSIONS",
@@ -87,7 +87,7 @@ func TestMarketUpdateRollbackCompletionMigrationIsMarketScoped(t *testing.T) {
 		"CASCADE",
 	} {
 		if strings.Contains(up, forbidden) {
-			t.Fatalf("0013 Market migration widens scope with %q", forbidden)
+			t.Fatalf("0014 Market migration widens scope with %q", forbidden)
 		}
 	}
 }
