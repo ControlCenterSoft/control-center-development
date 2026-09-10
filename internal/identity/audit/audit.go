@@ -8,10 +8,19 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	maxAuditDetailsBytes          = 16 * 1024
+	maxAuditDetailDepth           = 8
+	maxAuditDetailNodes           = 512
+	maxAuditDetailCollectionItems = 128
+	maxAuditDetailStringBytes     = 4096
 )
 
 type Event struct {
@@ -113,9 +122,9 @@ var sensitiveKey = regexp.MustCompile(`(?i)(password|passwd|secret|token|authori
 var bearerValue = regexp.MustCompile(`(?i)\bbearer\s+[a-z0-9._~+/=-]+`)
 
 // Redact returns a JSON-compatible copy of audit details with sensitive values
-// removed. Unsupported values are replaced with a safe marker; Prepare applies
-// the stricter fail-closed variant and rejects such events instead of persisting
-// potentially unredacted data.
+// removed. Unsupported or over-budget values are replaced with a safe marker;
+// Prepare applies the stricter fail-closed variant and rejects such events
+// instead of persisting potentially unsafe or unbounded data.
 func Redact(input map[string]any) map[string]any {
 	result, err := redactDetails(input)
 	if err != nil {
@@ -128,9 +137,15 @@ func redactDetails(input map[string]any) (map[string]any, error) {
 	if input == nil {
 		return nil, nil
 	}
+	if err := validateDetailShape(reflect.ValueOf(input), 1, &detailBudget{}, make(map[visit]bool)); err != nil {
+		return nil, err
+	}
 	payload, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
+	}
+	if len(payload) > maxAuditDetailsBytes {
+		return nil, fmt.Errorf("audit details exceed %d-byte limit", maxAuditDetailsBytes)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.UseNumber()
@@ -138,7 +153,168 @@ func redactDetails(input map[string]any) (map[string]any, error) {
 	if err := decoder.Decode(&normalized); err != nil {
 		return nil, err
 	}
+	if err := validateNormalizedDetailValue(normalized, 1, &detailBudget{}); err != nil {
+		return nil, err
+	}
 	return redactMap(normalized), nil
+}
+
+type detailBudget struct {
+	nodes int
+}
+
+type visit struct {
+	kind reflect.Kind
+	ptr  uintptr
+}
+
+func (b *detailBudget) consume() error {
+	b.nodes++
+	if b.nodes > maxAuditDetailNodes {
+		return fmt.Errorf("audit details exceed %d-node limit", maxAuditDetailNodes)
+	}
+	return nil
+}
+
+func validateDetailShape(value reflect.Value, depth int, budget *detailBudget, stack map[visit]bool) error {
+	if !value.IsValid() {
+		return budget.consume()
+	}
+	for value.Kind() == reflect.Interface {
+		if value.IsNil() {
+			return budget.consume()
+		}
+		value = value.Elem()
+	}
+	if depth > maxAuditDetailDepth {
+		return fmt.Errorf("audit details exceed depth limit %d", maxAuditDetailDepth)
+	}
+	if err := budget.consume(); err != nil {
+		return err
+	}
+
+	switch value.Kind() {
+	case reflect.Pointer:
+		if value.IsNil() {
+			return nil
+		}
+		key := visit{kind: value.Kind(), ptr: value.Pointer()}
+		if stack[key] {
+			return fmt.Errorf("audit details contain a cycle")
+		}
+		stack[key] = true
+		defer delete(stack, key)
+		return validateDetailShape(value.Elem(), depth+1, budget, stack)
+	case reflect.Map:
+		if value.IsNil() {
+			return nil
+		}
+		if value.Len() > maxAuditDetailCollectionItems {
+			return fmt.Errorf("audit detail map exceeds %d-item limit", maxAuditDetailCollectionItems)
+		}
+		key := visit{kind: value.Kind(), ptr: value.Pointer()}
+		if stack[key] {
+			return fmt.Errorf("audit details contain a cycle")
+		}
+		stack[key] = true
+		defer delete(stack, key)
+		iter := value.MapRange()
+		for iter.Next() {
+			mapKey := iter.Key()
+			if mapKey.Kind() == reflect.String && len(mapKey.String()) > maxAuditDetailStringBytes {
+				return fmt.Errorf("audit detail map key exceeds %d-byte string limit", maxAuditDetailStringBytes)
+			}
+			if err := validateDetailShape(iter.Value(), depth+1, budget, stack); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Slice:
+		if value.IsNil() {
+			return nil
+		}
+		if value.Len() > maxAuditDetailCollectionItems {
+			return fmt.Errorf("audit detail array exceeds %d-item limit", maxAuditDetailCollectionItems)
+		}
+		key := visit{kind: value.Kind(), ptr: value.Pointer()}
+		if stack[key] {
+			return fmt.Errorf("audit details contain a cycle")
+		}
+		stack[key] = true
+		defer delete(stack, key)
+		for i := 0; i < value.Len(); i++ {
+			if err := validateDetailShape(value.Index(i), depth+1, budget, stack); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Array:
+		if value.Len() > maxAuditDetailCollectionItems {
+			return fmt.Errorf("audit detail array exceeds %d-item limit", maxAuditDetailCollectionItems)
+		}
+		for i := 0; i < value.Len(); i++ {
+			if err := validateDetailShape(value.Index(i), depth+1, budget, stack); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Struct:
+		typeOfValue := value.Type()
+		for i := 0; i < value.NumField(); i++ {
+			field := typeOfValue.Field(i)
+			if field.PkgPath != "" || field.Tag.Get("json") == "-" {
+				continue
+			}
+			if err := validateDetailShape(value.Field(i), depth+1, budget, stack); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.String:
+		if value.Len() > maxAuditDetailStringBytes {
+			return fmt.Errorf("audit detail string exceeds %d-byte limit", maxAuditDetailStringBytes)
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func validateNormalizedDetailValue(value any, depth int, budget *detailBudget) error {
+	if depth > maxAuditDetailDepth {
+		return fmt.Errorf("audit details exceed depth limit %d", maxAuditDetailDepth)
+	}
+	if err := budget.consume(); err != nil {
+		return err
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		if len(typed) > maxAuditDetailCollectionItems {
+			return fmt.Errorf("audit detail map exceeds %d-item limit", maxAuditDetailCollectionItems)
+		}
+		for key, child := range typed {
+			if len(key) > maxAuditDetailStringBytes {
+				return fmt.Errorf("audit detail map key exceeds %d-byte string limit", maxAuditDetailStringBytes)
+			}
+			if err := validateNormalizedDetailValue(child, depth+1, budget); err != nil {
+				return err
+			}
+		}
+	case []any:
+		if len(typed) > maxAuditDetailCollectionItems {
+			return fmt.Errorf("audit detail array exceeds %d-item limit", maxAuditDetailCollectionItems)
+		}
+		for _, child := range typed {
+			if err := validateNormalizedDetailValue(child, depth+1, budget); err != nil {
+				return err
+			}
+		}
+	case string:
+		if len(typed) > maxAuditDetailStringBytes {
+			return fmt.Errorf("audit detail string exceeds %d-byte limit", maxAuditDetailStringBytes)
+		}
+	}
+	return nil
 }
 
 func redactMap(input map[string]any) map[string]any {
@@ -170,6 +346,27 @@ func redactValue(value any) any {
 	}
 }
 func hashEvent(event Event) (string, error) {
+	if event.Details != nil {
+		if err := validateDetailShape(reflect.ValueOf(event.Details), 1, &detailBudget{}, make(map[visit]bool)); err != nil {
+			return "", err
+		}
+		payload, err := json.Marshal(event.Details)
+		if err != nil {
+			return "", fmt.Errorf("audit event details are not serializable: %w", err)
+		}
+		if len(payload) > maxAuditDetailsBytes {
+			return "", fmt.Errorf("audit event details exceed %d-byte limit", maxAuditDetailsBytes)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.UseNumber()
+		var normalized any
+		if err := decoder.Decode(&normalized); err != nil {
+			return "", fmt.Errorf("audit event details are not serializable: %w", err)
+		}
+		if err := validateNormalizedDetailValue(normalized, 1, &detailBudget{}); err != nil {
+			return "", err
+		}
+	}
 	event.Hash = ""
 	payload, err := json.Marshal(event)
 	if err != nil {
