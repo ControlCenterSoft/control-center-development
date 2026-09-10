@@ -66,6 +66,9 @@ func AnalyzeWorkloadCurveEfficiency(curve WorkloadCurve, policy WorkloadCurveEff
 	if !validWorkloadProfileConfidence(policy.MinimumConfidence) {
 		return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: invalid minimum confidence", ErrInvalidRecommendation)
 	}
+	if curve.Status == WorkloadCurveReady && len(curve.Points) < 2 {
+		return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: ready workload curve requires at least two points", ErrInvalidRecommendation)
+	}
 
 	rebuilt, err := BuildWorkloadCurve(
 		WorkloadCurveRequest{ScopeID: curve.ScopeID, WorkloadUnit: curve.WorkloadUnit, MinimumPoints: curve.MinimumPoints},
@@ -97,12 +100,18 @@ func AnalyzeWorkloadCurveEfficiency(curve WorkloadCurve, policy WorkloadCurveEff
 	segments := make([]WorkloadCurveEfficiencySegment, 0, len(curve.Points)-1)
 	lowest := 1.0
 	if curve.Status == WorkloadCurveReady {
+		if len(curve.Points) < 2 {
+			return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: rebuilt ready workload curve requires at least two points", ErrInvalidRecommendation)
+		}
 		firstLeft := curve.Points[0]
 		firstRight := curve.Points[1]
 		baselineDeltaResource := firstRight.ResourceFactor - firstLeft.ResourceFactor
+		if baselineDeltaResource <= 0 {
+			return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: baseline segment resource factors must increase", ErrInvalidRecommendation)
+		}
 		baselineGain := firstRight.SafeWorkload - firstLeft.SafeWorkload
 		baselineSlope := baselineGain / baselineDeltaResource
-		if baselineDeltaResource <= 0 || baselineSlope <= 0 || math.IsNaN(baselineSlope) || math.IsInf(baselineSlope, 0) {
+		if baselineSlope <= 0 || math.IsNaN(baselineSlope) || math.IsInf(baselineSlope, 0) {
 			status = WorkloadCurveEfficiencyBlocked
 			reason = "baseline_segment_has_no_positive_gain"
 			action = "collect-evidence"
@@ -111,9 +120,18 @@ func AnalyzeWorkloadCurveEfficiency(curve WorkloadCurve, policy WorkloadCurveEff
 				left := curve.Points[index-1]
 				right := curve.Points[index]
 				deltaResource := right.ResourceFactor - left.ResourceFactor
+				if deltaResource <= 0 {
+					return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: segment resource factors must increase", ErrInvalidRecommendation)
+				}
 				gain := right.SafeWorkload - left.SafeWorkload
 				slope := gain / deltaResource
+				if math.IsNaN(slope) || math.IsInf(slope, 0) {
+					return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: segment marginal workload gain is not finite", ErrInvalidRecommendation)
+				}
 				ratio := slope / baselineSlope
+				if math.IsNaN(ratio) || math.IsInf(ratio, 0) {
+					return WorkloadCurveEfficiencyReport{}, fmt.Errorf("%w: segment efficiency ratio is not finite", ErrInvalidRecommendation)
+				}
 				if ratio < 0 {
 					ratio = 0
 				}
