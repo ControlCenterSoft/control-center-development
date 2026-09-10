@@ -1,11 +1,51 @@
 openapi: 3.1.0
 info:
   title: Control Center Session Security API fragment
-  version: 0.3.0
+  version: 0.4.0
 security:
   - bearerAuth: []
   - sessionCookie: []
 paths:
+  /api/v1/auth/session-policy:
+    get:
+      operationId: getEffectiveSessionSecurityPolicy
+      summary: Read the effective local session security policy
+      description: >-
+        Returns the bounded session policy currently enforced by this Control
+        Center instance. The operation is available only to an authenticated
+        local identity after any mandatory first-login password change. Reading
+        the policy is security-audited; if required audit evidence cannot be
+        persisted the operation fails closed without returning the policy.
+      responses:
+        '200':
+          description: Effective session security policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [policy]
+                properties:
+                  policy:
+                    $ref: '#/components/schemas/SessionSecurityPolicyView'
+        '401':
+          description: Authentication is missing, expired, revoked, or idle-expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: The mandatory first-login password change has not been completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Required security audit evidence is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /api/v1/auth/sessions:
     get:
       operationId: listOwnSessions
@@ -135,6 +175,31 @@ components:
       in: cookie
       name: cc_session
   schemas:
+    SessionSecurityPolicyView:
+      type: object
+      additionalProperties: false
+      required:
+        - absolute_ttl_seconds
+        - idle_timeout_seconds
+        - activity_refreshes_idle_deadline
+        - activity_extends_absolute_expiry
+      properties:
+        absolute_ttl_seconds:
+          type: integer
+          minimum: 60
+          maximum: 604800
+          description: Maximum absolute lifetime of a newly issued session.
+        idle_timeout_seconds:
+          type: integer
+          minimum: 60
+          maximum: 604800
+          description: Maximum inactivity interval; never greater than the absolute TTL.
+        activity_refreshes_idle_deadline:
+          type: boolean
+          const: true
+        activity_extends_absolute_expiry:
+          type: boolean
+          const: false
     SessionSecurityView:
       type: object
       additionalProperties: false
