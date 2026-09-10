@@ -142,6 +142,9 @@ func TestRevalidateLifecycleRecoveryRollbackPlanRejectsTampering(t *testing.T) {
 		{name: "resource-version", mutate: func(p *LifecycleRecoveryRollbackPlan) {
 			p.ExpectedLifecycleResourceVersion = "rv-tampered"
 		}},
+		{name: "minimum-ready", mutate: func(p *LifecycleRecoveryRollbackPlan) {
+			p.CurrentReadyVotes = p.CurrentQuorum - 1
+		}},
 		{name: "required-evidence", mutate: func(p *LifecycleRecoveryRollbackPlan) {
 			p.RequiredEvidence = append([]nodelifecycle.EvidenceCheck(nil), p.RequiredEvidence...)
 			p.RequiredEvidence[0] = nodelifecycle.CheckRollbackVerified
