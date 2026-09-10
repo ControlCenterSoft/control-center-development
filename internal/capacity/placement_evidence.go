@@ -33,20 +33,20 @@ type PlacementAdviceSnapshot struct {
 }
 
 type PlacementAdviceRevalidation struct {
-	SchemaVersion             string                            `json:"schema_version"`
-	RevalidationID            string                            `json:"revalidation_id"`
-	SnapshotID                string                            `json:"snapshot_id"`
-	CurrentSnapshotID         string                            `json:"current_snapshot_id"`
-	AdviceID                  string                            `json:"advice_id"`
-	CurrentAdviceID           string                            `json:"current_advice_id"`
-	RecommendedNodeID         string                            `json:"recommended_node_id,omitempty"`
-	CurrentRecommendedNodeID  string                            `json:"current_recommended_node_id,omitempty"`
-	Status                    PlacementAdviceRevalidationStatus `json:"status"`
-	Reason                    string                            `json:"reason"`
-	RecommendationReusable    bool                              `json:"recommendation_reusable"`
-	RecommendedAction         string                            `json:"recommended_action"`
-	AdvisoryOnly              bool                              `json:"advisory_only"`
-	ProductionMutation        bool                              `json:"production_mutation"`
+	SchemaVersion            string                            `json:"schema_version"`
+	RevalidationID           string                            `json:"revalidation_id"`
+	SnapshotID               string                            `json:"snapshot_id"`
+	CurrentSnapshotID        string                            `json:"current_snapshot_id"`
+	AdviceID                 string                            `json:"advice_id"`
+	CurrentAdviceID          string                            `json:"current_advice_id"`
+	RecommendedNodeID        string                            `json:"recommended_node_id,omitempty"`
+	CurrentRecommendedNodeID string                            `json:"current_recommended_node_id,omitempty"`
+	Status                   PlacementAdviceRevalidationStatus `json:"status"`
+	Reason                   string                            `json:"reason"`
+	RecommendationReusable   bool                              `json:"recommendation_reusable"`
+	RecommendedAction        string                            `json:"recommended_action"`
+	AdvisoryOnly             bool                              `json:"advisory_only"`
+	ProductionMutation       bool                              `json:"production_mutation"`
 }
 
 // CapturePlacementAdviceSnapshot seals one placement recommendation to the
@@ -141,7 +141,7 @@ func validatePlacementAdviceSnapshot(snapshot PlacementAdviceSnapshot) error {
 		snapshot.Advice.SchemaVersion != PlacementAdviceSchemaV1 || !snapshot.Advice.AdvisoryOnly || snapshot.Advice.ProductionMutation {
 		return fmt.Errorf("%w: unsafe saved placement advice snapshot", ErrInvalidRecommendation)
 	}
-	if !validSHA256Hex(snapshot.RequestFingerprint) || !validSHA256Hex(snapshot.NodeEvidenceFingerprint) || !validSHA256Hex(snapshot.AdviceFingerprint) {
+	if !validPlacementEvidenceSHA256Hex(snapshot.RequestFingerprint) || !validPlacementEvidenceSHA256Hex(snapshot.NodeEvidenceFingerprint) || !validPlacementEvidenceSHA256Hex(snapshot.AdviceFingerprint) {
 		return fmt.Errorf("%w: malformed placement evidence fingerprint", ErrInvalidRecommendation)
 	}
 	fingerprint, err := placementAdviceFingerprint(snapshot.Advice)
@@ -160,7 +160,7 @@ func placementRequestFingerprint(request PlacementRequest) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: placement request fingerprint: %v", ErrInvalidRecommendation, err)
 	}
-	return sha256Hex(encoded), nil
+	return placementEvidenceSHA256Hex(encoded), nil
 }
 
 func placementNodeEvidenceFingerprint(nodes []NodeProjection) (string, error) {
@@ -170,7 +170,7 @@ func placementNodeEvidenceFingerprint(nodes []NodeProjection) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: placement node evidence fingerprint: %v", ErrInvalidRecommendation, err)
 	}
-	return sha256Hex(encoded), nil
+	return placementEvidenceSHA256Hex(encoded), nil
 }
 
 func placementAdviceFingerprint(advice PlacementAdvice) (string, error) {
@@ -178,7 +178,7 @@ func placementAdviceFingerprint(advice PlacementAdvice) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: placement advice fingerprint: %v", ErrInvalidRecommendation, err)
 	}
-	return sha256Hex(encoded), nil
+	return placementEvidenceSHA256Hex(encoded), nil
 }
 
 func placementAdviceSnapshotID(snapshot PlacementAdviceSnapshot) string {
@@ -208,7 +208,7 @@ func reusablePlacementRecommendation(advice PlacementAdvice) bool {
 	return advice.RecommendedNodeID != "" && advice.Action == ActionNone && advice.FleetAssessment.Safe && advice.AdvisoryOnly && !advice.ProductionMutation
 }
 
-func validSHA256Hex(value string) bool {
+func validPlacementEvidenceSHA256Hex(value string) bool {
 	if len(value) != sha256.Size*2 {
 		return false
 	}
@@ -216,7 +216,7 @@ func validSHA256Hex(value string) bool {
 	return err == nil
 }
 
-func sha256Hex(value []byte) string {
+func placementEvidenceSHA256Hex(value []byte) string {
 	digest := sha256.Sum256(value)
 	return hex.EncodeToString(digest[:])
 }
