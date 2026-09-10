@@ -176,3 +176,67 @@ func TestAuthenticationRejectsSessionOlderThanPassword(t *testing.T) {
 		t.Fatalf("stale session accepted after password change: %v", err)
 	}
 }
+
+func TestRevokeAllSessionsRevokesEveryActiveSessionAndAudits(t *testing.T) {
+	service, _, log := newTestService(t)
+	first, err := service.Login(context.Background(), LoginInput{Username: "administrator", Password: "synthetic test password long enough", SourceIP: "192.0.2.10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.Login(context.Background(), LoginInput{Username: "administrator", Password: "synthetic test password long enough", SourceIP: "192.0.2.11"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := service.RevokeAllSessions(context.Background(), RevokeAllSessionsInput{UserID: "user-1", SourceIP: "192.0.2.12"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("revoked sessions=%d, want 2", count)
+	}
+	for _, token := range []string{first.Token, second.Token} {
+		if _, err := service.Authenticate(context.Background(), token); !errors.Is(err, ErrUnauthenticated) {
+			t.Fatalf("revoked session remained usable: %v", err)
+		}
+	}
+
+	records := log.Records()
+	if len(records) < 4 {
+		t.Fatalf("audit records=%d, want login and revocation evidence", len(records))
+	}
+	requested := records[len(records)-2]
+	succeeded := records[len(records)-1]
+	if requested.Action != "auth.sessions_revoke_all" || requested.Outcome != "requested" || requested.ActorID != "user-1" || requested.SubjectID != "user-1" {
+		t.Fatalf("unexpected requested audit event: %#v", requested)
+	}
+	if succeeded.Action != "auth.sessions_revoke_all" || succeeded.Outcome != "success" || succeeded.ActorID != "user-1" || succeeded.SubjectID != "user-1" {
+		t.Fatalf("unexpected success audit event: %#v", succeeded)
+	}
+	if got, ok := succeeded.Details["revoked_sessions"].(int); !ok || got != 2 {
+		t.Fatalf("revoked session count audit detail=%#v", succeeded.Details["revoked_sessions"])
+	}
+}
+
+type rejectingAuditLog struct{}
+
+func (rejectingAuditLog) Append(context.Context, audit.Event) error {
+	return errors.New("audit unavailable")
+}
+
+func TestRevokeAllSessionsFailsClosedWhenAuditIsUnavailable(t *testing.T) {
+	service, _, _ := newTestService(t)
+	issued, err := service.Login(context.Background(), LoginInput{Username: "administrator", Password: "synthetic test password long enough"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.audit = rejectingAuditLog{}
+
+	count, err := service.RevokeAllSessions(context.Background(), RevokeAllSessionsInput{UserID: "user-1", SourceIP: "192.0.2.20"})
+	if !errors.Is(err, ErrAuditUnavailable) || count != 0 {
+		t.Fatalf("revoke result count=%d err=%v", count, err)
+	}
+	if _, err := service.Authenticate(context.Background(), issued.Token); err != nil {
+		t.Fatalf("session was revoked without pre-mutation audit evidence: %v", err)
+	}
+}

@@ -52,7 +52,7 @@ func run() error {
 		return fmt.Errorf("initialize resource registry: %w", err)
 	}
 
-	identity, err := newIdentityHandler(cfg.Environment, db)
+	identity, err := newIdentityHandler(cfg.Environment, db, cfg.AuthSessionTTL, cfg.AuthSessionIdleTimeout)
 	if err != nil {
 		return fmt.Errorf("initialize identity: %w", err)
 	}
