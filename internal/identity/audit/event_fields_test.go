@@ -106,3 +106,14 @@ func TestVerifyRejectsOverBudgetPersistedTopLevelAuditField(t *testing.T) {
 		t.Fatalf("Verify accepted over-budget persisted subject_id: %v", err)
 	}
 }
+
+func TestVerifyRejectsNonCanonicalPersistedTopLevelAuditField(t *testing.T) {
+	prepared, err := Prepare(Event{ID: "event-123", OccurredAt: time.Now(), Action: "auth.login", Outcome: "success"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared.Action = " auth.login"
+	if err := Verify(prepared, ""); err == nil || !strings.Contains(err.Error(), "not canonical") {
+		t.Fatalf("Verify accepted non-canonical persisted action: %v", err)
+	}
+}
