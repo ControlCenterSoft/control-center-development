@@ -24,8 +24,8 @@ func workloadScaleEvidence(t *testing.T, threshold float64) (WorkloadCurve, Work
 func TestEvaluateWorkloadScaleScenarioFeasibleWithinObservedCurve(t *testing.T) {
 	curve, efficiency := workloadScaleEvidence(t, 0.5)
 	scenario, err := EvaluateWorkloadScaleScenario(curve, efficiency, WorkloadScaleScenarioRequest{
-		TargetResourceFactor: 2,
-		RequiredWorkload: 150,
+		TargetResourceFactor:   2,
+		RequiredWorkload:       150,
 		MinimumHeadroomPercent: 10,
 	})
 	if err != nil {
@@ -45,8 +45,8 @@ func TestEvaluateWorkloadScaleScenarioFeasibleWithinObservedCurve(t *testing.T) 
 func TestEvaluateWorkloadScaleScenarioReportsInsufficientHeadroom(t *testing.T) {
 	curve, efficiency := workloadScaleEvidence(t, 0.5)
 	scenario, err := EvaluateWorkloadScaleScenario(curve, efficiency, WorkloadScaleScenarioRequest{
-		TargetResourceFactor: 2,
-		RequiredWorkload: 175,
+		TargetResourceFactor:   2,
+		RequiredWorkload:       175,
 		MinimumHeadroomPercent: 10,
 	})
 	if err != nil {
@@ -60,8 +60,8 @@ func TestEvaluateWorkloadScaleScenarioReportsInsufficientHeadroom(t *testing.T) 
 func TestEvaluateWorkloadScaleScenarioPreservesDiminishingReturnsWarning(t *testing.T) {
 	curve, efficiency := workloadScaleEvidence(t, 0.8)
 	scenario, err := EvaluateWorkloadScaleScenario(curve, efficiency, WorkloadScaleScenarioRequest{
-		TargetResourceFactor: 2,
-		RequiredWorkload: 100,
+		TargetResourceFactor:   2,
+		RequiredWorkload:       100,
 		MinimumHeadroomPercent: 10,
 	})
 	if err != nil {
@@ -75,8 +75,8 @@ func TestEvaluateWorkloadScaleScenarioPreservesDiminishingReturnsWarning(t *test
 func TestEvaluateWorkloadScaleScenarioDoesNotExtrapolate(t *testing.T) {
 	curve, efficiency := workloadScaleEvidence(t, 0.5)
 	scenario, err := EvaluateWorkloadScaleScenario(curve, efficiency, WorkloadScaleScenarioRequest{
-		TargetResourceFactor: 8,
-		RequiredWorkload: 100,
+		TargetResourceFactor:   8,
+		RequiredWorkload:       100,
 		MinimumHeadroomPercent: 10,
 	})
 	if err != nil {
@@ -91,8 +91,8 @@ func TestEvaluateWorkloadScaleScenarioRejectsTamperedEfficiencyEvidence(t *testi
 	curve, efficiency := workloadScaleEvidence(t, 0.5)
 	efficiency.Reason = "tampered"
 	if _, err := EvaluateWorkloadScaleScenario(curve, efficiency, WorkloadScaleScenarioRequest{
-		TargetResourceFactor: 2,
-		RequiredWorkload: 100,
+		TargetResourceFactor:   2,
+		RequiredWorkload:       100,
 		MinimumHeadroomPercent: 10,
 	}); err == nil {
 		t.Fatal("expected tampered efficiency evidence to be rejected")
