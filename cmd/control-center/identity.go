@@ -11,7 +11,7 @@ import (
 	"control-center/internal/persistence/postgres"
 )
 
-func newIdentityHandler(environment string, db *sql.DB) (*identityapi.Server, error) {
+func newIdentityHandler(environment string, db *sql.DB, sessionTTL, sessionIdleTimeout time.Duration) (*identityapi.Server, error) {
 	hasher := security.NewPasswordHasher()
 	passwordHash, err := hasher.HashBootstrapAdminPassword()
 	if err != nil {
@@ -31,7 +31,7 @@ func newIdentityHandler(environment string, db *sql.DB) (*identityapi.Server, er
 	if err != nil {
 		return nil, err
 	}
-	authService, err := auth.NewService(store, store, auditLog, hasher, 0)
+	authService, err := auth.NewService(store, store, auditLog, hasher, sessionTTL, auth.WithSessionIdleTimeout(sessionIdleTimeout))
 	if err != nil {
 		return nil, err
 	}
