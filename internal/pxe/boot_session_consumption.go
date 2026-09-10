@@ -70,11 +70,11 @@ type BootSessionConsumptionStore interface {
 type BootSessionConsumptionDecision struct {
 	Status                BootSessionConsumptionStoreState `json:"status"`
 	Receipt               BootSessionConsumptionReceipt    `json:"receipt"`
-	AtomicConsumeVerified bool                              `json:"atomicConsumeVerified"`
-	BootHandoffAuthorized bool                              `json:"bootHandoffAuthorized"`
-	ReplayAuthorized      bool                              `json:"replayAuthorized"`
-	RecoveryRequired      bool                              `json:"recoveryRequired"`
-	RecoveryAction        string                            `json:"recoveryAction"`
+	AtomicConsumeVerified bool                             `json:"atomicConsumeVerified"`
+	BootHandoffAuthorized bool                             `json:"bootHandoffAuthorized"`
+	ReplayAuthorized      bool                             `json:"replayAuthorized"`
+	RecoveryRequired      bool                             `json:"recoveryRequired"`
+	RecoveryAction        string                           `json:"recoveryAction"`
 }
 
 type bootSessionConsumptionReceiptDigest struct {
