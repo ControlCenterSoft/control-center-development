@@ -1,64 +1,60 @@
 # Control Center
 
-Control Center — централизованная платформа управления инфраструктурой с типизированной, проверяемой и аудируемой моделью исполнения.
+Control Center — самостоятельная централизованная платформа управления инфраструктурой с типизированной, проверяемой и аудируемой моделью исполнения.
 
-Текущий кодовый baseline: **0.6.0**. Номер версии изменяется только отдельным релизным процессом после реализации и тестирования.
+Текущий опубликованный исходный релиз: **0.22.0**. Отдельный стабильный бинарный канал опубликован как **0.3.1**; исходная и бинарная линии не следует смешивать.
 
-## Источник истины разработки
-
-Нормативным источником истины для текущей разработки является ветка `main` этого репозитория: `ControlCenterSoft/control-center-development`.
-
-Перед продолжением разработки необходимо читать:
-
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md) — целевая архитектура и обязательные инварианты;
-2. [`ROADMAP.md`](ROADMAP.md) — правильная последовательность внедрения и первый незакрытый архитектурный этап;
-3. [`docs/REQUIREMENTS_RU.md`](docs/REQUIREMENTS_RU.md) — каталог уже принятых требований.
-
-Правило: команда «продолжай разработку» должна сначала сверять актуальный `main`, активные PR и первый незакрытый этап `ROADMAP.md`, а затем реализовывать следующий совместимый Task Packet.
-
-`ControlCenterSoft/control-center-stable` — стабильный релизный канал. `ControlCenterSoft/control-center` — публичный сайт/витрина. Эти репозитории не являются архитектурным source of truth продукта.
-
-Google Drive содержит подробную продуктовую/эксплуатационную документацию и должен быть синхронизирован с этими нормативными файлами. Выявленное противоречие между реализацией и документацией должно быть устранено до развития конфликтующего контракта.
-
-## Возможности текущего baseline
+## Базовые возможности
 
 - HTTP/JSON API и health/readiness endpoints;
-- локальная identity/session модель;
-- deny-by-default RBAC;
-- append-oriented audit;
+- локальная Identity/Session модель и deny-by-default RBAC;
+- обязательная смена первоначального пароля `admin` после чистой установки;
+- управляемая session security policy с абсолютным TTL, idle timeout, инвентаризацией и отзывом собственных сессий;
 - PostgreSQL-backed durable state;
-- immutable configuration revisions;
-- policy/risk/approval-aware Changes;
-- durable Jobs с leases, retries и idempotency;
-- allowlisted typed Worker actions;
-- resource state/health;
-- Agent enrollment/heartbeat foundations;
-- Inventory/Market/PXE/Automation/Domain/Integration foundations;
-- non-root runtime.
+- Desired State и Actual State как раздельные модели состояния;
+- Changes/Jobs, идемпотентность, retries и audit;
+- Agent enrollment/heartbeat и inventory foundations;
+- Node/Role/Lifecycle contracts;
+- Network Management с multi-NIC, WAN/LAN, VLAN/bonding, routing, DNS/NTP, firewall и безопасными staged changes;
+- Capacity Planner / Placement Advisor с детерминированными advisory-only расчётами;
+- Market contracts для устанавливаемых инфраструктурных модулей;
+- Backup/Recovery contracts и безопасные границы опасных операций;
+- single-node как самостоятельный режим и целевая multi-node/HA архитектура.
 
-Целевая распределённая ролевая, кластерная, Capacity, Lifecycle/Recovery, Network/Edge и Enterprise Market архитектура описана в нормативных документах выше и внедряется поэтапно, а не одним несовместимым скачком.
+## Core и Market
 
-## Модель разработки
+**Core** содержит обязательные функции платформы: Identity/RBAC, Desired/Actual State, Changes/Jobs, Node/Role/Lifecycle, Network, Monitoring/Health, Audit, Backup/Recovery contracts, Capacity Planner foundation и системные API.
 
-Разработка ведётся параллельно, но общие контракты Identity/RBAC/State/Jobs/Agent/Market/Network/Recovery не должны иметь независимых несовместимых реализаций в разных ветках.
+**Market** содержит устанавливаемые инфраструктурные возможности с явными compatibility/dependency, permissions, network/storage, capacity и lifecycle metadata. К направлениям Market относятся Directory Services, DNS/DHCP, PXE для Windows/Linux, Software Automation для Windows/Linux, Inventory/Compliance, File Services, Monitoring и другие поддерживаемые инфраструктурные providers.
 
-Pull request должен оставлять `main` зелёным и проходить предусмотренные форматирование, vet/race, unit/integration/security/failure/build gates.
+## Single-node и HA
 
-В репозитории запрещены credentials, приватная топология инфраструктуры, production data, приватные deployment endpoints и секреты.
+Single-node является полноценным поддерживаемым способом использования Control Center. Multi-node/HA вводится только для возможностей, для которых опубликованы и проверены соответствующие failure/recovery contracts. Наличие архитектурного контракта само по себе не означает сертифицированный production failover.
 
-## Локальная проверка
+## Desired / Actual State
+
+Изменение инфраструктуры проходит контролируемый путь:
+
+`Запрос → Валидация → Авторизация → План → Change → Job → типизированное действие → Проверка → Actual State → Audit`
+
+Desired State не подменяется текущим Actual State. Для опасных операций обязательно определяются риск, preflight, проверка результата и rollback/recovery path.
+
+## Capacity Planner
+
+Опубликованная Capacity-линия остаётся advisory-only. Она использует измеренные workload/capacity evidence и детерминированные контракты для forecast, what-if, placement advice, bottleneck/capacity horizon, calibration, workload profiles/curves, scale scenarios, safety margin, resource headroom, freshness/revalidation и контролируемого повторного использования placement advice. Такие расчёты не дают разрешения на автоматическую production mutation без отдельного policy/approval слоя.
+
+## Аутентификация и сессии
+
+После чистой установки создаётся локальный пользователь `admin` с первоначальным паролем `admin`. При первом входе пароль необходимо сменить; до смены обычная работа запрещена. При обновлении существующий пароль пользователя не сбрасывается к первоначальному значению.
+
+Начиная с опубликованного исходного релиза 0.22.0 локальные пользовательские сессии дополнительно ограничиваются абсолютным сроком жизни и idle timeout. Активность не продлевает абсолютный срок жизни сессии; политика, инвентаризация и отзыв собственных сессий сохраняют обязательные RBAC/Audit и fail-closed границы.
+
+## Локальная проверка и сборка
 
 ```bash
 make ci
-```
-
-## Локальная сборка
-
-```bash
 make build
 ./bin/control-center
 ```
 
-## Первый вход
-
-На пустой установке Control Center создаёт локального пользователя `admin` с одноразовым начальным паролем `admin`. Первая сессия позволяет только проверить состояние сессии, сменить пароль или выйти. До смены пароля обычная работа запрещена. Обновление установленной системы никогда не заменяет существующий пароль пользователя и не восстанавливает начальный credential.
+Подробные архитектурные требования, release notes и эксплуатационные инструкции находятся в документации продукта.
