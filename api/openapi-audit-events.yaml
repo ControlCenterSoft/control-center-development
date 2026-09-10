@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Control Center Audit Event Read API
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     Bounded, permission-gated read contract for append-only Control Center audit
     events. This contract is read-only and does not modify audit history.
@@ -13,8 +13,9 @@ paths:
       description: >-
         Returns audit events newest first. Access requires an authenticated
         session with a completed first-login password change and the global
-        audit.events.read permission. Filters are exact matches. Pagination uses
-        an opaque cursor; clients must not parse or construct cursors.
+        audit.events.read permission. Filters are exact matches, including
+        event_id and correlation_id. Pagination uses an opaque cursor; clients
+        must not parse or construct cursors.
       parameters:
         - name: limit
           in: query
@@ -60,9 +61,27 @@ paths:
           schema:
             type: string
             maxLength: 256
+        - name: event_id
+          in: query
+          required: false
+          description: Exact audit event identifier filter. At most one event can match a stored event ID.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - name: correlation_id
+          in: query
+          required: false
+          description: >-
+            Exact correlation identifier filter. Multiple events can share one
+            correlation identifier, so normal bounded pagination still applies.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 256
       responses:
         '200':
-          description: Bounded page of audit events.
+          description: Bounded page of audit events matching all supplied exact filters.
           headers:
             Cache-Control:
               schema:
