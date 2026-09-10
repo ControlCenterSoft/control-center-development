@@ -172,8 +172,10 @@ func TestDirectoryBootSessionConsumptionStoreKeepsReplayKeyBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conflict := receipt
-	conflict.AttemptID = "attempt-conflict"
+	conflict := bootSessionConsumptionStoreFixture(t, "attempt-conflict")
+	if conflict.ReplayKey != receipt.ReplayKey {
+		t.Fatalf("fixture did not preserve replay-key lineage: original=%s conflict=%s", receipt.ReplayKey, conflict.ReplayKey)
+	}
 	result, err := store.AtomicConsumeBootSession(conflict)
 	if err != nil {
 		t.Fatal(err)
