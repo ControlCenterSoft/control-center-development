@@ -66,6 +66,17 @@
       }
     },
     {
+      "if": {
+        "properties": {"current_evidence_status": {"const": "stale"}},
+        "required": ["current_evidence_status"]
+      },
+      "then": {
+        "properties": {
+          "current_recommendation_reusable": {"const": false}
+        }
+      }
+    },
+    {
       "if": {"properties": {"status": {"const": "blocked"}}, "required": ["status"]},
       "then": {
         "properties": {

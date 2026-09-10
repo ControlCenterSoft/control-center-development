@@ -127,6 +127,10 @@ func validatePlacementAdviceReuseConsumption(result PlacementAdviceReuseConsumpt
 		result.CurrentEvidenceStatus != PlacementAdviceEvidenceStale {
 		return fmt.Errorf("%w: invalid current evidence status", ErrInvalidRecommendation)
 	}
+	if result.CurrentEvidenceStatus == PlacementAdviceEvidenceStale &&
+		result.CurrentRecommendationReusable {
+		return fmt.Errorf("%w: stale current evidence marked reusable", ErrInvalidRecommendation)
+	}
 	if result.Status == PlacementAdviceReuseAllowed {
 		if !result.ReuseAllowed || !result.CurrentRecommendationReusable ||
 			result.CurrentEvidenceStatus != PlacementAdviceEvidenceCurrent ||

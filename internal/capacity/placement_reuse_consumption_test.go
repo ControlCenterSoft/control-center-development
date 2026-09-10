@@ -195,6 +195,18 @@ func TestPlacementAdviceReuseConsumptionRejectsUnsafeOrTamperedEvidence(t *testi
 		t.Fatalf("placement authority tamper error = %v", err)
 	}
 
+	stale := consumption
+	stale.Status = PlacementAdviceReuseBlocked
+	stale.CurrentEvidenceStatus = PlacementAdviceEvidenceStale
+	stale.CurrentRecommendationReusable = true
+	stale.ReuseAllowed = false
+	stale.Reason = "telemetry-revision-drift"
+	stale.RecommendedAction = "refresh-telemetry-evidence"
+	stale.ConsumptionID = placementAdviceReuseConsumptionID(stale)
+	if err := ValidatePlacementAdviceReuseConsumption(stale); !errors.Is(err, ErrInvalidRecommendation) {
+		t.Fatalf("stale reusable evidence tamper error = %v", err)
+	}
+
 	consumption, err = EvaluatePlacementAdviceReuseConsumption(decision, current)
 	if err != nil {
 		t.Fatal(err)
