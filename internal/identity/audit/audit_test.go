@@ -25,6 +25,80 @@ func TestAuditRedactionAndChain(t *testing.T) {
 		t.Fatal("audit chain was not linked")
 	}
 }
+
+func TestPrepareRedactsTypedContainers(t *testing.T) {
+	type typedPayload struct {
+		Token   string            `json:"token"`
+		Nested  map[string]string `json:"nested"`
+		Headers []string          `json:"headers"`
+		Visible string            `json:"visible"`
+	}
+
+	prepared, err := Prepare(Event{
+		ID:         "event-typed-details",
+		OccurredAt: time.Now(),
+		Action:     "auth.login",
+		Outcome:    "denied",
+		Details: map[string]any{
+			"payload": typedPayload{
+				Token: "typed-secret-token",
+				Nested: map[string]string{
+					"api_key": "typed-secret-key",
+					"visible": "nested-visible",
+				},
+				Headers: []string{"Bearer typed-bearer-token", "visible-header"},
+				Visible: "top-visible",
+			},
+		},
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serialized, err := jsonMarshal(prepared.Details)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"typed-secret-token", "typed-secret-key", "typed-bearer-token"} {
+		if strings.Contains(serialized, secret) {
+			t.Fatalf("typed secret %q leaked in audit details: %s", secret, serialized)
+		}
+	}
+	for _, visible := range []string{"nested-visible", "visible-header", "top-visible"} {
+		if !strings.Contains(serialized, visible) {
+			t.Fatalf("non-sensitive value %q was not preserved: %s", visible, serialized)
+		}
+	}
+	if err := Verify(prepared, ""); err != nil {
+		t.Fatalf("prepared typed audit event did not verify: %v", err)
+	}
+}
+
+func TestPrepareRejectsUnsupportedAuditDetails(t *testing.T) {
+	_, err := Prepare(Event{
+		Action:  "audit.unsupported_details",
+		Outcome: "denied",
+		Details: map[string]any{"callback": func() {}},
+	}, "")
+	if err == nil {
+		t.Fatal("Prepare accepted unsupported audit details")
+	}
+	if !strings.Contains(err.Error(), "not safely serializable") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRedactUnsupportedAuditDetailsReturnsSafeMarker(t *testing.T) {
+	redacted := Redact(map[string]any{"callback": func() {}})
+	serialized, err := jsonMarshal(redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serialized != `{"redaction_error":"unsupported_detail_value"}` {
+		t.Fatalf("unexpected safe marker: %s", serialized)
+	}
+}
+
 func TestPrepareCanonicalizesTimestampBeforeHash(t *testing.T) {
 	inputTime := time.Date(2026, 9, 8, 12, 34, 56, 123456789, time.FixedZone("test", 3*60*60))
 	prepared, err := Prepare(Event{ID: "event-1", OccurredAt: inputTime, Action: "identity.login", Outcome: "success"}, "previous-hash")
@@ -64,4 +138,16 @@ func TestVerifyRejectsBrokenAuditChain(t *testing.T) {
 		t.Fatal("Verify accepted tampered event content")
 	}
 }
+
+func TestVerifyRejectsUnserializableEvent(t *testing.T) {
+	prepared, err := Prepare(Event{ID: "event-1", OccurredAt: time.Now(), Action: "first", Outcome: "success"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared.Details = map[string]any{"callback": func() {}}
+	if err := Verify(prepared, ""); err == nil {
+		t.Fatal("Verify accepted an unserializable audit event")
+	}
+}
+
 func jsonMarshal(value any) (string, error) { b, err := json.Marshal(value); return string(b), err }
