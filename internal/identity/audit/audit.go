@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -65,9 +66,16 @@ func Prepare(event Event, previousHash string) (Event, error) {
 	} else {
 		event.OccurredAt = event.OccurredAt.UTC().Truncate(time.Microsecond)
 	}
-	event.Details = Redact(event.Details)
+	redacted, err := redactDetails(event.Details)
+	if err != nil {
+		return Event{}, fmt.Errorf("audit details are not safely serializable: %w", err)
+	}
+	event.Details = redacted
 	event.PreviousHash = previousHash
-	event.Hash = hashEvent(event)
+	event.Hash, err = hashEvent(event)
+	if err != nil {
+		return Event{}, err
+	}
 	return event, nil
 }
 func Verify(event Event, expectedPreviousHash string) error {
@@ -84,7 +92,11 @@ func Verify(event Event, expectedPreviousHash string) error {
 	if event.PreviousHash != expectedPreviousHash {
 		return fmt.Errorf("audit previous hash mismatch")
 	}
-	if event.Hash == "" || hashEvent(event) != event.Hash {
+	computedHash, err := hashEvent(event)
+	if err != nil {
+		return err
+	}
+	if event.Hash == "" || computedHash != event.Hash {
 		return fmt.Errorf("audit event hash mismatch")
 	}
 	return nil
@@ -100,10 +112,36 @@ func (l *MemoryLog) Records() []Event {
 var sensitiveKey = regexp.MustCompile(`(?i)(password|passwd|secret|token|authorization|cookie|api[-_]?key|private[-_]?key|credential)`)
 var bearerValue = regexp.MustCompile(`(?i)\bbearer\s+[a-z0-9._~+/=-]+`)
 
+// Redact returns a JSON-compatible copy of audit details with sensitive values
+// removed. Unsupported values are replaced with a safe marker; Prepare applies
+// the stricter fail-closed variant and rejects such events instead of persisting
+// potentially unredacted data.
 func Redact(input map[string]any) map[string]any {
-	if input == nil {
-		return nil
+	result, err := redactDetails(input)
+	if err != nil {
+		return map[string]any{"redaction_error": "unsupported_detail_value"}
 	}
+	return result
+}
+
+func redactDetails(input map[string]any) (map[string]any, error) {
+	if input == nil {
+		return nil, nil
+	}
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	var normalized map[string]any
+	if err := decoder.Decode(&normalized); err != nil {
+		return nil, err
+	}
+	return redactMap(normalized), nil
+}
+
+func redactMap(input map[string]any) map[string]any {
 	result := make(map[string]any, len(input))
 	for key, value := range input {
 		if sensitiveKey.MatchString(key) {
@@ -114,10 +152,11 @@ func Redact(input map[string]any) map[string]any {
 	}
 	return result
 }
+
 func redactValue(value any) any {
 	switch typed := value.(type) {
 	case map[string]any:
-		return Redact(typed)
+		return redactMap(typed)
 	case []any:
 		out := make([]any, len(typed))
 		for i := range typed {
@@ -130,11 +169,14 @@ func redactValue(value any) any {
 		return typed
 	}
 }
-func hashEvent(event Event) string {
+func hashEvent(event Event) (string, error) {
 	event.Hash = ""
-	payload, _ := json.Marshal(event)
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return "", fmt.Errorf("audit event is not serializable: %w", err)
+	}
 	sum := sha256.Sum256(payload)
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }
 func randomID() string {
 	b := make([]byte, 16)
