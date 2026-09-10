@@ -121,7 +121,11 @@ func TestPlacementRebuildSatisfactionGateBlocksNonMeasuredEvidence(t *testing.T)
 		[]agent.CapacityObservation(nil),
 		current.Telemetry.Observations...,
 	)
-	current.Telemetry.Observations[0].Evidence = agent.EvidenceBenchmark
+	for index := range current.Telemetry.Observations {
+		if current.Telemetry.Observations[index].Metric == agent.MetricStorageUsed {
+			current.Telemetry.Observations[index].Evidence = agent.EvidenceBenchmark
+		}
+	}
 	var err error
 	current.Evidence, err = DeriveNodeProjection(current.Profile, current.Telemetry, checkedAt)
 	if err != nil {
@@ -250,7 +254,11 @@ func TestPlacementRebuildSatisfactionGateMeasuredEvidenceProperty(t *testing.T) 
 			[]agent.CapacityObservation(nil),
 			current.Telemetry.Observations...,
 		)
-		candidate.Telemetry.Observations[0].Evidence = evidence
+		for index := range candidate.Telemetry.Observations {
+			if candidate.Telemetry.Observations[index].Metric == agent.MetricStorageUsed {
+				candidate.Telemetry.Observations[index].Evidence = evidence
+			}
+		}
 		var err error
 		candidate.Evidence, err = DeriveNodeProjection(candidate.Profile, candidate.Telemetry, checkedAt)
 		if err != nil {

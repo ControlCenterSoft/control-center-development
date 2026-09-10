@@ -155,7 +155,15 @@ func BuildPlacementRebuildSatisfactionGate(
 			)
 		}
 
-		expectedDerivation, err := DeriveNodeProjection(profile, input.Telemetry, checkedAt)
+		canonicalTelemetry, err := normalizeNodeProjectionTelemetry(input.Telemetry, profile, checkedAt)
+		if err != nil {
+			return PlacementRebuildSatisfactionGate{}, fmt.Errorf(
+				"current telemetry %q: %w",
+				nodeID,
+				err,
+			)
+		}
+		expectedDerivation, err := DeriveNodeProjection(profile, canonicalTelemetry, checkedAt)
 		if err != nil {
 			return PlacementRebuildSatisfactionGate{}, fmt.Errorf(
 				"current derivation %q: %w",
@@ -175,8 +183,8 @@ func BuildPlacementRebuildSatisfactionGate(
 		for _, constraint := range profile.Constraints {
 			constraintByID[constraint.ID] = constraint
 		}
-		observationByKey := make(map[string]agent.CapacityObservation, len(input.Telemetry.Observations))
-		for _, observation := range input.Telemetry.Observations {
+		observationByKey := make(map[string]agent.CapacityObservation, len(canonicalTelemetry.Observations))
+		for _, observation := range canonicalTelemetry.Observations {
 			key := projectionConstraintKey(observation.Metric, observation.TargetID)
 			observationByKey[key] = observation
 		}
