@@ -94,6 +94,9 @@ func CommitModuleUpdateJobRollbackClaimCAS(
 		expectedJournalSequence != current.RollbackAdmission.ExpectedJournalSequence {
 		return ModuleUpdateJobRollbackClaimCommitResult{}, fmt.Errorf("stale rollback claim revision")
 	}
+	if current.RollbackAdmission.ExpectedJournalSequence == ^uint64(0) {
+		return ModuleUpdateJobRollbackClaimCommitResult{}, fmt.Errorf("rollback claim sequence overflow")
+	}
 
 	planned := buildModuleUpdateJobRollbackClaim(current.RollbackAdmission, workerID)
 	if current.HasClaim {
