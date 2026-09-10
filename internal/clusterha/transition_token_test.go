@@ -7,31 +7,33 @@ import (
 	"control-center/internal/nodelifecycle"
 )
 
-func transitionTokenFixture(t *testing.T) (LifecycleTransitionToken, LifecyclePreflightRequest, TransitionRevision) {
+func transitionTokenFixture(t *testing.T) (LifecycleTransitionToken, LifecyclePreflightRequest, TransitionRevisionEvidence) {
 	t.Helper()
 	request := preflightRequest("controller-b", nodelifecycle.StateDraining)
 	preflight, err := BuildLifecyclePreflight(request)
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
 	}
-	revision := TransitionRevision{
-		LeaderEpoch:     7,
-		JournalSequence: 42,
+	evidence, err := BootstrapTransitionRevisionEvidence(ReconcilerRevisionObservation{
+		Membership:      request.Membership,
 		ResourceVersion: "rv-42",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapTransitionRevisionEvidence() error = %v", err)
 	}
 	token, err := BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
 		Preflight:        preflight,
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: evidence,
 	})
 	if err != nil {
 		t.Fatalf("BuildLifecycleTransitionToken() error = %v", err)
 	}
-	return token, request, revision
+	return token, request, evidence
 }
 
 func TestBuildLifecycleTransitionTokenIsDeterministicAndMutationFree(t *testing.T) {
-	token, request, revision := transitionTokenFixture(t)
+	token, request, evidence := transitionTokenFixture(t)
 	preflight, err := BuildLifecyclePreflight(request)
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
@@ -39,7 +41,7 @@ func TestBuildLifecycleTransitionTokenIsDeterministicAndMutationFree(t *testing.
 	second, err := BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
 		Preflight:        preflight,
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: evidence,
 	})
 	if err != nil {
 		t.Fatalf("BuildLifecycleTransitionToken(second) error = %v", err)
@@ -47,16 +49,19 @@ func TestBuildLifecycleTransitionTokenIsDeterministicAndMutationFree(t *testing.
 	if token.TokenID != second.TokenID {
 		t.Fatalf("token ID is not deterministic: %s != %s", token.TokenID, second.TokenID)
 	}
+	if token.RevisionEvidenceID != evidence.EvidenceID() || token.Revision != evidence.Revision() {
+		t.Fatalf("token lost sealed revision binding: token=%+v evidence=%+v", token, evidence)
+	}
 	if token.MembershipSnapshotID == "" || !token.PlanOnly || token.ExecutionAuthorized || token.HostMutation || token.StateMutation {
 		t.Fatalf("unexpected token safety contract: %+v", token)
 	}
 }
 
 func TestRevalidateLifecycleTransitionAllowsExactObservation(t *testing.T) {
-	token, request, revision := transitionTokenFixture(t)
+	token, request, evidence := transitionTokenFixture(t)
 	result, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: evidence,
 	})
 	if err != nil {
 		t.Fatalf("RevalidateLifecycleTransition() error = %v", err)
@@ -64,42 +69,72 @@ func TestRevalidateLifecycleTransitionAllowsExactObservation(t *testing.T) {
 	if !result.Revalidated || !result.PlanOnly || result.ExecutionAuthorized || result.HostMutation || result.StateMutation {
 		t.Fatalf("unexpected validation result: %+v", result)
 	}
-	if result.TokenID != token.TokenID || result.MembershipSnapshotID != token.MembershipSnapshotID {
+	if result.TokenID != token.TokenID || result.MembershipSnapshotID != token.MembershipSnapshotID || result.RevisionEvidenceID != evidence.EvidenceID() {
 		t.Fatalf("validation lost token binding: %+v", result)
 	}
 }
 
-func TestRevalidateLifecycleTransitionRejectsHARevisionDrift(t *testing.T) {
-	token, request, revision := transitionTokenFixture(t)
-	tests := []struct {
-		name   string
-		mutate func(*TransitionRevision)
-	}{
-		{name: "leader epoch", mutate: func(value *TransitionRevision) { value.LeaderEpoch++ }},
-		{name: "journal sequence", mutate: func(value *TransitionRevision) { value.JournalSequence++ }},
-		{name: "resource version", mutate: func(value *TransitionRevision) { value.ResourceVersion = "rv-43" }},
+func TestBuildLifecycleTransitionTokenRejectsEvidenceFromDifferentMembership(t *testing.T) {
+	request := preflightRequest("controller-b", nodelifecycle.StateDraining)
+	preflight, err := BuildLifecyclePreflight(request)
+	if err != nil {
+		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			observed := revision
-			test.mutate(&observed)
-			_, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
-				PreflightRequest: request,
-				Revision:         observed,
-			})
-			if !errors.Is(err, ErrStaleLifecycleTransitionToken) {
-				t.Fatalf("error = %v, want ErrStaleLifecycleTransitionToken", err)
-			}
-		})
+	other := request.Membership
+	other.Members[2].Healthy = false
+	other.Members[2].CaughtUp = false
+	evidence, err := BootstrapTransitionRevisionEvidence(ReconcilerRevisionObservation{
+		Membership:      other,
+		ResourceVersion: "rv-other",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapTransitionRevisionEvidence() error = %v", err)
+	}
+	_, err = BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
+		Preflight:        preflight,
+		PreflightRequest: request,
+		RevisionEvidence: evidence,
+	})
+	if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
+		t.Fatalf("error = %v, want ErrInvalidLifecycleTransitionToken", err)
 	}
 }
 
-func TestRevalidateLifecycleTransitionRejectsMembershipDrift(t *testing.T) {
-	token, request, revision := transitionTokenFixture(t)
-	request.Membership.LeaderID = "controller-c"
-	_, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
+func TestRevalidateLifecycleTransitionRejectsJournalAdvance(t *testing.T) {
+	token, request, evidence := transitionTokenFixture(t)
+	next, err := AdvanceTransitionRevisionEvidence(evidence, ReconcilerRevisionObservation{
+		Membership:              request.Membership,
+		ExpectedResourceVersion: evidence.Revision().ResourceVersion,
+		ResourceVersion:         "rv-43",
+	})
+	if err != nil {
+		t.Fatalf("AdvanceTransitionRevisionEvidence() error = %v", err)
+	}
+	_, err = RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: next,
+	})
+	if !errors.Is(err, ErrStaleLifecycleTransitionToken) {
+		t.Fatalf("error = %v, want ErrStaleLifecycleTransitionToken", err)
+	}
+}
+
+func TestRevalidateLifecycleTransitionRejectsLeaderFailoverEvidence(t *testing.T) {
+	token, request, evidence := transitionTokenFixture(t)
+	failedOver := request.Membership
+	failedOver.LeaderID = "controller-c"
+	next, err := AdvanceTransitionRevisionEvidence(evidence, ReconcilerRevisionObservation{
+		Membership:              failedOver,
+		ExpectedResourceVersion: evidence.Revision().ResourceVersion,
+		ResourceVersion:         "rv-43",
+	})
+	if err != nil {
+		t.Fatalf("AdvanceTransitionRevisionEvidence() error = %v", err)
+	}
+	request.Membership = failedOver
+	_, err = RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
+		PreflightRequest: request,
+		RevisionEvidence: next,
 	})
 	if !errors.Is(err, ErrStaleLifecycleTransitionToken) {
 		t.Fatalf("error = %v, want ErrStaleLifecycleTransitionToken", err)
@@ -107,11 +142,20 @@ func TestRevalidateLifecycleTransitionRejectsMembershipDrift(t *testing.T) {
 }
 
 func TestRevalidateLifecycleTransitionRejectsUnsafeHealthDrift(t *testing.T) {
-	token, request, revision := transitionTokenFixture(t)
+	token, request, evidence := transitionTokenFixture(t)
 	request.Membership.Members[2].Healthy = false
-	_, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
+	request.Membership.Members[2].CaughtUp = false
+	next, err := AdvanceTransitionRevisionEvidence(evidence, ReconcilerRevisionObservation{
+		Membership:              request.Membership,
+		ExpectedResourceVersion: evidence.Revision().ResourceVersion,
+		ResourceVersion:         "rv-43",
+	})
+	if err != nil {
+		t.Fatalf("AdvanceTransitionRevisionEvidence() error = %v", err)
+	}
+	_, err = RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: next,
 	})
 	if !errors.Is(err, ErrStaleLifecycleTransitionToken) {
 		t.Fatalf("error = %v, want ErrStaleLifecycleTransitionToken", err)
@@ -124,49 +168,71 @@ func TestBuildLifecycleTransitionTokenRejectsMismatchedPreflightEvidence(t *test
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
 	}
+	evidence, err := BootstrapTransitionRevisionEvidence(ReconcilerRevisionObservation{
+		Membership:      request.Membership,
+		ResourceVersion: "rv-42",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapTransitionRevisionEvidence() error = %v", err)
+	}
 	request.Membership.LeaderID = "controller-c"
 	_, err = BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
 		Preflight:        preflight,
 		PreflightRequest: request,
-		Revision: TransitionRevision{
-			LeaderEpoch:     7,
-			JournalSequence: 42,
-			ResourceVersion: "rv-42",
-		},
+		RevisionEvidence: evidence,
 	})
 	if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
 		t.Fatalf("error = %v, want ErrInvalidLifecycleTransitionToken", err)
 	}
 }
 
-func TestBuildLifecycleTransitionTokenRejectsInvalidRevision(t *testing.T) {
-	request := preflightRequest("controller-b", nodelifecycle.StateDraining)
+func TestBuildLifecycleTransitionTokenRejectsTamperedSealedEvidence(t *testing.T) {
+	_, request, evidence := transitionTokenFixture(t)
 	preflight, err := BuildLifecyclePreflight(request)
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
 	}
-	for _, revision := range []TransitionRevision{
-		{LeaderEpoch: 0, JournalSequence: 42, ResourceVersion: "rv-42"},
-		{LeaderEpoch: 7, JournalSequence: 0, ResourceVersion: "rv-42"},
-		{LeaderEpoch: 7, JournalSequence: 42, ResourceVersion: "bad version"},
-	} {
-		_, err := BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
-			Preflight:        preflight,
-			PreflightRequest: request,
-			Revision:         revision,
-		})
-		if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
-			t.Fatalf("revision %+v error = %v, want ErrInvalidLifecycleTransitionToken", revision, err)
-		}
+	evidence.revision.JournalSequence++
+	_, err = BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
+		Preflight:        preflight,
+		PreflightRequest: request,
+		RevisionEvidence: evidence,
+	})
+	if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
+		t.Fatalf("error = %v, want ErrInvalidLifecycleTransitionToken", err)
 	}
 }
 
-func TestRevalidateLifecycleTransitionRejectsTamperedSafetyFlags(t *testing.T) {
-	token, request, revision := transitionTokenFixture(t)
-	token.ExecutionAuthorized = true
+func TestRevalidateLifecycleTransitionRejectsTamperedTokenEvidenceIdentity(t *testing.T) {
+	token, request, evidence := transitionTokenFixture(t)
+	token.RevisionEvidenceID = "chre-tampered"
 	_, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: evidence,
+	})
+	if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
+		t.Fatalf("error = %v, want ErrInvalidLifecycleTransitionToken", err)
+	}
+}
+
+func TestRevalidateLifecycleTransitionRejectsTamperedTokenRevision(t *testing.T) {
+	token, request, evidence := transitionTokenFixture(t)
+	token.Revision.JournalSequence++
+	_, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
+		PreflightRequest: request,
+		RevisionEvidence: evidence,
+	})
+	if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
+		t.Fatalf("error = %v, want ErrInvalidLifecycleTransitionToken", err)
+	}
+}
+
+func TestRevalidateLifecycleTransitionRejectsTamperedCurrentEvidence(t *testing.T) {
+	token, request, evidence := transitionTokenFixture(t)
+	evidence.revision.JournalSequence++
+	_, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{
+		PreflightRequest: request,
+		RevisionEvidence: evidence,
 	})
 	if !errors.Is(err, ErrInvalidLifecycleTransitionToken) {
 		t.Fatalf("error = %v, want ErrInvalidLifecycleTransitionToken", err)
@@ -181,16 +247,22 @@ func TestLifecycleTransitionTokenSupportsStandaloneWithExplicitDowntime(t *testi
 	if err != nil {
 		t.Fatalf("BuildLifecyclePreflight() error = %v", err)
 	}
-	revision := TransitionRevision{LeaderEpoch: 3, JournalSequence: 9, ResourceVersion: "rv-standalone-9"}
+	evidence, err := BootstrapTransitionRevisionEvidence(ReconcilerRevisionObservation{
+		Membership:      request.Membership,
+		ResourceVersion: "rv-standalone-9",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapTransitionRevisionEvidence() error = %v", err)
+	}
 	token, err := BuildLifecycleTransitionToken(LifecycleTransitionTokenRequest{
 		Preflight:        preflight,
 		PreflightRequest: request,
-		Revision:         revision,
+		RevisionEvidence: evidence,
 	})
 	if err != nil {
 		t.Fatalf("BuildLifecycleTransitionToken() error = %v", err)
 	}
-	if _, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{PreflightRequest: request, Revision: revision}); err != nil {
+	if _, err := RevalidateLifecycleTransition(token, LifecycleTransitionObservation{PreflightRequest: request, RevisionEvidence: evidence}); err != nil {
 		t.Fatalf("RevalidateLifecycleTransition() error = %v", err)
 	}
 }
