@@ -90,6 +90,40 @@ func TestAnalyzeWorkloadCurveEfficiencyRejectsTamperedCurve(t *testing.T) {
 	}
 }
 
+func TestAnalyzeWorkloadCurveEfficiencyRejectsTruncatedReadyCurve(t *testing.T) {
+	curve, err := BuildWorkloadCurve(
+		WorkloadCurveRequest{ScopeID: "site-a", WorkloadUnit: WorkloadRequestsPerSecond, MinimumPoints: 3},
+		workloadCurvePoints(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	curve.Points = curve.Points[:1]
+	if _, err := AnalyzeWorkloadCurveEfficiency(curve, WorkloadCurveEfficiencyPolicy{
+		MinimumEfficiencyRatio: 0.5,
+		MinimumConfidence:      WorkloadProfileConfidenceMedium,
+	}); err == nil {
+		t.Fatal("expected truncated ready curve to be rejected")
+	}
+}
+
+func TestAnalyzeWorkloadCurveEfficiencyRejectsDuplicateResourceFactorEvidence(t *testing.T) {
+	curve, err := BuildWorkloadCurve(
+		WorkloadCurveRequest{ScopeID: "site-a", WorkloadUnit: WorkloadRequestsPerSecond, MinimumPoints: 3},
+		workloadCurvePoints(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	curve.Points[1].ResourceFactor = curve.Points[0].ResourceFactor
+	if _, err := AnalyzeWorkloadCurveEfficiency(curve, WorkloadCurveEfficiencyPolicy{
+		MinimumEfficiencyRatio: 0.5,
+		MinimumConfidence:      WorkloadProfileConfidenceMedium,
+	}); err == nil {
+		t.Fatal("expected non-increasing resource-factor evidence to be rejected")
+	}
+}
+
 func TestAnalyzeWorkloadCurveEfficiencyIsDeterministic(t *testing.T) {
 	curve, err := BuildWorkloadCurve(
 		WorkloadCurveRequest{ScopeID: "site-a", WorkloadUnit: WorkloadRequestsPerSecond, MinimumPoints: 3},
