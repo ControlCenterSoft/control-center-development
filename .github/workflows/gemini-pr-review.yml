@@ -20,8 +20,7 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   review:
@@ -32,60 +31,217 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-        with:
-          persist-credentials: false
+      - name: Resolve exact review target
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
 
-      - name: Run Gemini pull request review
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            pr_number="${EVENT_PR_NUMBER}"
+            head_sha="${EVENT_HEAD_SHA}"
+            base_sha="${EVENT_BASE_SHA}"
+          else
+            pr_number="${INPUT_PR_NUMBER}"
+            pr_json="$(curl --fail-with-body --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPOSITORY}/pulls/${pr_number}")"
+            head_sha="$(jq -er '.head.sha' <<<"${pr_json}")"
+            base_sha="$(jq -er '.base.sha' <<<"${pr_json}")"
+          fi
+
+          [[ "${pr_number}" =~ ^[0-9]+$ ]]
+          [[ "${head_sha}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${base_sha}" =~ ^[0-9a-f]{40}$ ]]
+          echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
+          echo "base_sha=${base_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare bounded review evidence
+        id: evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.target.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.target.outputs.head_sha }}
+          BASE_SHA: ${{ steps.target.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+
+          pr_json="$(curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}")"
+
+          current_head="$(jq -er '.head.sha' <<<"${pr_json}")"
+          current_base="$(jq -er '.base.sha' <<<"${pr_json}")"
+          [[ "${current_head}" == "${HEAD_SHA}" ]]
+          [[ "${current_base}" == "${BASE_SHA}" ]]
+
+          diff_file="${RUNNER_TEMP}/gemini-review.diff"
+          curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github.diff" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}" \
+            -o "${diff_file}"
+
+          byte_count="$(wc -c < "${diff_file}")"
+          if (( byte_count == 0 || byte_count > 200000 )); then
+            echo "::error title=Gemini evidence boundary::PR diff size ${byte_count} bytes is outside the allowed 1..200000 byte range"
+            exit 1
+          fi
+
+          delimiter="GEMINI_REVIEW_$(date +%s%N)_${RANDOM}"
+          {
+            echo "review_prompt<<${delimiter}"
+            printf '%s\n' \
+              'You are an independent supplemental code-review gate for Control Center.' \
+              'Review ONLY the bounded evidence below. Do not call tools, do not modify GitHub,' \
+              'do not request secrets or PII, and do not infer a different revision.' \
+              '' \
+              "Repository: ${REPOSITORY}" \
+              "Pull request: #${PR_NUMBER}" \
+              "EXACT head_sha: ${HEAD_SHA}" \
+              "EXACT base_sha: ${BASE_SHA}" \
+              '' \
+              'Assess correctness, regressions, security/privacy, infrastructure neutrality,' \
+              'migration/upgrade safety, test adequacy, and stated release boundaries. A PASS' \
+              'is allowed only when this exact evidence has no blocking finding. If the evidence' \
+              'is insufficient to establish a safe supplemental verdict, return BLOCK.' \
+              '' \
+              'Return EXACTLY one JSON object and no markdown, prose, tool calls, or code fences:' \
+              "{\"verdict\":\"PASS|BLOCK\",\"head_sha\":\"${HEAD_SHA}\",\"base_sha\":\"${BASE_SHA}\",\"findings\":[{\"severity\":\"blocking|warning|info\",\"summary\":\"short finding\"}]}" \
+              'Use an empty findings array when no material finding exists.' \
+              '' \
+              'BEGIN PR DIFF'
+            cat "${diff_file}"
+            printf '\nEND PR DIFF\n'
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Run independent Gemini review
         id: gemini_review
+        continue-on-error: true
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
-          GITHUB_TOKEN: ${{ github.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           gemini_cli_version: ${{ vars.GEMINI_CLI_VERSION }}
           gemini_model: ${{ vars.GEMINI_MODEL }}
           gemini_debug: ${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}
-          workflow_name: control-center-gemini-review
-          github_pr_number: ${{ github.event.pull_request.number || inputs.pr_number }}
+          workflow_name: control-center-gemini-exact-review
+          github_pr_number: ${{ steps.target.outputs.pr_number }}
           settings: |-
             {
               "model": {
-                "maxSessionTurns": 25
+                "maxSessionTurns": 1
               },
               "telemetry": {
                 "enabled": false
-              },
-              "mcpServers": {
-                "github": {
-                  "command": "docker",
-                  "args": [
-                    "run",
-                    "-i",
-                    "--rm",
-                    "-e",
-                    "GITHUB_PERSONAL_ACCESS_TOKEN",
-                    "ghcr.io/github/github-mcp-server:v0.27.0"
-                  ],
-                  "includeTools": [
-                    "add_comment_to_pending_review",
-                    "pull_request_read",
-                    "pull_request_review_write"
-                  ],
-                  "env": {
-                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
-                  }
-                }
               },
               "tools": {
                 "core": []
               }
             }
-          extensions: |-
-            [
-              "https://github.com/gemini-cli-extensions/code-review"
-            ]
-          prompt: /pr-code-review
+          prompt: ${{ steps.evidence.outputs.review_prompt }}
+
+      - name: Validate exact-SHA Gemini evidence
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.target.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.target.outputs.head_sha }}
+          BASE_SHA: ${{ steps.target.outputs.base_sha }}
+          ACTION_OUTCOME: ${{ steps.gemini_review.outcome }}
+          GEMINI_SUMMARY: ${{ steps.gemini_review.outputs.summary }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PR_NUMBER}" || -z "${HEAD_SHA}" || -z "${BASE_SHA}" ]]; then
+            echo '::error title=Gemini review gate::UNKNOWN: exact target resolution did not complete'
+            exit 1
+          fi
+
+          pr_json="$(curl --fail-with-body --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}")"
+          current_head="$(jq -er '.head.sha' <<<"${pr_json}")"
+          current_base="$(jq -er '.base.sha' <<<"${pr_json}")"
+
+          if [[ "${current_head}" != "${HEAD_SHA}" || "${current_base}" != "${BASE_SHA}" ]]; then
+            echo '::error title=Gemini review gate::UNKNOWN: PR head/base changed while review was running'
+            exit 1
+          fi
+
+          if [[ "${ACTION_OUTCOME}" != "success" ]]; then
+            echo '::error title=Gemini review gate::UNKNOWN: Gemini provider/action failure'
+            exit 1
+          fi
+
+          if ! jq -e '
+            type == "object" and
+            (.verdict == "PASS" or .verdict == "BLOCK") and
+            (.head_sha | type == "string") and
+            (.base_sha | type == "string") and
+            (.findings | type == "array") and
+            ([.findings[] | select(
+              (type != "object") or
+              ((.severity == "blocking" or .severity == "warning" or .severity == "info") | not) or
+              ((.summary | type == "string") | not)
+            )] | length == 0)
+          ' <<<"${GEMINI_SUMMARY}" >/dev/null 2>&1; then
+            echo '::error title=Gemini review gate::UNKNOWN: malformed or ambiguous Gemini response'
+            exit 1
+          fi
+
+          response_head="$(jq -r '.head_sha' <<<"${GEMINI_SUMMARY}")"
+          response_base="$(jq -r '.base_sha' <<<"${GEMINI_SUMMARY}")"
+          response_verdict="$(jq -r '.verdict' <<<"${GEMINI_SUMMARY}")"
+
+          if [[ "${response_head}" != "${HEAD_SHA}" || "${response_base}" != "${BASE_SHA}" ]]; then
+            echo '::error title=Gemini review gate::UNKNOWN: Gemini evidence SHA mismatch'
+            exit 1
+          fi
+
+          if [[ "${response_verdict}" == "PASS" ]] && jq -e '[.findings[] | select(.severity == "blocking")] | length > 0' <<<"${GEMINI_SUMMARY}" >/dev/null; then
+            echo '::error title=Gemini review gate::UNKNOWN: PASS contained blocking findings'
+            exit 1
+          fi
+
+          {
+            echo '### Gemini exact-SHA supplemental review'
+            echo
+            echo "- head: \`${HEAD_SHA}\`"
+            echo "- base: \`${BASE_SHA}\`"
+            echo "- verdict: **${response_verdict}**"
+            echo
+            echo '```json'
+            jq -c . <<<"${GEMINI_SUMMARY}"
+            echo '```'
+            echo
+            echo 'This evidence is supplemental and does not replace deterministic CI, security qualification, branch protection, or required independent approvals.'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${response_verdict}" != "PASS" ]]; then
+            echo '::error title=Gemini review gate::BLOCK: Gemini reported blocking findings'
+            exit 1
+          fi
