@@ -175,8 +175,7 @@ func TestPlacementRecalculatedAdviceReuseDecisionRejectsAuthorityExpansion(t *te
 			tampered := got
 			mutate(&tampered)
 			tampered.DecisionID = placementRecalculatedAdviceReuseDecisionID(tampered)
-			if err := validatePlacementRecalculatedAdviceReuseDecision(tampered);
-				!errors.Is(err, ErrInvalidRecommendation) {
+			if err := validatePlacementRecalculatedAdviceReuseDecision(tampered); !errors.Is(err, ErrInvalidRecommendation) {
 				t.Fatalf("authority expansion error = %v", err)
 			}
 		})
@@ -195,15 +194,13 @@ func TestPlacementRecalculatedAdviceReuseDecisionRejectsSafetyOrSourceIdentityLo
 	marginLost := got
 	marginLost.EffectiveSafetyMarginPct = 0
 	marginLost.DecisionID = placementRecalculatedAdviceReuseDecisionID(marginLost)
-	if err := validatePlacementRecalculatedAdviceReuseDecision(marginLost);
-		!errors.Is(err, ErrInvalidRecommendation) {
+	if err := validatePlacementRecalculatedAdviceReuseDecision(marginLost); !errors.Is(err, ErrInvalidRecommendation) {
 		t.Fatalf("lost safety margin error = %v", err)
 	}
 	sourceReused := got
 	sourceReused.SourceDerivedSnapshotID = sourceReused.DerivedSnapshotID
 	sourceReused.DecisionID = placementRecalculatedAdviceReuseDecisionID(sourceReused)
-	if err := validatePlacementRecalculatedAdviceReuseDecision(sourceReused);
-		!errors.Is(err, ErrInvalidRecommendation) {
+	if err := validatePlacementRecalculatedAdviceReuseDecision(sourceReused); !errors.Is(err, ErrInvalidRecommendation) {
 		t.Fatalf("source identity reuse error = %v", err)
 	}
 }
