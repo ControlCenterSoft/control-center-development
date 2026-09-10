@@ -115,6 +115,7 @@ func TestBuildLeaderTransferReceiptRejectsMemberStateDrift(t *testing.T) {
 		t.Fatalf("BootstrapTransitionRevisionEvidence() error = %v", err)
 	}
 	after := request.Membership
+	after.Members = append([]Member(nil), request.Membership.Members...)
 	after.LeaderID = request.NextLeaderID
 	after.Members[2].Healthy = false
 	after.Members[2].CaughtUp = false
