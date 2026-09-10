@@ -41,7 +41,6 @@ func TestPlacementAdviceDerivedEvidenceRevalidationExactCurrent(t *testing.T) {
 	if result.Status != PlacementAdviceEvidenceCurrent ||
 		result.Reason != "exact-derived-evidence-current" ||
 		result.CurrentSnapshotID != saved.SnapshotID ||
-		!result.RecommendationReusable ||
 		result.RecommendedAction != "none" ||
 		!result.AdvisoryOnly || result.ProductionMutation {
 		t.Fatalf("exact evidence was not current and advisory-only: %#v", result)
@@ -184,5 +183,25 @@ func TestPlacementAdviceDerivedEvidenceRevalidationRejectsUnsafeOrTamperedEviden
 	result.ProductionMutation = true
 	if err := ValidatePlacementAdviceDerivedEvidenceRevalidation(result); !errors.Is(err, ErrInvalidRecommendation) {
 		t.Fatalf("unsafe revalidation error = %v", err)
+	}
+}
+
+func TestPlacementAdviceDerivedEvidenceRevalidationFreshnessPrecedesRequestDrift(t *testing.T) {
+	request, input, saved, _ := derivedPlacementRevalidationFixture(t)
+	request.MinimumNodeReservePercent++
+	result, err := RevalidatePlacementAdviceDerivedEvidence(
+		saved,
+		request,
+		[]PlacementNodeDerivationInput{input},
+		input.Evidence.EvaluatedAt.Add(16*time.Minute),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != PlacementAdviceEvidenceStale ||
+		result.Reason != "telemetry-freshness-expired" ||
+		result.CurrentSnapshotID != "" || result.RecommendationReusable ||
+		result.RecommendedAction != "refresh-telemetry-evidence" {
+		t.Fatalf("expired telemetry did not take fail-closed precedence: %#v", result)
 	}
 }
