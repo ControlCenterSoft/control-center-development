@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"control-center/internal/identity/audit"
@@ -34,6 +35,15 @@ func (l *AuditLog) Append(ctx context.Context, event audit.Event) error {
 		return err
 	}
 	prepared, err := audit.Prepare(event, previous.String)
+	if err != nil {
+		return err
+	}
+	canonicalDetails, err := canonicalizeAuditDetailsForPostgres(ctx, tx, prepared.Details)
+	if err != nil {
+		return err
+	}
+	prepared.Details = canonicalDetails
+	prepared, err = audit.Prepare(prepared, previous.String)
 	if err != nil {
 		return err
 	}
@@ -68,7 +78,8 @@ func (l *AuditLog) VerifyChain(ctx context.Context) error {
 		event.SourceIP = nullString(sourceIP)
 		event.CorrelationID = nullString(correlationID)
 		event.PreviousHash = nullString(previous)
-		if err := json.Unmarshal(details, &event.Details); err != nil {
+		event.Details, err = decodeAuditDetails(string(details))
+		if err != nil {
 			return fmt.Errorf("decode audit details at offset %d: %w", sequenceOffset, err)
 		}
 		if err := audit.Verify(event, previousHash); err != nil {
@@ -82,6 +93,33 @@ func (l *AuditLog) VerifyChain(ctx context.Context) error {
 	}
 	return nil
 }
+
+func canonicalizeAuditDetailsForPostgres(ctx context.Context, tx *sql.Tx, details map[string]any) (map[string]any, error) {
+	payload, err := json.Marshal(details)
+	if err != nil {
+		return nil, fmt.Errorf("encode audit details for PostgreSQL canonicalization: %w", err)
+	}
+	var canonical string
+	if err := tx.QueryRowContext(ctx, `SELECT ($1::jsonb)::text`, string(payload)).Scan(&canonical); err != nil {
+		return nil, fmt.Errorf("canonicalize audit details as PostgreSQL jsonb: %w", err)
+	}
+	decoded, err := decodeAuditDetails(canonical)
+	if err != nil {
+		return nil, fmt.Errorf("decode PostgreSQL-canonical audit details: %w", err)
+	}
+	return decoded, nil
+}
+
+func decodeAuditDetails(payload string) (map[string]any, error) {
+	decoder := json.NewDecoder(strings.NewReader(payload))
+	decoder.UseNumber()
+	var details map[string]any
+	if err := decoder.Decode(&details); err != nil {
+		return nil, err
+	}
+	return details, nil
+}
+
 func nullString(value sql.NullString) string {
 	if !value.Valid {
 		return ""
