@@ -1,6 +1,6 @@
 # Control Center 0.22.0
 
-Статус: кандидат на qualification, не официальный релиз.
+Статус: официальный релиз; qualification и release gates пройдены.
 
 Версия 0.22.0 добавляет завершённый контур безопасности локальных пользовательских сессий Control Center: ограниченный абсолютный срок жизни, idle timeout, просмотр эффективной политики, инвентаризацию и отзыв собственных сессий с durable persistence и обязательным Audit.
 
@@ -24,4 +24,4 @@ First-login ограничение сохраняется: до обязател
 
 Добавлены unit, HTTP API, persistence и migration tests для TTL/idle policy, session inventory, activity persistence, revocation и fail-closed audit semantics.
 
-Официальный выпуск 0.22.0 допускается только после отдельной qualification и release gates.
+Qualification и release gates для официального выпуска 0.22.0 пройдены.
