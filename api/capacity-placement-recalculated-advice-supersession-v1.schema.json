@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.local/api/capacity-placement-recalculated-advice-supersession-v1.schema.json",
+  "title": "Capacity Placement Recalculated Advice Supersession v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "supersession_id",
+    "source_receipt_id",
+    "satisfaction_gate_id",
+    "source_derived_snapshot_id",
+    "source_placement_snapshot_id",
+    "source_advice_id",
+    "new_derived_snapshot_id",
+    "new_placement_snapshot_id",
+    "new_advice_id",
+    "new_headroom_envelope_id",
+    "scope_id",
+    "recalculated_at",
+    "action",
+    "advice_changed",
+    "placement_snapshot_changed",
+    "supersedes_source",
+    "fresh_evidence_recalculated",
+    "source_reuse_authorized",
+    "reuse_authorized",
+    "placement_authorized",
+    "advisory_only",
+    "production_mutation",
+    "reason",
+    "recommended_action"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "capacity.placement-recalculated-advice-supersession/v1"
+    },
+    "supersession_id": {
+      "type": "string",
+      "pattern": "^pras-[a-f0-9]{24}$"
+    },
+    "source_receipt_id": {
+      "type": "string",
+      "pattern": "^prer-[a-f0-9]{24}$"
+    },
+    "satisfaction_gate_id": {
+      "type": "string",
+      "pattern": "^prsg-[a-f0-9]{24}$"
+    },
+    "source_derived_snapshot_id": {
+      "type": "string",
+      "pattern": "^pade-[a-f0-9]{24}$"
+    },
+    "source_placement_snapshot_id": {
+      "type": "string",
+      "pattern": "^pas-[a-f0-9]{24}$"
+    },
+    "source_advice_id": {
+      "type": "string",
+      "pattern": "^pa-[a-f0-9]{24}$"
+    },
+    "new_derived_snapshot_id": {
+      "type": "string",
+      "pattern": "^pade-[a-f0-9]{24}$"
+    },
+    "new_placement_snapshot_id": {
+      "type": "string",
+      "pattern": "^pas-[a-f0-9]{24}$"
+    },
+    "new_advice_id": {
+      "type": "string",
+      "pattern": "^pa-[a-f0-9]{24}$"
+    },
+    "new_headroom_envelope_id": {
+      "type": "string",
+      "pattern": "^prh-[a-f0-9]{24}$"
+    },
+    "scope_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "recalculated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recommended_node_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "action": {
+      "enum": [
+        "none",
+        "add-role-capacity",
+        "move-role",
+        "increase-storage",
+        "increase-network",
+        "adjust-workload-policy",
+        "reduce-load",
+        "collect-evidence"
+      ]
+    },
+    "advice_changed": {
+      "type": "boolean"
+    },
+    "placement_snapshot_changed": {
+      "type": "boolean"
+    },
+    "supersedes_source": {
+      "const": true
+    },
+    "fresh_evidence_recalculated": {
+      "const": true
+    },
+    "source_reuse_authorized": {
+      "const": false
+    },
+    "reuse_authorized": {
+      "const": false
+    },
+    "placement_authorized": {
+      "const": false
+    },
+    "advisory_only": {
+      "const": true
+    },
+    "production_mutation": {
+      "const": false
+    },
+    "reason": {
+      "const": "fresh-evidence-advice-recalculated"
+    },
+    "recommended_action": {
+      "const": "review-recalculated-advisory-placement"
+    }
+  }
+}
