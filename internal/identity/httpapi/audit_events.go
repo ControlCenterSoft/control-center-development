@@ -52,6 +52,7 @@ func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 		SourceIP: remoteIP(r), Details: map[string]any{
 			"limit": query.Limit, "returned": len(events), "action": query.Action,
 			"outcome": query.Outcome, "actor_id": query.ActorID, "subject_id": query.SubjectID,
+			"event_id": query.EventID, "correlation_id": query.CorrelationID,
 		},
 	}); err != nil {
 		writeError(w, r, http.StatusServiceUnavailable, "audit_evidence_unavailable", "Audit read evidence could not be recorded")
@@ -63,6 +64,7 @@ func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 func parseAuditQuery(values url.Values) (audit.Query, error) {
 	allowed := map[string]struct{}{
 		"limit": {}, "cursor": {}, "action": {}, "outcome": {}, "actor_id": {}, "subject_id": {},
+		"event_id": {}, "correlation_id": {},
 	}
 	for key, entries := range values {
 		if _, ok := allowed[key]; !ok || len(entries) != 1 {
@@ -71,10 +73,12 @@ func parseAuditQuery(values url.Values) (audit.Query, error) {
 	}
 
 	query := audit.Query{
-		Action:    values.Get("action"),
-		Outcome:   values.Get("outcome"),
-		ActorID:   values.Get("actor_id"),
-		SubjectID: values.Get("subject_id"),
+		Action:        values.Get("action"),
+		Outcome:       values.Get("outcome"),
+		ActorID:       values.Get("actor_id"),
+		SubjectID:     values.Get("subject_id"),
+		EventID:       values.Get("event_id"),
+		CorrelationID: values.Get("correlation_id"),
 	}
 	if rawLimit := strings.TrimSpace(values.Get("limit")); rawLimit != "" {
 		limit, err := strconv.Atoi(rawLimit)
