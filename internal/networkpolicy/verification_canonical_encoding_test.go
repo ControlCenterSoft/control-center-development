@@ -10,7 +10,7 @@ func TestEvaluateVerificationFreshnessRejectsNonCanonicalEvidenceEncoding(t *tes
 	now := time.Date(2026, 9, 11, 17, 35, 0, 0, time.UTC)
 	policy := VerificationFreshnessPolicy{
 		MaxAge:         10 * time.Minute,
-		MaxFutureSkew: 30 * time.Second,
+		MaxFutureSkew:  30 * time.Second,
 		RequiredChecks: []string{"control_plane", "link_state"},
 	}
 
