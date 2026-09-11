@@ -54,6 +54,7 @@
         "state",
         "approvals_recorded",
         "approvals_required",
+        "approvals_satisfied",
         "version",
         "updated_at"
       ],
@@ -87,6 +88,9 @@
         "approvals_required": {
           "type": "integer",
           "minimum": 0
+        },
+        "approvals_satisfied": {
+          "type": "boolean"
         },
         "version": {
           "type": "integer",
