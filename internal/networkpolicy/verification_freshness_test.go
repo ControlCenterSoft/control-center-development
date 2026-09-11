@@ -51,7 +51,7 @@ func TestEvaluateChangePlanVerificationFreshnessRequiresEveryPlanProbe(t *testin
 		})
 	}
 	policy := ChangePlanVerificationFreshnessPolicy{
-		MaxAge:         10 * time.Minute,
+		MaxAge:        10 * time.Minute,
 		MaxFutureSkew: 30 * time.Second,
 	}
 
