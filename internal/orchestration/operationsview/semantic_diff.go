@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -88,11 +89,7 @@ func decodeJSONObject(content []byte) (map[string]any, error) {
 	if value == nil {
 		return nil, errors.New("configuration must be a JSON object")
 	}
-	if decoder.More() {
-		return nil, errors.New("configuration contains trailing JSON values")
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err == nil {
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return nil, errors.New("configuration contains trailing JSON values")
 	}
 	return value, nil
