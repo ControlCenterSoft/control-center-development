@@ -79,11 +79,32 @@ func ValidateRestoreDrillFreshnessSnapshot(snapshot RestoreDrillFreshnessSnapsho
 			return fmt.Errorf("restore drill freshness snapshot: valid_until does not match verified_at plus max_age_seconds")
 		}
 		expectedState := RestoreDrillSnapshotFresh
+		assessmentState := RestoreDrillFresh
 		if !snapshot.CheckedAt.Before(validUntil) {
 			expectedState = RestoreDrillSnapshotStale
+			assessmentState = RestoreDrillStale
 		}
 		if snapshot.State != expectedState {
 			return fmt.Errorf("restore drill freshness snapshot: state does not match checked_at freshness boundary")
+		}
+
+		expectedAssessmentID, err := restoreDrillFreshnessAssessmentIdentity(RestoreDrillFreshnessAssessment{
+			SchemaVersion:      RestoreDrillFreshnessSchemaVersion,
+			RestoreID:          snapshot.RestoreID,
+			Target:             snapshot.Target,
+			VerifiedAt:         verifiedAt,
+			CheckedAt:          snapshot.CheckedAt.UTC(),
+			ValidUntil:         validUntil,
+			MaxAgeSeconds:      snapshot.MaxAgeSeconds,
+			State:              assessmentState,
+			AdvisoryOnly:       snapshot.AdvisoryOnly,
+			ProductionMutation: snapshot.ProductionMutation,
+		})
+		if err != nil {
+			return fmt.Errorf("restore drill freshness snapshot: calculate assessment identity: %w", err)
+		}
+		if snapshot.AssessmentID != expectedAssessmentID {
+			return fmt.Errorf("restore drill freshness snapshot: assessment_id does not match freshness claim")
 		}
 		return nil
 
