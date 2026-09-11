@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.pro/schemas/operations-change-job-v1.schema.json",
+  "title": "Control Center Operations Change Job View v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "generated_at",
+    "change",
+    "result_evidence",
+    "timeline",
+    "attention_required"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "ui.operations-change-job/v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "change": {
+      "$ref": "#/$defs/change"
+    },
+    "job": {
+      "$ref": "#/$defs/job"
+    },
+    "result_evidence": {
+      "$ref": "#/$defs/resultEvidence"
+    },
+    "timeline": {
+      "$ref": "#/$defs/timeline"
+    },
+    "attention_required": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "action",
+        "requester",
+        "revision_id",
+        "risk",
+        "state",
+        "approvals_recorded",
+        "approvals_required",
+        "version",
+        "updated_at"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "action": { "$ref": "#/$defs/identifier" },
+        "requester": { "$ref": "#/$defs/identifier" },
+        "revision_id": { "$ref": "#/$defs/identifier" },
+        "risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending_approval",
+            "approved",
+            "queued",
+            "executing",
+            "verifying",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "rejected"
+          ]
+        },
+        "approvals_recorded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approvals_required": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "attempt",
+        "max_attempts",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "retry_wait",
+            "cancel_requested",
+            "cancelled",
+            "succeeded",
+            "failed"
+          ]
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "last_error": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "resultEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "actual_state_count",
+        "health_count",
+        "audit_event_count"
+      ],
+      "properties": {
+        "availability": {
+          "type": "string",
+          "enum": ["unavailable", "available"]
+        },
+        "actual_state_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "health_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "audit_event_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "timeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completeness", "items"],
+      "properties": {
+        "completeness": {
+          "const": "snapshot_only"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/timelineItem"
+          }
+        }
+      }
+    },
+    "timelineItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "state", "at", "version"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["change_snapshot", "job_snapshot"]
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}
