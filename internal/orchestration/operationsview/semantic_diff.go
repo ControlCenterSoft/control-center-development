@@ -15,6 +15,8 @@ import (
 const (
 	SemanticDiffContractVersion = "ui.operations-semantic-diff/v1"
 	MaxSemanticDiffEntries      = 256
+	MaxSemanticDiffPathLength   = 2048
+	MaxSemanticDiffIdentifierLength = 255
 )
 
 var ErrInvalidSemanticDiff = errors.New("invalid operations semantic diff")
@@ -47,8 +49,11 @@ type SemanticDiffEntry struct {
 // 0.31 operator UI only needs authoritative change shape for review. Large
 // diffs fail closed instead of silently truncating approval evidence.
 func BuildSemanticDiff(base, target orchestrationconfig.Revision) (SemanticDiff, error) {
-	if strings.TrimSpace(base.ID()) == "" || strings.TrimSpace(target.ID()) == "" || strings.TrimSpace(base.Digest()) == "" || strings.TrimSpace(target.Digest()) == "" {
-		return SemanticDiff{}, fmt.Errorf("%w: revision identity and digest are required", ErrInvalidSemanticDiff)
+	if err := validateSemanticDiffRevisionIdentity(base.ID(), base.Digest()); err != nil {
+		return SemanticDiff{}, fmt.Errorf("%w: base revision: %v", ErrInvalidSemanticDiff, err)
+	}
+	if err := validateSemanticDiffRevisionIdentity(target.ID(), target.Digest()); err != nil {
+		return SemanticDiff{}, fmt.Errorf("%w: target revision: %v", ErrInvalidSemanticDiff, err)
 	}
 	baseValue, err := decodeJSONObject(base.Content())
 	if err != nil {
@@ -77,6 +82,17 @@ func BuildSemanticDiff(base, target orchestrationconfig.Revision) (SemanticDiff,
 		return view.Changes[i].Kind < view.Changes[j].Kind
 	})
 	return view, nil
+}
+
+func validateSemanticDiffRevisionIdentity(id, digest string) error {
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" || id != trimmedID || len(id) > MaxSemanticDiffIdentifierLength {
+		return errors.New("canonical revision id is required")
+	}
+	if strings.TrimSpace(digest) == "" {
+		return errors.New("revision digest is required")
+	}
+	return nil
 }
 
 func decodeJSONObject(content []byte) (map[string]any, error) {
@@ -151,6 +167,9 @@ func collectSemanticDiff(path string, before, after any, changes *[]SemanticDiff
 }
 
 func appendSemanticDiff(changes *[]SemanticDiffEntry, entry SemanticDiffEntry) error {
+	if entry.Path == "" || !strings.HasPrefix(entry.Path, "/") || len(entry.Path) > MaxSemanticDiffPathLength {
+		return fmt.Errorf("%w: invalid or overlong diff path", ErrInvalidSemanticDiff)
+	}
 	if len(*changes) >= MaxSemanticDiffEntries {
 		return fmt.Errorf("%w: diff exceeds %d entries", ErrInvalidSemanticDiff, MaxSemanticDiffEntries)
 	}
