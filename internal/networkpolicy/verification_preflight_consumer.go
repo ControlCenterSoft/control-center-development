@@ -65,5 +65,8 @@ func validateVerificationPreflightAdmissionConsumerShape(admission VerificationP
 			seen[name] = struct{}{}
 		}
 	}
+	if !admission.Ready && len(admission.MissingChecks)+len(admission.StaleChecks)+len(admission.FailedChecks) == 0 {
+		return fmt.Errorf("%w: rejected admission requires at least one rejection reason", ErrInvalidVerificationPreflightAdmission)
+	}
 	return nil
 }
