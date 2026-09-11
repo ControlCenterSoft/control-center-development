@@ -112,6 +112,13 @@
             "maxItems": 0
           }
         }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "expires_at"
+          ]
+        }
       }
     }
   ],
