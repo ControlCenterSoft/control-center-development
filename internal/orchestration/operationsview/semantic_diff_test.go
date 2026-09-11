@@ -105,16 +105,25 @@ func TestBuildSemanticDiffFailsClosedOnOverlongReviewPath(t *testing.T) {
 }
 
 func TestBuildSemanticDiffFailsClosedOnExcessiveNesting(t *testing.T) {
-	base := mustSemanticRevision(t, "rev-a", 1, `{}`)
-	value := any(true)
+	baseValue := any(false)
+	targetValue := any(true)
 	for depth := 0; depth <= MaxSemanticDiffDepth+1; depth++ {
-		value = map[string]any{"nested": value}
+		baseValue = map[string]any{"nested": baseValue}
+		targetValue = map[string]any{"nested": targetValue}
 	}
-	content, err := json.Marshal(map[string]any{"root": value})
+	baseContent, err := json.Marshal(map[string]any{"root": baseValue})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := orchestrationconfig.NewRevision("rev-b", 2, time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC), content)
+	targetContent, err := json.Marshal(map[string]any{"root": targetValue})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := orchestrationconfig.NewRevision("rev-a", 1, time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC), baseContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := orchestrationconfig.NewRevision("rev-b", 2, time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC), targetContent)
 	if err != nil {
 		t.Fatal(err)
 	}
