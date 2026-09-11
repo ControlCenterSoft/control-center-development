@@ -54,6 +54,12 @@ func TestValidateRestoreDrillFreshnessSnapshotRejectsTampering(t *testing.T) {
 			},
 		},
 		{
+			name: "canonical-looking assessment id substitution",
+			edit: func(snapshot *RestoreDrillFreshnessSnapshot) {
+				snapshot.AssessmentID = "rdf-aaaaaaaaaaaaaaaaaaaaaaaa"
+			},
+		},
+		{
 			name: "freshness state mismatch",
 			edit: func(snapshot *RestoreDrillFreshnessSnapshot) {
 				snapshot.State = RestoreDrillSnapshotStale
