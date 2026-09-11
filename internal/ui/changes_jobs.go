@@ -33,11 +33,11 @@ type ChangesJobsInput struct {
 }
 
 type ChangesJobsView struct {
-	ContractVersion string               `json:"contract_version"`
-	State           ChangesJobsViewState `json:"state"`
-	GeneratedAt     *time.Time            `json:"generated_at,omitempty"`
-	ChangeCount     int                   `json:"change_count"`
-	JobCount        int                   `json:"job_count"`
+	ContractVersion string                  `json:"contract_version"`
+	State           ChangesJobsViewState    `json:"state"`
+	GeneratedAt     *time.Time              `json:"generated_at,omitempty"`
+	ChangeCount     int                     `json:"change_count"`
+	JobCount        int                     `json:"job_count"`
 	Changes         []ChangeOperationalView `json:"changes"`
 }
 
