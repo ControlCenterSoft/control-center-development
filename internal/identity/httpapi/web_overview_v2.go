@@ -44,7 +44,7 @@ var productOverviewV2Template = template.Must(template.New("overview-v2").Funcs(
 <section class="context-panel" aria-labelledby="context-title">
 <h2 id="context-title" data-i18n="context.title">Контекст</h2>
 <div class="context-grid" role="group" aria-label="Выбор контекста">
-<button class="context" type="button" disabled aria-pressed="true"><strong data-i18n="context.installation">{{$shell.Contexts 0}}</strong><span data-i18n="context.installation.current">Текущий контекст</span></button>
+<button class="context" type="button" disabled aria-pressed="true"><strong data-i18n="context.installation">Установка</strong><span data-i18n="context.installation.current">Текущий контекст</span></button>
 <button class="context" type="button" disabled aria-pressed="false"><strong data-i18n="context.site">Сайт</strong><span data-i18n="context.not_selected">Не выбран</span></button>
 <button class="context" type="button" disabled aria-pressed="false"><strong data-i18n="context.node">Узел</strong><span data-i18n="context.not_selected">Не выбран</span></button>
 </div>
