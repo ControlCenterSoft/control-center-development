@@ -74,6 +74,22 @@ func TestBuildSemanticDiffFailsClosedWhenReviewSurfaceWouldTruncate(t *testing.T
 	}
 }
 
+func TestBuildSemanticDiffFailsClosedOnOverlongReviewPath(t *testing.T) {
+	base := mustRevision(t, "rev-a", 1, `{}`)
+	values := map[string]any{strings.Repeat("x", MaxSemanticDiffPathLength): true}
+	content, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := orchestrationconfig.NewRevision("rev-b", 2, time.Date(2026, 9, 12, 1, 56, 0, 0, time.UTC), content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildSemanticDiff(base, target); err == nil {
+		t.Fatal("BuildSemanticDiff() accepted a path longer than the API contract")
+	}
+}
+
 func mustRevision(t *testing.T, id string, sequence uint64, content string) orchestrationconfig.Revision {
 	t.Helper()
 	revision, err := orchestrationconfig.NewRevision(id, sequence, time.Date(2026, 9, 12, 1, 54, 0, 0, time.UTC), []byte(content))
