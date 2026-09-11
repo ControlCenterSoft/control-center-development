@@ -114,11 +114,49 @@
         }
       },
       "else": {
-        "not": {
-          "required": [
-            "expires_at"
-          ]
-        }
+        "allOf": [
+          {
+            "not": {
+              "required": [
+                "expires_at"
+              ]
+            }
+          },
+          {
+            "anyOf": [
+              {
+                "required": [
+                  "missing_checks"
+                ],
+                "properties": {
+                  "missing_checks": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "stale_checks"
+                ],
+                "properties": {
+                  "stale_checks": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "failed_checks"
+                ],
+                "properties": {
+                  "failed_checks": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          }
+        ]
       }
     }
   ],
