@@ -92,8 +92,42 @@ func TestBuildMarksSucceededJobWithoutEvidenceForAttention(t *testing.T) {
 	}
 }
 
-func TestBuildDoesNotInventHistoryBeforeJobExists(t *testing.T) {
+func TestBuildSurfacesTerminalJobReconciliationLag(t *testing.T) {
 	now := time.Date(2026, 9, 12, 1, 49, 0, 0, time.UTC)
+	snapshot := testSnapshot(change.StateVerifying, now.Add(-time.Minute))
+	execution := testJob(job.StatusSucceeded, now.Add(-30*time.Second))
+	execution.Output = &events.Output{
+		Health: []events.Health{{ResourceID: "node-a", Status: events.HealthHealthy, CheckedAt: now.Add(-20 * time.Second)}},
+	}
+	view, err := Build(snapshot, &execution, now)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !view.ReconciliationPending || !view.AttentionRequired {
+		t.Fatalf("terminal job reconciliation lag was hidden: %#v", view)
+	}
+}
+
+func TestBuildRejectsImpossibleTerminalMismatch(t *testing.T) {
+	now := time.Date(2026, 9, 12, 1, 50, 0, 0, time.UTC)
+	snapshot := testSnapshot(change.StateSucceeded, now.Add(-time.Minute))
+	execution := testJob(job.StatusFailed, now.Add(-30*time.Second))
+	if _, err := Build(snapshot, &execution, now); err == nil {
+		t.Fatal("Build() accepted a succeeded change paired with a failed job")
+	}
+}
+
+func TestBuildRejectsGeneratedAtBeforeAuthoritativeEvidence(t *testing.T) {
+	now := time.Date(2026, 9, 12, 1, 51, 0, 0, time.UTC)
+	snapshot := testSnapshot(change.StateExecuting, now)
+	execution := testJob(job.StatusRunning, now.Add(time.Second))
+	if _, err := Build(snapshot, &execution, now.Add(500*time.Millisecond)); err == nil {
+		t.Fatal("Build() accepted generated_at older than job evidence")
+	}
+}
+
+func TestBuildDoesNotInventHistoryBeforeJobExists(t *testing.T) {
+	now := time.Date(2026, 9, 12, 1, 52, 0, 0, time.UTC)
 	snapshot := testSnapshot(change.StatePendingApproval, now.Add(-time.Minute))
 	view, err := Build(snapshot, nil, now)
 	if err != nil {
@@ -105,7 +139,7 @@ func TestBuildDoesNotInventHistoryBeforeJobExists(t *testing.T) {
 }
 
 func TestBuildRejectsPendingStateAfterApprovalRequirementIsSatisfied(t *testing.T) {
-	now := time.Date(2026, 9, 12, 1, 50, 0, 0, time.UTC)
+	now := time.Date(2026, 9, 12, 1, 53, 0, 0, time.UTC)
 	snapshot := testSnapshot(change.StatePendingApproval, now.Add(-time.Minute))
 	snapshot.Approvals = []policy.Approval{{
 		Actor: "approver-a", Permissions: []string{"orchestration.changes.approve"}, ApprovedAt: now.Add(-90 * time.Second),
