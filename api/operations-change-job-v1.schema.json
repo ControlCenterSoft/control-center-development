@@ -136,10 +136,6 @@
           "type": "integer",
           "minimum": 1
         },
-        "last_error": {
-          "type": "string",
-          "maxLength": 4096
-        },
         "version": {
           "type": "integer",
           "minimum": 1
