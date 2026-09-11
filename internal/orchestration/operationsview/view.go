@@ -28,13 +28,14 @@ type TimelineCompleteness string
 const TimelineSnapshotOnly TimelineCompleteness = "snapshot_only"
 
 type View struct {
-	ContractVersion   string         `json:"contract_version"`
-	GeneratedAt       time.Time      `json:"generated_at"`
-	Change            ChangeSummary  `json:"change"`
-	Job               *JobSummary    `json:"job,omitempty"`
-	ResultEvidence    ResultEvidence `json:"result_evidence"`
-	Timeline          Timeline       `json:"timeline"`
-	AttentionRequired bool           `json:"attention_required"`
+	ContractVersion      string         `json:"contract_version"`
+	GeneratedAt          time.Time      `json:"generated_at"`
+	Change               ChangeSummary  `json:"change"`
+	Job                  *JobSummary    `json:"job,omitempty"`
+	ResultEvidence       ResultEvidence `json:"result_evidence"`
+	Timeline             Timeline       `json:"timeline"`
+	ReconciliationPending bool          `json:"reconciliation_pending"`
+	AttentionRequired    bool           `json:"attention_required"`
 }
 
 type ChangeSummary struct {
@@ -89,14 +90,18 @@ func Build(snapshot change.Snapshot, execution *job.Job, generatedAt time.Time) 
 	if generatedAt.IsZero() {
 		return View{}, fmt.Errorf("%w: generated_at is required", ErrInvalidView)
 	}
+	generatedAt = generatedAt.UTC()
 	if err := validateChange(snapshot); err != nil {
 		return View{}, err
+	}
+	if generatedAt.Before(snapshot.UpdatedAt.UTC()) {
+		return View{}, fmt.Errorf("%w: generated_at predates change evidence", ErrInvalidView)
 	}
 	approvalsSatisfied := policy.CheckApprovals(snapshot.Requester, snapshot.Decision.Requirement, snapshot.Approvals) == nil
 
 	view := View{
 		ContractVersion: ContractVersion,
-		GeneratedAt:     generatedAt.UTC(),
+		GeneratedAt:     generatedAt,
 		Change: ChangeSummary{
 			ID:                 snapshot.ID,
 			Action:             snapshot.Action,
@@ -129,6 +134,12 @@ func Build(snapshot change.Snapshot, execution *job.Job, generatedAt time.Time) 
 	if err := validateJob(snapshot, *execution); err != nil {
 		return View{}, err
 	}
+	if generatedAt.Before(execution.UpdatedAt.UTC()) {
+		return View{}, fmt.Errorf("%w: generated_at predates job evidence", ErrInvalidView)
+	}
+	if err := validateTerminalConsistency(snapshot.State, execution.Status); err != nil {
+		return View{}, err
+	}
 
 	view.Job = &JobSummary{
 		ID:          execution.ID,
@@ -158,8 +169,10 @@ func Build(snapshot change.Snapshot, execution *job.Job, generatedAt time.Time) 
 		}
 	}
 
+	view.ReconciliationPending = terminalReconciliationPending(snapshot.State, execution.Status)
 	view.AttentionRequired = execution.Status == job.StatusFailed ||
 		snapshot.State == change.StateFailed ||
+		view.ReconciliationPending ||
 		(execution.Status == job.StatusSucceeded && view.ResultEvidence.Availability != EvidenceAvailable)
 	return view, nil
 }
@@ -224,6 +237,37 @@ func validateJob(snapshot change.Snapshot, execution job.Job) error {
 		return fmt.Errorf("%w: state %q cannot have an executable job", ErrInvalidView, snapshot.State)
 	}
 	return nil
+}
+
+func validateTerminalConsistency(state change.State, status job.Status) error {
+	switch state {
+	case change.StateSucceeded:
+		if status != job.StatusSucceeded {
+			return fmt.Errorf("%w: succeeded change has non-succeeded job %q", ErrInvalidView, status)
+		}
+	case change.StateFailed:
+		if status != job.StatusFailed {
+			return fmt.Errorf("%w: failed change has non-failed job %q", ErrInvalidView, status)
+		}
+	case change.StateCancelled:
+		if status != job.StatusCancelled {
+			return fmt.Errorf("%w: cancelled change has non-cancelled job %q", ErrInvalidView, status)
+		}
+	}
+	return nil
+}
+
+func terminalReconciliationPending(state change.State, status job.Status) bool {
+	switch status {
+	case job.StatusSucceeded:
+		return state != change.StateSucceeded
+	case job.StatusFailed:
+		return state != change.StateFailed
+	case job.StatusCancelled:
+		return state != change.StateCancelled
+	default:
+		return false
+	}
 }
 
 func changeRequiresJob(state change.State) bool {
