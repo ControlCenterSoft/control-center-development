@@ -120,3 +120,44 @@ func TestBuildRestoreDrillEvidenceBindingIncludesResourceVersion(t *testing.T) {
 		t.Fatal("resource-version drift did not change binding identity")
 	}
 }
+
+func TestBuildRestoreDrillEvidenceBindingIsDeterministic(t *testing.T) {
+	restore := validRestoreMetadata()
+	assessment, err := EvaluateRestoreDrillFreshness(
+		restore,
+		24*time.Hour,
+		restore.Verification.VerifiedAt.Add(2*time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("EvaluateRestoreDrillFreshness() error = %v", err)
+	}
+
+	first, err := BuildRestoreDrillEvidenceBinding(restore, assessment)
+	if err != nil {
+		t.Fatalf("first binding error = %v", err)
+	}
+	second, err := BuildRestoreDrillEvidenceBinding(restore, assessment)
+	if err != nil {
+		t.Fatalf("second binding error = %v", err)
+	}
+	if first != second {
+		t.Fatalf("identical restore evidence produced non-deterministic binding: first=%#v second=%#v", first, second)
+	}
+}
+
+func TestBuildRestoreDrillEvidenceBindingRejectsInvalidFreshnessWindow(t *testing.T) {
+	restore := validRestoreMetadata()
+	assessment, err := EvaluateRestoreDrillFreshness(
+		restore,
+		24*time.Hour,
+		restore.Verification.VerifiedAt.Add(time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("EvaluateRestoreDrillFreshness() error = %v", err)
+	}
+
+	assessment.MaxAgeSeconds = 0
+	if _, err := BuildRestoreDrillEvidenceBinding(restore, assessment); err == nil {
+		t.Fatal("zero max_age_seconds accepted")
+	}
+}
