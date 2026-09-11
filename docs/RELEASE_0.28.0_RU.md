@@ -17,7 +17,8 @@ Control Center 0.28.0 усиливает безопасный контур се�
 - строгая правая граница срока действия: момент `observed_at + max_age` / `expires_at` уже считается истёкшим;
 - preflight admission, связанный с точной версией state machine;
 - строгий consumer boundary для admission: неизвестные поля, trailing JSON, дубликаты и неканонический порядок rejection reasons отклоняются;
-- защита от повторного использования admission после изменения плана, ревизии, evidence, состояния либо версии state machine.
+- защита от повторного использования admission после изменения плана, ревизии, evidence, состояния либо версии state machine;
+- повторная проверка authoritative verification evidence непосредственно на границе перехода из `preflight`: `evidence_id` обязан совпадать с фактическим evidence, freshness пересчитывается на момент перехода, а `expires_at` admission обязан точно соответствовать сроку жизни исходного evidence. Самосогласованный SHA-256 admission не считается доказательством происхождения и не может самостоятельно открыть `apply_window`.
 
 ## Инварианты безопасности
 
@@ -25,12 +26,15 @@ Control Center 0.28.0 усиливает безопасный контур се�
 - `execution_authorized=false` и `production_mutation_allowed=false` остаются обязательными;
 - сетевое изменение продолжает проходить отдельные этапы authorization, staged apply, connectivity verification и rollback;
 - старое evidence нельзя использовать для нового или изменённого сетевого плана;
+- сериализованный admission считается снимком результата, а не доверенным источником истины: перед переходом state machine он повторно связывается с authoritative evidence;
 - изменение WAN/LAN-конфигурации само по себе не включает routing, NAT или port-forwarding;
 - неизвестное, повреждённое, неоднозначное или устаревшее состояние не трактуется как успешное.
 
 ## Совместимость и обновление
 
 Изменение является аддитивным на уровне сетевых safety-контрактов и не требует изменения существующих данных либо разрушительной миграции базы данных. Обновление не должно автоматически применять сетевую конфигурацию: фактическая мутация сети остаётся отдельной явно разрешённой операцией.
+
+Внутренний вызов перехода `preflight` теперь требует передать то же authoritative verification evidence и freshness policy, на основании которых был построен admission. Это намеренное усиление fail-closed границы до публикации 0.28.0; внешний сетевой runtime/API не расширяется.
 
 ## Проверки для qualification
 
@@ -43,6 +47,8 @@ Control Center 0.28.0 усиливает безопасный контур се�
 - timestamps из будущего вне разрешённого clock skew;
 - точная граница истечения freshness/admission;
 - подмена evidence/admission identity;
+- самосогласованный admission с подменённым `evidence_id`;
+- искусственное продление `expires_at` admission после истечения authoritative evidence;
 - изменение версии либо состояния preflight state machine;
 - неизвестные поля, trailing JSON, дубли и неканонические rejection reasons.
 
