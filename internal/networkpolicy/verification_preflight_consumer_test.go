@@ -2,6 +2,7 @@ package networkpolicy
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,8 +40,7 @@ func TestParseVerificationPreflightAdmissionRejectsUnknownFieldFixture(t *testin
 func TestParseVerificationPreflightAdmissionRejectsOversizedReasonList(t *testing.T) {
 	checks := make([]string, maxVerificationChecks+1)
 	for index := range checks {
-		checks[index] = "probe-" + strings.Repeat("0", 3-len(strings.TrimLeft(strings.TrimPrefix(strings.Repeat("0", 3), ""), "0")))
-		checks[index] = "probe-" + string(rune('a'+index%26)) + "-" + strings.Repeat("x", index/26)
+		checks[index] = fmt.Sprintf("probe-%03d", index)
 	}
 	admission := VerificationPreflightAdmission{
 		SchemaVersion:             VerificationPreflightAdmissionSchemaVersion,
