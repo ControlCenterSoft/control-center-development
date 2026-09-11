@@ -56,7 +56,6 @@ type JobSummary struct {
 	Status      job.Status `json:"status"`
 	Attempt     int        `json:"attempt"`
 	MaxAttempts int        `json:"max_attempts"`
-	LastError   string     `json:"last_error,omitempty"`
 	Version     uint64     `json:"version"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -84,8 +83,8 @@ type TimelineItem struct {
 // Build creates the 0.31 read model without inventing transition history.
 // Only the latest durable Change and Job snapshots are represented in the
 // timeline until an authoritative event-history source is wired separately.
-// Sensitive Job fields such as input, lease token and idempotency key are never
-// copied into the UI contract.
+// Sensitive Job fields such as input, lease token, idempotency key and raw
+// execution errors are never copied into the UI contract.
 func Build(snapshot change.Snapshot, execution *job.Job, generatedAt time.Time) (View, error) {
 	if generatedAt.IsZero() {
 		return View{}, fmt.Errorf("%w: generated_at is required", ErrInvalidView)
@@ -136,7 +135,6 @@ func Build(snapshot change.Snapshot, execution *job.Job, generatedAt time.Time) 
 		Status:      execution.Status,
 		Attempt:     execution.Attempt,
 		MaxAttempts: execution.MaxAttempts,
-		LastError:   execution.LastError,
 		Version:     execution.Version,
 		CreatedAt:   execution.CreatedAt.UTC(),
 		UpdatedAt:   execution.UpdatedAt.UTC(),
