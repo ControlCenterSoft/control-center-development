@@ -57,13 +57,15 @@
     "missing_checks": {
       "type": "array",
       "maxItems": 128,
+      "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/check_name"
       }
     },
     "stale_checks": {
       "type": "array",
-      "maxItems": 129,
+      "maxItems": 128,
+      "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/check_name"
       }
@@ -71,6 +73,7 @@
     "failed_checks": {
       "type": "array",
       "maxItems": 128,
+      "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/check_name"
       }
