@@ -67,14 +67,19 @@ type VerificationFreshnessVerdict struct {
 
 // EvaluateChangePlanVerificationFreshness evaluates verification evidence for
 // one exact canonical network change plan. Every probe declared by that plan is
-// mandatory and is addressed by its unique probe ID. The plan is rebuilt before
-// evaluation so a mutated plan carrying an old PlanID is rejected fail-closed.
+// mandatory and is addressed by its unique probe ID. Both the supplied plan
+// identity and its canonical reconstruction are verified before evidence can be
+// considered, so mutated envelope fields cannot reuse an older PlanID.
 func EvaluateChangePlanVerificationFreshness(
 	now time.Time,
 	plan ChangePlan,
 	evidence VerificationEvidence,
 	policy ChangePlanVerificationFreshnessPolicy,
 ) (VerificationFreshnessVerdict, error) {
+	if plan.PlanID == "" || changePlanID(plan) != plan.PlanID {
+		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: change plan identity mismatch", ErrInvalidVerificationEvidence)
+	}
+
 	validated, err := BuildChangePlan(ChangePlanRequest{
 		NodeID:     plan.NodeID,
 		RevisionID: plan.RevisionID,
