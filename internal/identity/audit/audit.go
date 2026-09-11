@@ -179,10 +179,23 @@ func Verify(event Event, expectedPreviousHash string) error {
 	if event.PreviousHash != expectedPreviousHash {
 		return fmt.Errorf("audit previous hash mismatch")
 	}
-	if event.Hash == "" || hashEvent(event) != event.Hash {
+	if event.Hash == "" {
 		return fmt.Errorf("audit event hash mismatch")
 	}
-	return nil
+	if hashEvent(event) == event.Hash {
+		return nil
+	}
+	// Releases before 0.25 generated audit event IDs as 32 hex characters.
+	// PostgreSQL stores the value as uuid and returns the same UUID with hyphens,
+	// so reconstruct that historical representation only for hash verification.
+	if legacyID, ok := legacyUnhyphenatedUUID(event.ID); ok {
+		legacy := event
+		legacy.ID = legacyID
+		if hashEvent(legacy) == event.Hash {
+			return nil
+		}
+	}
+	return fmt.Errorf("audit event hash mismatch")
 }
 func (l *MemoryLog) Records() []Event {
 	l.mu.RLock()
@@ -238,4 +251,17 @@ func randomID() string {
 	}
 	encoded := hex.EncodeToString(b)
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32]
+}
+func legacyUnhyphenatedUUID(value string) (string, bool) {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return "", false
+	}
+	compact := strings.ReplaceAll(value, "-", "")
+	if len(compact) != 32 {
+		return "", false
+	}
+	if _, err := hex.DecodeString(compact); err != nil {
+		return "", false
+	}
+	return compact, true
 }
