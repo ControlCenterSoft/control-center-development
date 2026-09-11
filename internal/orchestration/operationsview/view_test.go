@@ -27,8 +27,8 @@ func TestBuildKeepsOperationalReadModelBoundedAndRedactsJobInternals(t *testing.
 	if view.ContractVersion != ContractVersion {
 		t.Fatalf("contract version = %q", view.ContractVersion)
 	}
-	if view.Change.ID != snapshot.ID || view.Job == nil || view.Job.ID != execution.ID {
-		t.Fatalf("unexpected linkage: %#v", view)
+	if view.Change.ID != snapshot.ID || view.Job == nil || view.Job.ID != execution.ID || !view.Change.ApprovalsSatisfied {
+		t.Fatalf("unexpected linkage or approval evidence: %#v", view)
 	}
 	if view.Timeline.Completeness != TimelineSnapshotOnly || len(view.Timeline.Items) != 2 {
 		t.Fatalf("timeline = %#v", view.Timeline)
@@ -98,12 +98,29 @@ func TestBuildDoesNotInventHistoryBeforeJobExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if view.Job != nil || len(view.Timeline.Items) != 1 || view.Timeline.Completeness != TimelineSnapshotOnly {
-		t.Fatalf("unexpected invented execution history: %#v", view)
+	if view.Job != nil || len(view.Timeline.Items) != 1 || view.Timeline.Completeness != TimelineSnapshotOnly || view.Change.ApprovalsSatisfied {
+		t.Fatalf("unexpected invented execution or approval evidence: %#v", view)
+	}
+}
+
+func TestBuildRejectsPendingStateAfterApprovalRequirementIsSatisfied(t *testing.T) {
+	now := time.Date(2026, 9, 12, 1, 50, 0, 0, time.UTC)
+	snapshot := testSnapshot(change.StatePendingApproval, now.Add(-time.Minute))
+	snapshot.Approvals = []policy.Approval{{
+		Actor: "approver-a", Permissions: []string{"orchestration.changes.approve"}, ApprovedAt: now.Add(-90 * time.Second),
+	}}
+	if _, err := Build(snapshot, nil, now); err == nil {
+		t.Fatal("Build() accepted pending approval state with satisfied approval evidence")
 	}
 }
 
 func testSnapshot(state change.State, updatedAt time.Time) change.Snapshot {
+	approvals := []policy.Approval(nil)
+	if state != change.StatePendingApproval && state != change.StateRejected {
+		approvals = []policy.Approval{{
+			Actor: "approver-a", Permissions: []string{"orchestration.changes.approve"}, ApprovedAt: updatedAt.Add(-time.Minute),
+		}}
+	}
 	return change.Snapshot{
 		ID:         "chg-a",
 		Action:     "node.update",
@@ -120,7 +137,7 @@ func testSnapshot(state change.State, updatedAt time.Time) change.Snapshot {
 				Minimum: 1, Permission: "orchestration.changes.approve", DistinctActors: true, ProhibitRequester: true,
 			},
 		},
-		Approvals: []policy.Approval{{Actor: "approver-a", Permissions: []string{"orchestration.changes.approve"}, ApprovedAt: updatedAt.Add(-time.Minute)}},
+		Approvals: approvals,
 		Version:   4,
 		UpdatedAt: updatedAt,
 	}
