@@ -51,7 +51,8 @@ func validateVerificationPreflightAdmissionConsumerShape(admission VerificationP
 			return fmt.Errorf("%w: %s exceeds %d entries", ErrInvalidVerificationPreflightAdmission, list.name, maxVerificationChecks)
 		}
 		seen := make(map[string]struct{}, len(list.checks))
-		for _, raw := range list.checks {
+		previous := ""
+		for index, raw := range list.checks {
 			name, err := normalizeIdentifier(list.name, raw)
 			if err != nil {
 				return fmt.Errorf("%w: %v", ErrInvalidVerificationPreflightAdmission, err)
@@ -59,10 +60,14 @@ func validateVerificationPreflightAdmissionConsumerShape(admission VerificationP
 			if name != raw {
 				return fmt.Errorf("%w: %s contains non-canonical check name %q", ErrInvalidVerificationPreflightAdmission, list.name, raw)
 			}
+			if index > 0 && name < previous {
+				return fmt.Errorf("%w: %s must be sorted", ErrInvalidVerificationPreflightAdmission, list.name)
+			}
 			if _, duplicate := seen[name]; duplicate {
 				return fmt.Errorf("%w: %s contains duplicate check %q", ErrInvalidVerificationPreflightAdmission, list.name, name)
 			}
 			seen[name] = struct{}{}
+			previous = name
 		}
 	}
 	if !admission.Ready && len(admission.MissingChecks)+len(admission.StaleChecks)+len(admission.FailedChecks) == 0 {
