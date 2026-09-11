@@ -4,13 +4,13 @@
 
 ## 1. Текущий релизный статус
 
-Последний официально опубликованный canonical/source release Control Center — **0.25.0**. Полноценный **PUBLIC STABLE RELEASE 0.25.0** опубликован в официальном stable-канале [`ControlCenterSoft/control-center-stable`](https://github.com/ControlCenterSoft/control-center-stable) с актуальными stable/default branch, tag `v0.25.0`, официальным GitHub Release и предусмотренными artifacts/checksums/manifest/provenance.
+Последний официально опубликованный canonical/source release Control Center — **0.26.0**. Полноценный **PUBLIC STABLE RELEASE 0.25.0** опубликован в официальном stable-канале [`ControlCenterSoft/control-center-stable`](https://github.com/ControlCenterSoft/control-center-stable) с актуальными stable/default branch, tag `v0.25.0`, официальным GitHub Release и предусмотренными artifacts/checksums/manifest/provenance.
 
-Версия **0.26.0** является текущим release candidate и не считается пользовательски опубликованной до завершения собственного release cycle. Наличие кода, контракта, ветки или предварительной версии не означает пользовательскую доступность.
+Версия **0.26.0** опубликована как официальный source release, но не считается Public Stable до отдельного promotion cycle. Наличие кода, контракта, ветки или предварительной следующей версии не означает пользовательскую доступность.
 
 ## 2. Уже опубликованные направления
 
-Опубликованная линия до 0.25.0 включает:
+Public Stable 0.25.0 включает:
 
 - базовые Identity/RBAC/Audit и durable state boundaries;
 - Changes/Jobs и типизированную модель операций;
@@ -24,11 +24,11 @@
 
 Capacity-возможности остаются advisory-only и сами по себе не разрешают автоматическое изменение инфраструктуры.
 
-## 3. Ближайшая кандидатная линия
+Canonical/source release 0.26.0 дополнительно публикует Audit Integrity: permission-gated read-only проверку целостности append-only Audit-цепочки, fail-closed integrity verification и compatibility migration для поддерживаемых PostgreSQL-схем без переписывания уже выпущенных migration-файлов. Эти возможности не должны описываться как Public Stable до отдельного promotion 0.26.0.
 
-Текущий candidate **0.26.0** — Audit Integrity: permission-gated read-only проверка целостности Audit с fail-closed поведением для persistence и HTTP boundary. До завершения qualification и официальной публикации этот scope остаётся кандидатным и не должен описываться как доступный в public stable.
+## 3. Ближайшая линия после опубликованного source release
 
-Следующие capability обязаны сохранять совместимость с опубликованными Identity/RBAC, Change/Job, Audit, recovery и API boundaries. Нельзя объявлять кандидатную функцию опубликованной до официального релиза.
+0.26.0 больше не является кандидатом: source release официально опубликован. Следующие capability обязаны сохранять совместимость с опубликованными Identity/RBAC, Change/Job, Audit, recovery и API boundaries. Любая следующая версия считается development/qualification scope до собственной release identity и не должна описываться как доступная пользователю заранее.
 
 ## 4. Single-node, multi-node и HA
 
