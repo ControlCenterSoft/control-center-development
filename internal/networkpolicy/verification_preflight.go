@@ -94,6 +94,8 @@ func BuildVerificationPreflightAdmission(
 // Event converts a still-valid ready admission into the existing typed
 // preflight_passed event. The derived event remains state-machine input only;
 // it carries no adapter command, endpoint, credential or execution authority.
+// expires_at is an exclusive boundary: an event at the exact expiry instant is
+// rejected fail-closed.
 func (admission VerificationPreflightAdmission) Event(at time.Time) (ChangeEvent, uint64, error) {
 	if err := validateVerificationPreflightAdmission(admission); err != nil {
 		return ChangeEvent{}, 0, err
@@ -108,7 +110,7 @@ func (admission VerificationPreflightAdmission) Event(at time.Time) (ChangeEvent
 	if at.Before(admission.EvaluatedAt) {
 		return ChangeEvent{}, 0, fmt.Errorf("%w: event time precedes admission", ErrInvalidVerificationPreflightAdmission)
 	}
-	if at.After(admission.ExpiresAt) {
+	if !at.Before(admission.ExpiresAt) {
 		return ChangeEvent{}, 0, fmt.Errorf("%w: admission expired", ErrInvalidVerificationPreflightAdmission)
 	}
 	return ChangeEvent{
