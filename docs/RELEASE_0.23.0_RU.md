@@ -1,5 +1,7 @@
 # Control Center 0.23.0 — RBAC self-introspection
 
+Статус: официальный source release.
+
 ## Что нового
 
 Control Center 0.23.0 добавляет безопасный read-only API для просмотра текущим аутентифицированным пользователем собственных назначений RBAC.
@@ -12,8 +14,6 @@ Control Center 0.23.0 добавляет безопасный read-only API дл
 - Ответ помечается `Cache-Control: no-store` и не содержит пароли, session tokens, cookie или token digests.
 - Реализация поддерживает одинаковую модель introspection для in-memory authorizer и PostgreSQL-backed RBAC.
 
-## Qualification
+## Проверка релиза
 
-Кандидат должен пройти полный существующий deterministic CI/qualification-контур, включая unit/integration, format/vet, build, public-safety и PostgreSQL clean-install/supported-upgrade/adapter matrix. Gemini используется только как дополнительный exact-SHA reviewer при доступности провайдера.
-
-Публикация в `main`, создание tag и GitHub Release выполняются отдельным Release Engine после успешного qualification.
+Опубликованная release identity должна соответствовать точному квалифицированному исходному дереву. Обязательные release gates проверяют unit/integration behavior, format/vet/build, public-safety, PostgreSQL clean-install/supported-upgrade и adapter compatibility. Публикация версии допускается только после успешного прохождения обязательных проверок и не предоставляет дополнительных runtime-полномочий сама по себе.
