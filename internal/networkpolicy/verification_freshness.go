@@ -111,6 +111,8 @@ func EvaluateChangePlanVerificationFreshness(
 
 // EvaluateVerificationFreshness verifies that safety evidence belongs to the
 // exact plan/revision and that every required check is present, PASS and fresh.
+// Freshness windows use an exclusive expiry boundary: evidence is stale when
+// observed_at + max_age is equal to or earlier than the evaluation time.
 func EvaluateVerificationFreshness(
 	now time.Time,
 	expectedPlanID string,
@@ -167,7 +169,7 @@ func EvaluateVerificationFreshness(
 	}
 
 	verdict := VerificationFreshnessVerdict{}
-	if now.Sub(evidence.VerifiedAt) > policy.MaxAge {
+	if !evidence.VerifiedAt.Add(policy.MaxAge).After(now) {
 		verdict.StaleChecks = append(verdict.StaleChecks, "verification")
 	}
 	for _, name := range required {
@@ -179,7 +181,7 @@ func EvaluateVerificationFreshness(
 		if check.Status != VerificationCheckPass {
 			verdict.FailedChecks = append(verdict.FailedChecks, name)
 		}
-		if now.Sub(check.ObservedAt) > policy.MaxAge {
+		if !check.ObservedAt.Add(policy.MaxAge).After(now) {
 			verdict.StaleChecks = append(verdict.StaleChecks, name)
 		}
 	}
