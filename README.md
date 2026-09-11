@@ -5,8 +5,8 @@ Control Center — самостоятельная платформа центр�
 ## Текущий релизный статус
 
 - Последний официально опубликованный canonical/source release: **0.26.0**.
-- Полноценный **PUBLIC STABLE RELEASE 0.25.0** опубликован в [`ControlCenterSoft/control-center-stable`](https://github.com/ControlCenterSoft/control-center-stable): актуальны stable/default branch, tag `v0.25.0`, официальный GitHub Release и предусмотренные artifacts/checksums/manifest/provenance.
-- **0.26.0** опубликован как официальный source release, но не считается Public Stable до отдельного promotion cycle.
+- Полноценный **PUBLIC STABLE RELEASE 0.26.0** опубликован в [`ControlCenterSoft/control-center-stable`](https://github.com/ControlCenterSoft/control-center-stable): актуальны default branch, tag `v0.26.0`, официальный GitHub Release и предусмотренные artifacts/checksums/qualification/release manifests/provenance.
+- **0.25.0** сохраняется как предыдущая стабильная версия.
 - Более новые development-возможности не должны описываться как доступные пользователю до официальной публикации соответствующей release identity.
 
 ## Архитектурные принципы
@@ -19,11 +19,11 @@ Market содержит устанавливаемые инфраструкту�
 
 ## Текущая опубликованная линия
 
-Public Stable 0.25.0 включает безопасную локальную аутентификацию и сессии, RBAC self-introspection, Audit, lifecycle/recovery contracts, advisory Capacity Intelligence, bounded-защиту локального входа от brute force/credential spraying и permission-gated bounded read-only доступ к Audit events. Capacity-рекомендации не предоставляют автоматическое право на изменение инфраструктуры.
+Public Stable 0.26.0 включает безопасную локальную аутентификацию и сессии, RBAC self-introspection, Audit, lifecycle/recovery contracts, advisory Capacity Intelligence, bounded-защиту локального входа от brute force/credential spraying, permission-gated bounded read-only доступ к Audit events и permission-gated read-only проверку целостности append-only Audit-цепочки. Audit Integrity работает fail-closed; для поддерживаемых legacy PostgreSQL-схем используется новая compatibility migration без изменения уже опубликованных migration-файлов.
 
-Canonical/source release 0.26.0 добавляет permission-gated read-only проверку целостности append-only Audit-цепочки, fail-closed integrity verification и совместимость обновления поддерживаемых PostgreSQL-схем через новую migration без изменения уже опубликованных migration-файлов. Пользовательским Public Stable до отдельного promotion остаётся 0.25.0.
+Capacity-рекомендации не предоставляют автоматическое право на изменение инфраструктуры.
 
-Для чистой установки публичного stable 0.25.0 действует локальная учётная запись `admin` с первоначальным паролем `admin`. При первом входе пароль необходимо сменить; до смены обычная работа запрещена. При обновлении установленный пользователем пароль сохраняется и не сбрасывается к первоначальному значению. Новый per-install bootstrap secret является требованием будущей линии и не должен приписываться 0.25.0.
+Для чистой установки Public Stable 0.26.0 создаётся локальная учётная запись `admin` с первоначальным паролем `admin`. При первом входе пароль необходимо сменить; до смены обычная работа запрещена. При обновлении установленный пользователем пароль сохраняется и не сбрасывается к первоначальному значению.
 
 ## Целевая эксплуатационная модель
 
@@ -41,4 +41,4 @@ Canonical/source release 0.26.0 добавляет permission-gated read-only п
 
 Архитектурные требования, продуктовая дорожная карта и каталог требований находятся в `ARCHITECTURE.md`, `ROADMAP.md` и `docs/REQUIREMENTS_RU.md`. Пользовательская документация должна описывать только фактически опубликованные возможности и отдельно обозначать целевые/кандидатные функции.
 
-Продуктовая документация не должна содержать внутреннюю инфраструктуру разработки, служебные адреса, секреты, ключи, персональные данные или сведения, не требующиеся пользователю и администратору продукта.
+Продуктовая документация не должна содержать внутреннюю инфраструктуру разработки, runner-инфраструктуру, служебные адреса, секреты, ключи, персональные данные, названия внутренних AI/reviewer-процессов или сведения, не требующиеся пользователю и администратору продукта.
