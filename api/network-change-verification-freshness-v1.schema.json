@@ -4,7 +4,13 @@
   "title": "Control Center Network Change Verification Freshness v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "plan_id", "revision_id", "verified_at", "checks"],
+  "required": [
+    "schema_version",
+    "plan_id",
+    "revision_id",
+    "verified_at",
+    "checks"
+  ],
   "properties": {
     "schema_version": {
       "const": "network.change.verification-freshness/v1"
@@ -26,7 +32,7 @@
     "checks": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 64,
+      "maxItems": 128,
       "items": {
         "$ref": "#/$defs/check"
       }
@@ -36,7 +42,12 @@
     "check": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "status", "evidence_digest", "observed_at"],
+      "required": [
+        "name",
+        "status",
+        "evidence_digest",
+        "observed_at"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -46,7 +57,10 @@
         },
         "status": {
           "type": "string",
-          "enum": ["PASS", "FAIL"]
+          "enum": [
+            "PASS",
+            "FAIL"
+          ]
         },
         "evidence_digest": {
           "type": "string",
