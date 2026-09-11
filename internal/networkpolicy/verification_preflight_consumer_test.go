@@ -87,6 +87,28 @@ func TestParseVerificationPreflightAdmissionRejectsDuplicateReason(t *testing.T)
 	}
 }
 
+func TestParseVerificationPreflightAdmissionRejectsReasonlessRejectedAdmission(t *testing.T) {
+	admission := VerificationPreflightAdmission{
+		SchemaVersion:             VerificationPreflightAdmissionSchemaVersion,
+		AdmissionID:               "sha256:" + strings.Repeat("c", 64),
+		PlanID:                    "sha256:" + strings.Repeat("a", 64),
+		RevisionID:                "network-revision-028",
+		EvidenceID:                "sha256:" + strings.Repeat("b", 64),
+		MachineVersion:            2,
+		EvaluatedAt:               time.Date(2026, 9, 11, 10, 0, 5, 0, time.UTC),
+		Ready:                     false,
+		ExecutionAuthorized:       false,
+		ProductionMutationAllowed: false,
+	}
+	document, err := json.Marshal(admission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseVerificationPreflightAdmission(document); err == nil {
+		t.Fatal("rejected admission without a rejection reason was accepted")
+	}
+}
+
 func TestParseVerificationPreflightAdmissionRejectsExpiryOnRejectedAdmission(t *testing.T) {
 	admission := VerificationPreflightAdmission{
 		SchemaVersion:             VerificationPreflightAdmissionSchemaVersion,
