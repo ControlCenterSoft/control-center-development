@@ -34,6 +34,7 @@ func TestInfrastructureInventoryEndpointRequiresResourcesRead(t *testing.T) {
 	}{
 		{name: "anonymous", wantStatus: http.StatusUnauthorized},
 		{name: "unbound", username: "unbound", wantStatus: http.StatusForbidden},
+		{name: "site-scoped-viewer-cannot-read-global-aggregate", username: "siteviewer", wantStatus: http.StatusForbidden},
 		{name: "viewer", username: "viewer", wantStatus: http.StatusOK},
 		{name: "auditor", username: "auditor", wantStatus: http.StatusOK},
 		{name: "operator", username: "operator", wantStatus: http.StatusOK},
@@ -61,6 +62,14 @@ func TestInfrastructureInventoryPageUsesSameReadPermissionAndSecurityHeaders(t *
 	fixture.handler.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/infrastructure", nil))
 	if anonymous.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous status=%d body=%s", anonymous.Code, anonymous.Body.String())
+	}
+
+	siteScoped := httptest.NewRecorder()
+	siteScopedRequest := httptest.NewRequest(http.MethodGet, "/infrastructure", nil)
+	siteScopedRequest.AddCookie(fixture.login(t, "siteviewer"))
+	fixture.handler.ServeHTTP(siteScoped, siteScopedRequest)
+	if siteScoped.Code != http.StatusForbidden {
+		t.Fatalf("site-scoped viewer status=%d want=%d body=%s", siteScoped.Code, http.StatusForbidden, siteScoped.Body.String())
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "/infrastructure", nil)
