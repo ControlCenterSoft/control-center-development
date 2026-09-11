@@ -69,7 +69,9 @@ type VerificationFreshnessVerdict struct {
 // one exact canonical network change plan. Every probe declared by that plan is
 // mandatory and is addressed by its unique probe ID. Both the supplied plan
 // identity and its canonical reconstruction are verified before evidence can be
-// considered, so mutated envelope fields cannot reuse an older PlanID.
+// considered, so mutated envelope fields cannot reuse an older PlanID. Plan-
+// bound evidence is exact: checks not declared by the plan are rejected rather
+// than silently ignored.
 func EvaluateChangePlanVerificationFreshness(
 	now time.Time,
 	plan ChangePlan,
@@ -93,9 +95,24 @@ func EvaluateChangePlanVerificationFreshness(
 	}
 
 	requiredChecks := make([]string, 0, len(validated.Probes))
+	requiredSet := make(map[string]struct{}, len(validated.Probes))
 	for _, probe := range validated.Probes {
 		requiredChecks = append(requiredChecks, probe.ID)
+		requiredSet[probe.ID] = struct{}{}
 	}
+	for _, check := range evidence.Checks {
+		name, err := normalizeIdentifier("check name", check.Name)
+		if err != nil {
+			return VerificationFreshnessVerdict{}, fmt.Errorf("%w: %v", ErrInvalidVerificationEvidence, err)
+		}
+		if check.Name != name {
+			return VerificationFreshnessVerdict{}, fmt.Errorf("%w: check name %q must be canonical", ErrInvalidVerificationEvidence, check.Name)
+		}
+		if _, declared := requiredSet[name]; !declared {
+			return VerificationFreshnessVerdict{}, fmt.Errorf("%w: unexpected check %q for change plan", ErrInvalidVerificationEvidence, name)
+		}
+	}
+
 	return EvaluateVerificationFreshness(
 		now,
 		validated.PlanID,
