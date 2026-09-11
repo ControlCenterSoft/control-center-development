@@ -51,7 +51,7 @@ func TestValidateRestoreDrillFreshnessSnapshotCurrentRejectsGenerationDrift(t *t
 
 func TestValidateRestoreDrillFreshnessSnapshotCurrentRejectsVerificationEvidenceDrift(t *testing.T) {
 	restore, snapshot := currentRestoreDrillFreshnessSnapshotFixture(t)
-	restore.Verification.Evidence[0].Digest = "sha256:" + strings.Repeat("a", 64)
+	restore.Verification.Evidence[0].Digest = "sha256:" + strings.Repeat("b", 64)
 
 	if err := ValidateRestoreMetadata(restore); err != nil {
 		t.Fatalf("drifted restore fixture is not valid metadata: %v", err)
