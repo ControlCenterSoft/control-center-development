@@ -130,6 +130,9 @@ func EvaluateVerificationFreshness(
 	if err != nil {
 		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: %v", ErrInvalidVerificationEvidence, err)
 	}
+	if revisionID != expectedRevisionID {
+		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: expected revision_id must be canonical", ErrInvalidVerificationEvidence)
+	}
 	if evidence.SchemaVersion != VerificationFreshnessSchemaVersion {
 		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: unsupported schema_version %q", ErrInvalidVerificationEvidence, evidence.SchemaVersion)
 	}
@@ -142,6 +145,9 @@ func EvaluateVerificationFreshness(
 	evidenceRevisionID, err := normalizeIdentifier("evidence revision_id", evidence.RevisionID)
 	if err != nil {
 		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: %v", ErrInvalidVerificationEvidence, err)
+	}
+	if evidenceRevisionID != evidence.RevisionID {
+		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: evidence revision_id must be canonical", ErrInvalidVerificationEvidence)
 	}
 	if evidenceRevisionID != revisionID {
 		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: revision_id mismatch", ErrInvalidVerificationEvidence)
@@ -228,6 +234,9 @@ func canonicalVerificationChecks(
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidVerificationEvidence, err)
 		}
+		if check.Name != name {
+			return nil, fmt.Errorf("%w: check name %q must be canonical", ErrInvalidVerificationEvidence, check.Name)
+		}
 		check.Name = name
 		if _, duplicate := result[name]; duplicate {
 			return nil, fmt.Errorf("%w: duplicate check %q", ErrInvalidVerificationEvidence, name)
@@ -253,7 +262,10 @@ func canonicalVerificationChecks(
 }
 
 func validateDigestID(name, value string) error {
-	value = strings.TrimSpace(value)
+	trimmed := strings.TrimSpace(value)
+	if trimmed != value {
+		return fmt.Errorf("%w: %s must be canonical without surrounding whitespace", ErrInvalidVerificationEvidence, name)
+	}
 	const prefix = "sha256:"
 	if !strings.HasPrefix(value, prefix) {
 		return fmt.Errorf("%w: %s must use sha256:<hex>", ErrInvalidVerificationEvidence, name)
