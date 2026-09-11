@@ -10,6 +10,7 @@
     "change",
     "result_evidence",
     "timeline",
+    "reconciliation_pending",
     "attention_required"
   ],
   "properties": {
@@ -31,6 +32,9 @@
     },
     "timeline": {
       "$ref": "#/$defs/timeline"
+    },
+    "reconciliation_pending": {
+      "type": "boolean"
     },
     "attention_required": {
       "type": "boolean"
