@@ -16,7 +16,7 @@ func TestEvaluateVerificationFreshnessReady(t *testing.T) {
 		evidence,
 		VerificationFreshnessPolicy{
 			MaxAge:         10 * time.Minute,
-			MaxFutureSkew: 30 * time.Second,
+			MaxFutureSkew:  30 * time.Second,
 			RequiredChecks: []string{"control_plane", "link_state"},
 		},
 	)
@@ -189,7 +189,7 @@ func TestEvaluateVerificationFreshnessFailsClosed(t *testing.T) {
 			evidence := validVerificationEvidence(now)
 			policy := VerificationFreshnessPolicy{
 				MaxAge:         10 * time.Minute,
-				MaxFutureSkew: 30 * time.Second,
+				MaxFutureSkew:  30 * time.Second,
 				RequiredChecks: []string{"control_plane", "link_state"},
 			}
 			expectedPlanID := evidence.PlanID
