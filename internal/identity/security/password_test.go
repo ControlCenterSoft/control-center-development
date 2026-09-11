@@ -55,3 +55,22 @@ func TestBootstrapAdminPasswordIsNarrowPolicyException(t *testing.T) {
 		t.Fatalf("bootstrap password verification failed: ok=%v err=%v", ok, err)
 	}
 }
+
+func TestGeneratedBootstrapCredentialHash(t *testing.T) {
+	h := NewPasswordHasher()
+	if _, err := h.HashBootstrapCredential("too-short"); err == nil {
+		t.Fatal("weak generated bootstrap credential accepted")
+	}
+	const credential = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+	encoded, err := h.HashBootstrapCredential(credential)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(encoded, credential) {
+		t.Fatal("generated bootstrap hash contains plaintext")
+	}
+	ok, err := h.Verify(credential, encoded)
+	if err != nil || !ok {
+		t.Fatalf("generated bootstrap credential verification failed: ok=%v err=%v", ok, err)
+	}
+}
