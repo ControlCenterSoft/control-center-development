@@ -36,14 +36,14 @@ const (
 // Sites/Nodes/Inventory view. It is deliberately observation-only: building a
 // view must never enroll a node, mutate topology, or apply desired state.
 type NodeInventoryRecord struct {
-	NodeID           string
-	Hostname         string
-	SiteID           string
-	ManagementZoneID string
-	Capabilities     []string
-	Roles            []corecontracts.NodeRole
-	CollectedAt      time.Time
-	Hardware         agent.HardwareInventory
+	NodeID            string
+	Hostname          string
+	SiteID            string
+	ManagementZoneID  string
+	Capabilities      []string
+	Roles             []corecontracts.NodeRole
+	CollectedAt       time.Time
+	Hardware          agent.HardwareInventory
 	NetworkInterfaces []agent.NetworkInterface
 }
 
@@ -85,7 +85,7 @@ type InfrastructureInventoryInput struct {
 type InfrastructureInventory struct {
 	ContractVersion string             `json:"contract_version"`
 	State           InventoryViewState `json:"state"`
-	GeneratedAt     *time.Time          `json:"generated_at,omitempty"`
+	GeneratedAt     *time.Time         `json:"generated_at,omitempty"`
 	SiteCount       int                `json:"site_count"`
 	NodeCount       int                `json:"node_count"`
 	Sites           []SiteInventory    `json:"sites"`
@@ -100,19 +100,19 @@ type SiteInventory struct {
 }
 
 type NodeInventory struct {
-	ID               string               `json:"id"`
-	Hostname         string               `json:"hostname"`
-	SiteID           string               `json:"site_id"`
-	ManagementZoneID string               `json:"management_zone_id,omitempty"`
-	Capabilities     []string             `json:"capabilities"`
+	ID               string                   `json:"id"`
+	Hostname         string                   `json:"hostname"`
+	SiteID           string                   `json:"site_id"`
+	ManagementZoneID string                   `json:"management_zone_id,omitempty"`
+	Capabilities     []string                 `json:"capabilities"`
 	Roles            []corecontracts.NodeRole `json:"roles"`
-	CollectedAt      time.Time            `json:"collected_at"`
-	Freshness        InventoryViewState   `json:"freshness"`
-	Hardware         HardwareSummary      `json:"hardware"`
-	Connectivity     ConnectivitySummary  `json:"connectivity"`
-	DesiredState     EvidenceAvailability `json:"desired_state"`
-	ActualState      EvidenceAvailability `json:"actual_state"`
-	VersionSkew      EvidenceAvailability `json:"version_skew"`
+	CollectedAt      time.Time                `json:"collected_at"`
+	Freshness        InventoryViewState       `json:"freshness"`
+	Hardware         HardwareSummary          `json:"hardware"`
+	Connectivity     ConnectivitySummary      `json:"connectivity"`
+	DesiredState     EvidenceAvailability     `json:"desired_state"`
+	ActualState      EvidenceAvailability     `json:"actual_state"`
+	VersionSkew      EvidenceAvailability     `json:"version_skew"`
 }
 
 type HardwareSummary struct {
@@ -272,11 +272,11 @@ func summarizeHardware(hardware agent.HardwareInventory) HardwareSummary {
 		storageBytes += device.CapacityBytes
 	}
 	return HardwareSummary{
-		Architecture: hardware.Architecture,
-		CPUModel: hardware.CPU.Model,
-		LogicalCores: hardware.CPU.LogicalCores,
-		MemoryBytes: hardware.MemoryBytes,
-		StorageBytes: storageBytes,
+		Architecture:   hardware.Architecture,
+		CPUModel:       hardware.CPU.Model,
+		LogicalCores:   hardware.CPU.LogicalCores,
+		MemoryBytes:    hardware.MemoryBytes,
+		StorageBytes:   storageBytes,
 		StorageDevices: len(hardware.Storage),
 	}
 }
