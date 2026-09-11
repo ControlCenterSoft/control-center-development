@@ -82,6 +82,77 @@ func TestPrepareWritesGeneratedSecretExactlyOnce(t *testing.T) {
 	}
 }
 
+func TestLoadRequiresRegular0600CredentialFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bootstrap-password")
+	store := NewStore(path)
+	if _, err := store.Load(); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing credential err=%v want os.ErrNotExist", err)
+	}
+
+	if err := os.WriteFile(path, []byte("unsafe-secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(); !errors.Is(err, ErrUnsafeCredentialFile) {
+		t.Fatalf("permissive file err=%v want ErrUnsafeCredentialFile", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secret, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secret != "unsafe-secret" {
+		t.Fatalf("loaded secret=%q", secret)
+	}
+}
+
+func TestLoadRejectsSymlinkAndWhitespaceBearingSecret(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("target-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "bootstrap-password")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewStore(link).Load(); !errors.Is(err, ErrUnsafeCredentialFile) {
+		t.Fatalf("symlink err=%v want ErrUnsafeCredentialFile", err)
+	}
+
+	whitespace := filepath.Join(dir, "whitespace-password")
+	if err := os.WriteFile(whitespace, []byte("two words\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewStore(whitespace).Load(); !errors.Is(err, ErrUnsafeCredentialFile) {
+		t.Fatalf("whitespace err=%v want ErrUnsafeCredentialFile", err)
+	}
+}
+
+func TestPrepareOrLoadReusesPersistedCredentialAfterRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bootstrap-password")
+	store := NewStore(path)
+	first, created, err := store.PrepareOrLoad(bytes.NewReader(bytes.Repeat([]byte{0x31}, secretBytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created {
+		t.Fatal("first PrepareOrLoad did not report credential creation")
+	}
+
+	second, created, err := store.PrepareOrLoad(bytes.NewReader(bytes.Repeat([]byte{0x32}, secretBytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created {
+		t.Fatal("second PrepareOrLoad unexpectedly replaced credential")
+	}
+	if first != second {
+		t.Fatalf("credential changed across restart: first=%q second=%q", first, second)
+	}
+}
+
 func TestRemoveIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bootstrap-password")
 	store := NewStore(path)
@@ -103,6 +174,9 @@ func TestStoreRejectsRelativePathAndEmptySecret(t *testing.T) {
 	store := NewStore("relative/bootstrap-password")
 	if err := store.WriteOnce("secret"); err == nil {
 		t.Fatal("relative path unexpectedly accepted")
+	}
+	if _, err := store.Load(); err == nil {
+		t.Fatal("relative path load unexpectedly accepted")
 	}
 	store = NewStore(filepath.Join(t.TempDir(), "bootstrap-password"))
 	if err := store.WriteOnce("   "); err == nil {
