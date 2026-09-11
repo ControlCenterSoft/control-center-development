@@ -159,8 +159,12 @@ func validateVerificationPreflightAdmission(admission VerificationPreflightAdmis
 	if err := validateDigestID("plan_id", admission.PlanID); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidVerificationPreflightAdmission, err)
 	}
-	if _, err := normalizeIdentifier("revision_id", admission.RevisionID); err != nil {
+	revisionID, err := normalizeIdentifier("revision_id", admission.RevisionID)
+	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidVerificationPreflightAdmission, err)
+	}
+	if admission.RevisionID != revisionID {
+		return fmt.Errorf("%w: revision_id must be canonical", ErrInvalidVerificationPreflightAdmission)
 	}
 	if err := validateDigestID("evidence_id", admission.EvidenceID); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidVerificationPreflightAdmission, err)
