@@ -236,5 +236,6 @@ func randomID() string {
 	if _, err := rand.Read(b); err != nil {
 		panic("operating system random source unavailable")
 	}
-	return hex.EncodeToString(b)
+	encoded := hex.EncodeToString(b)
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32]
 }
