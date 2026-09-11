@@ -80,6 +80,18 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Diagnose freshness evaluator
+        continue-on-error: true
+        run: go test ./internal/networkpolicy -run '^(TestEvaluate|TestParseVerificationEvidence)' -count=1
+
+      - name: Diagnose preflight admission
+        continue-on-error: true
+        run: go test ./internal/networkpolicy -run '^TestVerificationPreflightAdmission' -count=1
+
+      - name: Diagnose current and admission consumers
+        continue-on-error: true
+        run: go test ./internal/networkpolicy -run '^(TestBuildCurrent|TestApplyCurrent|TestParseVerificationPreflightAdmission)' -count=1
+
       - name: Run side-effect-free tests
         run: go test ./...
 
