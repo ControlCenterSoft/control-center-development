@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"control-center/internal/identity/auth"
+	"control-center/internal/identity/bootstrap"
 	identityapi "control-center/internal/identity/httpapi"
 	"control-center/internal/identity/security"
 	"control-center/internal/persistence/postgres"
@@ -13,10 +14,6 @@ import (
 
 func newIdentityHandler(environment string, db *sql.DB, sessionTTL, sessionIdleTimeout time.Duration) (*identityapi.Server, error) {
 	hasher := security.NewPasswordHasher()
-	passwordHash, err := hasher.HashBootstrapAdminPassword()
-	if err != nil {
-		return nil, err
-	}
 	auditLog, err := postgres.NewAuditLog(db)
 	if err != nil {
 		return nil, err
@@ -24,14 +21,16 @@ func newIdentityHandler(environment string, db *sql.DB, sessionTTL, sessionIdleT
 	if err := auditLog.VerifyChain(context.Background()); err != nil {
 		return nil, err
 	}
-	if _, _, err := postgres.BootstrapAdmin(context.Background(), db, "admin", passwordHash, time.Now().UTC()); err != nil {
-		return nil, err
-	}
 	store, err := postgres.NewIdentityStore(db)
 	if err != nil {
 		return nil, err
 	}
-	authService, err := auth.NewService(store, store, auditLog, hasher, sessionTTL, auth.WithSessionIdleTimeout(sessionIdleTimeout))
+	credential := bootstrap.DefaultCredentialFile()
+	if err := prepareBootstrapAdmin(context.Background(), db, store, hasher, credential, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	users := &bootstrapCredentialUserStore{IdentityStore: store, credential: credential}
+	authService, err := auth.NewService(users, store, auditLog, hasher, sessionTTL, auth.WithSessionIdleTimeout(sessionIdleTimeout))
 	if err != nil {
 		return nil, err
 	}
