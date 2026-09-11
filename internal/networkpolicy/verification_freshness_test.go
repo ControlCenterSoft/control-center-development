@@ -28,16 +28,101 @@ func TestEvaluateVerificationFreshnessReady(t *testing.T) {
 	}
 }
 
+func TestEvaluateChangePlanVerificationFreshnessRequiresEveryPlanProbe(t *testing.T) {
+	plan, err := BuildChangePlan(validChangePlanRequest())
+	if err != nil {
+		t.Fatalf("BuildChangePlan() error = %v", err)
+	}
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, time.UTC)
+	verifiedAt := now.Add(-time.Minute)
+	evidence := VerificationEvidence{
+		SchemaVersion: VerificationFreshnessSchemaVersion,
+		PlanID:        plan.PlanID,
+		RevisionID:    plan.RevisionID,
+		VerifiedAt:    verifiedAt,
+		Checks:        make([]VerificationCheckEvidence, 0, len(plan.Probes)),
+	}
+	for _, probe := range plan.Probes {
+		evidence.Checks = append(evidence.Checks, VerificationCheckEvidence{
+			Name:           probe.ID,
+			Status:         VerificationCheckPass,
+			EvidenceDigest: digestID("e"),
+			ObservedAt:     verifiedAt.Add(-10 * time.Second),
+		})
+	}
+	policy := ChangePlanVerificationFreshnessPolicy{
+		MaxAge:         10 * time.Minute,
+		MaxFutureSkew: 30 * time.Second,
+	}
+
+	verdict, err := EvaluateChangePlanVerificationFreshness(now, plan, evidence, policy)
+	if err != nil {
+		t.Fatalf("EvaluateChangePlanVerificationFreshness() error = %v", err)
+	}
+	if !verdict.Ready {
+		t.Fatalf("verdict.Ready = false, verdict = %#v", verdict)
+	}
+
+	missingProbe := plan.Probes[len(plan.Probes)-1].ID
+	evidence.Checks = evidence.Checks[:len(evidence.Checks)-1]
+	verdict, err = EvaluateChangePlanVerificationFreshness(now, plan, evidence, policy)
+	if err != nil {
+		t.Fatalf("missing probe returned error: %v", err)
+	}
+	if verdict.Ready || !containsString(verdict.MissingChecks, missingProbe) {
+		t.Fatalf("missing probe verdict = %#v, want missing %q", verdict, missingProbe)
+	}
+}
+
+func TestEvaluateChangePlanVerificationFreshnessRejectsMutatedPlanIdentity(t *testing.T) {
+	plan, err := BuildChangePlan(validChangePlanRequest())
+	if err != nil {
+		t.Fatalf("BuildChangePlan() error = %v", err)
+	}
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, time.UTC)
+	evidence := VerificationEvidence{
+		SchemaVersion: VerificationFreshnessSchemaVersion,
+		PlanID:        plan.PlanID,
+		RevisionID:    plan.RevisionID,
+		VerifiedAt:    now.Add(-time.Minute),
+		Checks: []VerificationCheckEvidence{
+			{
+				Name:           plan.Probes[0].ID,
+				Status:         VerificationCheckPass,
+				EvidenceDigest: digestID("f"),
+				ObservedAt:     now.Add(-time.Minute),
+			},
+		},
+	}
+
+	plan.RevisionID = "network-revision-tampered"
+	_, err = EvaluateChangePlanVerificationFreshness(
+		now,
+		plan,
+		evidence,
+		ChangePlanVerificationFreshnessPolicy{MaxAge: 10 * time.Minute, MaxFutureSkew: 30 * time.Second},
+	)
+	if err == nil {
+		t.Fatal("mutated plan carrying an old plan_id must be rejected")
+	}
+}
+
+func TestVerificationFreshnessBoundMatchesChangePlanProbeBound(t *testing.T) {
+	if maxVerificationChecks != maxProbesPerPlan {
+		t.Fatalf("verification bound = %d, change plan probe bound = %d", maxVerificationChecks, maxProbesPerPlan)
+	}
+}
+
 func TestEvaluateVerificationFreshnessFailsClosed(t *testing.T) {
 	now := time.Date(2026, 9, 11, 7, 10, 0, 0, time.UTC)
 	tests := []struct {
-		name          string
-		mutate        func(*VerificationEvidence, *VerificationFreshnessPolicy)
-		wantError     bool
-		wantReady     bool
-		wantMissing   string
-		wantStale     string
-		wantFailed    string
+		name        string
+		mutate      func(*VerificationEvidence, *VerificationFreshnessPolicy)
+		wantError   bool
+		wantReady   bool
+		wantMissing string
+		wantStale   string
+		wantFailed  string
 	}{
 		{
 			name: "plan mismatch",
