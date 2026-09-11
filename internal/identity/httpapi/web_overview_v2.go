@@ -6,8 +6,10 @@ import "html/template"
 // It is deliberately fail-closed about operational state: until a backend
 // supplies context, freshness, risk and notifications, the UI says that the
 // data is unavailable instead of inventing a healthy state.
-var productOverviewV2Template = template.Must(template.New("overview-v2").Parse(`<!doctype html>
-<html lang="ru" data-locale="ru-RU">
+var productOverviewV2Template = template.Must(template.New("overview-v2").Funcs(template.FuncMap{
+	"productShell": newProductShellSnapshot,
+}).Parse(`{{- $shell := productShell .Version -}}<!doctype html>
+<html lang="{{$shell.Language}}" data-locale="{{$shell.Locale}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -22,8 +24,8 @@ var productOverviewV2Template = template.Must(template.New("overview-v2").Parse(
 <header class="topbar">
 <div class="brand"><span class="eyebrow" data-i18n="shell.product">Control Center</span><strong data-i18n="shell.section.overview">Обзор</strong></div>
 <div class="header-meta" aria-label="Сведения о среде">
-<span class="badge" data-i18n="shell.release"><span aria-hidden="true">●</span> Версия {{.Version}}</span>
-<span class="badge" aria-label="Среда не определена" data-i18n="shell.environment.unknown"><span aria-hidden="true">◇</span> Среда: не определена</span>
+<span class="badge" data-i18n="shell.release"><span aria-hidden="true">●</span> Версия {{$shell.Release}}</span>
+<span class="badge" aria-label="{{$shell.Environment.Label}}" data-i18n="shell.environment.unknown"><span aria-hidden="true">◇</span> {{$shell.Environment.Label}}</span>
 </div>
 </header>
 <div class="shell">
@@ -37,12 +39,12 @@ var productOverviewV2Template = template.Must(template.New("overview-v2").Parse(
 <main class="content" id="main-content">
 <div class="page-head">
 <div><h1 data-i18n="overview.title">Состояние Control Center</h1><p class="muted" data-i18n="overview.subtitle">Единая точка входа в состояние установки, сайта и узлов.</p></div>
-<div class="actions"><span class="badge" aria-label="Риск неизвестен" data-i18n="risk.unknown"><span aria-hidden="true">?</span> Риск: неизвестен</span></div>
+<div class="actions"><span class="badge" aria-label="{{$shell.Risk.Label}}" data-i18n="risk.unknown"><span aria-hidden="true">?</span> {{$shell.Risk.Label}}</span></div>
 </div>
 <section class="context-panel" aria-labelledby="context-title">
 <h2 id="context-title" data-i18n="context.title">Контекст</h2>
 <div class="context-grid" role="group" aria-label="Выбор контекста">
-<button class="context" type="button" disabled aria-pressed="true"><strong data-i18n="context.installation">Установка</strong><span data-i18n="context.installation.current">Текущий контекст</span></button>
+<button class="context" type="button" disabled aria-pressed="true"><strong data-i18n="context.installation">{{$shell.Contexts 0}}</strong><span data-i18n="context.installation.current">Текущий контекст</span></button>
 <button class="context" type="button" disabled aria-pressed="false"><strong data-i18n="context.site">Сайт</strong><span data-i18n="context.not_selected">Не выбран</span></button>
 <button class="context" type="button" disabled aria-pressed="false"><strong data-i18n="context.node">Узел</strong><span data-i18n="context.not_selected">Не выбран</span></button>
 </div>
@@ -50,12 +52,12 @@ var productOverviewV2Template = template.Must(template.New("overview-v2").Parse(
 <div class="cards">
 <section class="card" aria-labelledby="health-title">
 <h2 id="health-title" data-i18n="health.title">Состояние</h2>
-<p class="status-line"><span class="status-icon" aria-hidden="true">◇</span><span><strong data-i18n="health.unavailable">Статус: данные не загружены</strong><small data-i18n="health.unavailable.help">Интерфейс не подменяет фактический health-check.</small></span></p>
-<dl class="definition"><dt data-i18n="freshness.label">Актуальность</dt><dd data-i18n="freshness.unavailable">Нет данных</dd><dt data-i18n="environment.label">Среда</dt><dd data-i18n="environment.unavailable">Не определена</dd></dl>
+<p class="status-line"><span class="status-icon" aria-hidden="true">◇</span><span><strong data-i18n="health.unavailable">{{$shell.Health.Label}}</strong><small data-i18n="health.unavailable.help">{{$shell.Health.Detail}}</small></span></p>
+<dl class="definition"><dt data-i18n="freshness.label">Актуальность</dt><dd data-i18n="freshness.unavailable">{{$shell.Freshness.Label}}</dd><dt data-i18n="environment.label">Среда</dt><dd data-i18n="environment.unavailable">Не определена</dd></dl>
 </section>
 <section class="card" aria-labelledby="notifications-title">
 <h2 id="notifications-title" data-i18n="notifications.title">Уведомления</h2>
-<p class="status-line"><span class="status-icon" aria-hidden="true">◇</span><span><strong data-i18n="notifications.disconnected">Источник уведомлений не подключён</strong><small data-i18n="notifications.disconnected.help">Количество активных событий не показывается без подтверждённого источника.</small></span></p>
+<p class="status-line"><span class="status-icon" aria-hidden="true">◇</span><span><strong data-i18n="notifications.disconnected">{{$shell.Notifications.Label}}</strong><small data-i18n="notifications.disconnected.help">{{$shell.Notifications.Detail}}</small></span></p>
 </section>
 <section class="card" aria-labelledby="session-title">
 <h2 id="session-title" data-i18n="session.title">Сеанс</h2>
@@ -66,7 +68,7 @@ var productOverviewV2Template = template.Must(template.New("overview-v2").Parse(
 <p class="status-line"><span class="status-icon" aria-hidden="true">!</span><span><strong data-i18n="safety.fail_closed">Неподтверждённые данные отображаются как неизвестные</strong><small data-i18n="safety.fail_closed.help">Цвет не используется как единственный признак статуса или риска.</small></span></p>
 </section>
 </div>
-<footer class="footer"><span class="muted" data-i18n="shell.locale">Язык интерфейса: русский (ru-RU)</span><form method="post" action="/web/logout"><button type="submit" data-i18n="session.logout">Выйти</button></form></footer>
+<footer class="footer"><span class="muted" data-i18n="shell.locale">Язык интерфейса: русский ({{$shell.Locale}})</span><form method="post" action="/web/logout"><button type="submit" data-i18n="session.logout">Выйти</button></form></footer>
 </main>
 </div>
 </body>
