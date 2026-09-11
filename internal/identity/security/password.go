@@ -19,6 +19,7 @@ const (
 	argon2SaltSize                  = 16
 	argon2KeySize                   = 32
 	maxEncodedHashLength            = 512
+	minBootstrapCredentialLength    = 32
 
 	minArgon2Memory      uint32 = 19 * 1024
 	maxArgon2Memory      uint32 = 1024 * 1024
@@ -50,11 +51,24 @@ func (h PasswordHasher) Hash(password string) (string, error) {
 	return h.hash(password)
 }
 
-// HashBootstrapAdminPassword hashes the one-time installation credential. It is
-// deliberately the only password-policy exception: all user-selected passwords
-// must go through Hash and satisfy the normal policy.
+// HashBootstrapAdminPassword preserves the legacy 0.25.x bootstrap credential
+// semantics for compatibility tests and migrations. New installations must use
+// HashBootstrapCredential with a freshly generated one-time credential.
 func (h PasswordHasher) HashBootstrapAdminPassword() (string, error) {
 	return h.hash("admin")
+}
+
+// HashBootstrapCredential hashes a generated one-time bootstrap credential.
+// The separate entry point keeps generated credentials independent from the
+// user-selected password policy while still rejecting weak bootstrap inputs.
+func (h PasswordHasher) HashBootstrapCredential(password string) (string, error) {
+	if len(password) < minBootstrapCredentialLength {
+		return "", errors.New("bootstrap credential is too short")
+	}
+	if len(password) > 1024 {
+		return "", errors.New("bootstrap credential is too long")
+	}
+	return h.hash(password)
 }
 
 func (h PasswordHasher) hash(password string) (string, error) {
