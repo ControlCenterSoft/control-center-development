@@ -71,7 +71,7 @@ func TestInfrastructureInventoryPageUsesSameReadPermissionAndSecurityHeaders(t *
 		t.Fatalf("status=%d body=%s", result.Code, result.Body.String())
 	}
 	for header, want := range map[string]string{
-		"Cache-Control":         "no-store",
+		"Cache-Control":          "no-store",
 		"X-Content-Type-Options": "nosniff",
 		"X-Frame-Options":        "DENY",
 		"Referrer-Policy":        "no-referrer",
