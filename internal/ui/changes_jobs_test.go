@@ -112,8 +112,8 @@ func TestBuildChangesJobsViewSortsNewestChangeAndJobFirst(t *testing.T) {
 func TestBuildChangesJobsViewRejectsOrphanJobWithoutPartialView(t *testing.T) {
 	now := time.Date(2026, 9, 12, 2, 0, 0, 0, time.UTC)
 	view, err := BuildChangesJobsView(ChangesJobsInput{
-		Changes: []change.Snapshot{validChangeSnapshot("change-a", "service.ensure", now)},
-		Jobs: []job.Job{validJob("job-a", "missing-change", "service.ensure", now)},
+		Changes:       []change.Snapshot{validChangeSnapshot("change-a", "service.ensure", now)},
+		Jobs:          []job.Job{validJob("job-a", "missing-change", "service.ensure", now)},
 		ChangesLoaded: true, JobsLoaded: true, Now: now,
 	})
 	if !errors.Is(err, ErrInvalidChangesJobsView) {
@@ -127,8 +127,8 @@ func TestBuildChangesJobsViewRejectsOrphanJobWithoutPartialView(t *testing.T) {
 func TestBuildChangesJobsViewRejectsActionMismatch(t *testing.T) {
 	now := time.Date(2026, 9, 12, 2, 0, 0, 0, time.UTC)
 	_, err := BuildChangesJobsView(ChangesJobsInput{
-		Changes: []change.Snapshot{validChangeSnapshot("change-a", "service.ensure", now)},
-		Jobs: []job.Job{validJob("job-a", "change-a", "network.apply", now)},
+		Changes:       []change.Snapshot{validChangeSnapshot("change-a", "service.ensure", now)},
+		Jobs:          []job.Job{validJob("job-a", "change-a", "network.apply", now)},
 		ChangesLoaded: true, JobsLoaded: true, Now: now,
 	})
 	if !errors.Is(err, ErrInvalidChangesJobsView) {
@@ -139,7 +139,7 @@ func TestBuildChangesJobsViewRejectsActionMismatch(t *testing.T) {
 func TestBuildChangesJobsViewKeepsUnwiredRiskEvidenceUnavailable(t *testing.T) {
 	now := time.Date(2026, 9, 12, 2, 0, 0, 0, time.UTC)
 	view, err := BuildChangesJobsView(ChangesJobsInput{
-		Changes: []change.Snapshot{validChangeSnapshot("change-a", "service.ensure", now)},
+		Changes:       []change.Snapshot{validChangeSnapshot("change-a", "service.ensure", now)},
 		ChangesLoaded: true, JobsLoaded: true, Now: now,
 	})
 	if err != nil {
@@ -153,9 +153,9 @@ func TestBuildChangesJobsViewKeepsUnwiredRiskEvidenceUnavailable(t *testing.T) {
 
 func validChangeSnapshot(id, action string, updatedAt time.Time) change.Snapshot {
 	decision := policy.Decision{
-		Effect: policy.EffectAllow,
-		Risk: policy.RiskLow,
-		Reason: "test policy allows low risk operation",
+		Effect:   policy.EffectAllow,
+		Risk:     policy.RiskLow,
+		Reason:   "test policy allows low risk operation",
 		PolicyID: "policy-test",
 	}
 	return change.Snapshot{
