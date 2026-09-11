@@ -24,7 +24,7 @@ func TestBuildRestoreDrillEvidenceBindingBindsExactStoredEvidence(t *testing.T) 
 	if binding.RestoreID != restore.ObjectID || binding.RestoreResourceVersion != restore.ResourceVersion || binding.RestoreGeneration != restore.Generation {
 		t.Fatalf("binding lost exact restore identity: %#v", binding)
 	}
-	if binding.AssessmentID != assessment.AssessmentID || binding.VerifiedAt != assessment.VerifiedAt {
+	if binding.AssessmentID != assessment.AssessmentID || !binding.VerifiedAt.Equal(assessment.VerifiedAt) {
 		t.Fatalf("binding lost freshness identity: %#v", binding)
 	}
 	if !strings.HasPrefix(binding.VerificationEvidenceDigest, "sha256:") || len(binding.VerificationEvidenceDigest) != len("sha256:")+64 {
