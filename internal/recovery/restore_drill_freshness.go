@@ -73,7 +73,19 @@ func EvaluateRestoreDrillFreshness(restore RestoreMetadata, maxAge time.Duration
 		AdvisoryOnly:       true,
 		ProductionMutation: false,
 	}
+	assessmentID, err := restoreDrillFreshnessAssessmentIdentity(result)
+	if err != nil {
+		return RestoreDrillFreshnessAssessment{}, fmt.Errorf("restore drill freshness: encode identity: %w", err)
+	}
+	result.AssessmentID = assessmentID
+	return result, nil
+}
 
+// restoreDrillFreshnessAssessmentIdentity returns the deterministic identity
+// for an assessment's complete non-authorizing freshness claim. Keeping this
+// calculation shared by generation and validation prevents a stored/API
+// projection from substituting a different canonical-looking assessment ID.
+func restoreDrillFreshnessAssessmentIdentity(assessment RestoreDrillFreshnessAssessment) (string, error) {
 	canonical := struct {
 		SchemaVersion      string                     `json:"schema_version"`
 		RestoreID          string                     `json:"restore_id"`
@@ -86,16 +98,21 @@ func EvaluateRestoreDrillFreshness(restore RestoreMetadata, maxAge time.Duration
 		AdvisoryOnly       bool                       `json:"advisory_only"`
 		ProductionMutation bool                       `json:"production_mutation"`
 	}{
-		SchemaVersion: result.SchemaVersion, RestoreID: result.RestoreID, Target: result.Target,
-		VerifiedAt: result.VerifiedAt, CheckedAt: result.CheckedAt, ValidUntil: result.ValidUntil,
-		MaxAgeSeconds: result.MaxAgeSeconds, State: result.State, AdvisoryOnly: result.AdvisoryOnly,
-		ProductionMutation: result.ProductionMutation,
+		SchemaVersion:      assessment.SchemaVersion,
+		RestoreID:          assessment.RestoreID,
+		Target:             assessment.Target,
+		VerifiedAt:         assessment.VerifiedAt.UTC(),
+		CheckedAt:          assessment.CheckedAt.UTC(),
+		ValidUntil:         assessment.ValidUntil.UTC(),
+		MaxAgeSeconds:      assessment.MaxAgeSeconds,
+		State:              assessment.State,
+		AdvisoryOnly:       assessment.AdvisoryOnly,
+		ProductionMutation: assessment.ProductionMutation,
 	}
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
-		return RestoreDrillFreshnessAssessment{}, fmt.Errorf("restore drill freshness: encode identity: %w", err)
+		return "", err
 	}
 	digest := sha256.Sum256(encoded)
-	result.AssessmentID = "rdf-" + hex.EncodeToString(digest[:])[:24]
-	return result, nil
+	return "rdf-" + hex.EncodeToString(digest[:])[:24], nil
 }
