@@ -19,6 +19,7 @@ func TestBuildKeepsOperationalReadModelBoundedAndRedactsJobInternals(t *testing.
 	execution.Input = json.RawMessage(`{"password":"do-not-expose"}`)
 	execution.IdempotencyKey = "secret-idempotency-value"
 	execution.Lease = &job.Lease{Token: "secret-lease-token", WorkerID: "worker-a", ExpiresAt: now.Add(time.Minute)}
+	execution.LastError = "backend failed with secret-error-detail"
 
 	view, err := Build(snapshot, &execution, now)
 	if err != nil {
@@ -37,7 +38,7 @@ func TestBuildKeepsOperationalReadModelBoundedAndRedactsJobInternals(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"do-not-expose", "secret-idempotency-value", "secret-lease-token", "worker-a"} {
+	for _, forbidden := range []string{"do-not-expose", "secret-idempotency-value", "secret-lease-token", "worker-a", "secret-error-detail"} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("read model leaked %q: %s", forbidden, encoded)
 		}
