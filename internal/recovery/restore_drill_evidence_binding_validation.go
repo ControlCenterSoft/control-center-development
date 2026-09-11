@@ -15,7 +15,6 @@ func ValidateRestoreDrillEvidenceBindingCurrent(
 		binding.AssessmentID == "" ||
 		binding.RestoreID == "" ||
 		binding.RestoreResourceVersion == "" ||
-		binding.RestoreGeneration == 0 ||
 		binding.VerificationEvidenceDigest == "" ||
 		binding.VerifiedAt.IsZero() {
 		return fmt.Errorf("restore drill evidence binding validation: persisted binding is incomplete")
