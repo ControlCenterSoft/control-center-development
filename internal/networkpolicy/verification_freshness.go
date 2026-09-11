@@ -11,6 +11,8 @@ import (
 
 const VerificationFreshnessSchemaVersion = "network.change.verification-freshness/v1"
 
+const maxVerificationChecks = maxProbesPerPlan
+
 var ErrInvalidVerificationEvidence = errors.New("invalid network verification evidence")
 
 type VerificationCheckStatus string
@@ -40,9 +42,17 @@ type VerificationEvidence struct {
 }
 
 type VerificationFreshnessPolicy struct {
+	MaxAge         time.Duration `json:"max_age"`
+	MaxFutureSkew  time.Duration `json:"max_future_skew"`
+	RequiredChecks []string      `json:"required_checks"`
+}
+
+// ChangePlanVerificationFreshnessPolicy controls only time freshness. Required
+// checks are derived from the exact canonical ChangePlan so a caller cannot
+// weaken verification by supplying a shorter required-check list.
+type ChangePlanVerificationFreshnessPolicy struct {
 	MaxAge        time.Duration `json:"max_age"`
 	MaxFutureSkew time.Duration `json:"max_future_skew"`
-	RequiredChecks []string      `json:"required_checks"`
 }
 
 // VerificationFreshnessVerdict is deterministic, fail-closed eligibility
@@ -53,6 +63,45 @@ type VerificationFreshnessVerdict struct {
 	MissingChecks []string `json:"missing_checks,omitempty"`
 	StaleChecks   []string `json:"stale_checks,omitempty"`
 	FailedChecks  []string `json:"failed_checks,omitempty"`
+}
+
+// EvaluateChangePlanVerificationFreshness evaluates verification evidence for
+// one exact canonical network change plan. Every probe declared by that plan is
+// mandatory and is addressed by its unique probe ID. The plan is rebuilt before
+// evaluation so a mutated plan carrying an old PlanID is rejected fail-closed.
+func EvaluateChangePlanVerificationFreshness(
+	now time.Time,
+	plan ChangePlan,
+	evidence VerificationEvidence,
+	policy ChangePlanVerificationFreshnessPolicy,
+) (VerificationFreshnessVerdict, error) {
+	validated, err := BuildChangePlan(ChangePlanRequest{
+		NodeID:     plan.NodeID,
+		RevisionID: plan.RevisionID,
+		Interfaces: plan.Interfaces,
+		Forwarding: plan.Forwarding,
+		Probes:     plan.Probes,
+		Timeouts:   plan.Timeouts,
+	})
+	if err != nil || validated.PlanID != plan.PlanID {
+		return VerificationFreshnessVerdict{}, fmt.Errorf("%w: change plan integrity check failed", ErrInvalidVerificationEvidence)
+	}
+
+	requiredChecks := make([]string, 0, len(validated.Probes))
+	for _, probe := range validated.Probes {
+		requiredChecks = append(requiredChecks, probe.ID)
+	}
+	return EvaluateVerificationFreshness(
+		now,
+		validated.PlanID,
+		validated.RevisionID,
+		evidence,
+		VerificationFreshnessPolicy{
+			MaxAge:         policy.MaxAge,
+			MaxFutureSkew:  policy.MaxFutureSkew,
+			RequiredChecks: requiredChecks,
+		},
+	)
 }
 
 // EvaluateVerificationFreshness verifies that safety evidence belongs to the
@@ -137,8 +186,8 @@ func EvaluateVerificationFreshness(
 }
 
 func canonicalRequiredChecks(input []string) ([]string, error) {
-	if len(input) == 0 || len(input) > 64 {
-		return nil, fmt.Errorf("%w: required_checks must contain 1..64 entries", ErrInvalidVerificationEvidence)
+	if len(input) == 0 || len(input) > maxVerificationChecks {
+		return nil, fmt.Errorf("%w: required_checks must contain 1..%d entries", ErrInvalidVerificationEvidence, maxVerificationChecks)
 	}
 	result := make([]string, 0, len(input))
 	seen := make(map[string]struct{}, len(input))
@@ -163,8 +212,8 @@ func canonicalVerificationChecks(
 	now time.Time,
 	maxFutureSkew time.Duration,
 ) (map[string]VerificationCheckEvidence, error) {
-	if len(input) == 0 || len(input) > 64 {
-		return nil, fmt.Errorf("%w: checks must contain 1..64 entries", ErrInvalidVerificationEvidence)
+	if len(input) == 0 || len(input) > maxVerificationChecks {
+		return nil, fmt.Errorf("%w: checks must contain 1..%d entries", ErrInvalidVerificationEvidence, maxVerificationChecks)
 	}
 	result := make(map[string]VerificationCheckEvidence, len(input))
 	for _, check := range input {
