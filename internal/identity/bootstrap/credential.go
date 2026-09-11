@@ -14,9 +14,13 @@ import (
 const (
 	DefaultCredentialPath = "/root/control-center-bootstrap-password"
 	secretBytes           = 32
+	maxCredentialFileSize = 4096
 )
 
-var ErrCredentialAlreadyExists = errors.New("bootstrap credential already exists")
+var (
+	ErrCredentialAlreadyExists = errors.New("bootstrap credential already exists")
+	ErrUnsafeCredentialFile    = errors.New("unsafe bootstrap credential file")
+)
 
 // Store owns the one-time local bootstrap credential file. The credential is
 // intentionally write-once: an existing file is never replaced on restart or
@@ -86,6 +90,41 @@ func (s Store) WriteOnce(secret string) error {
 	return nil
 }
 
+// Load reads an existing bootstrap credential only when the on-disk object is a
+// regular file with exactly 0600 permissions. Symlinks, permissive modes and
+// unexpectedly large or whitespace-bearing values are rejected fail-closed.
+func (s Store) Load() (string, error) {
+	if !filepath.IsAbs(s.Path) {
+		return "", errors.New("bootstrap credential path must be absolute")
+	}
+	info, err := os.Lstat(s.Path)
+	if err != nil {
+		return "", fmt.Errorf("stat bootstrap credential file: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		return "", ErrUnsafeCredentialFile
+	}
+
+	file, err := os.Open(s.Path)
+	if err != nil {
+		return "", fmt.Errorf("open bootstrap credential file: %w", err)
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(io.LimitReader(file, maxCredentialFileSize+1))
+	if err != nil {
+		return "", fmt.Errorf("read bootstrap credential file: %w", err)
+	}
+	if len(content) > maxCredentialFileSize {
+		return "", ErrUnsafeCredentialFile
+	}
+	secret := strings.TrimSpace(string(content))
+	if secret == "" || strings.ContainsAny(secret, " \t\r\n") {
+		return "", ErrUnsafeCredentialFile
+	}
+	return secret, nil
+}
+
 func (s Store) Remove() error {
 	if !filepath.IsAbs(s.Path) {
 		return errors.New("bootstrap credential path must be absolute")
@@ -108,4 +147,34 @@ func (s Store) Prepare(reader io.Reader) (string, error) {
 		return "", err
 	}
 	return secret, nil
+}
+
+// PrepareOrLoad makes clean-install bootstrap resilient to a process crash
+// between local credential persistence and database bootstrap. A pre-existing
+// credential is reused only after Load has verified its file safety invariants.
+// The boolean reports whether this call created the credential file.
+func (s Store) PrepareOrLoad(reader io.Reader) (string, bool, error) {
+	secret, err := s.Load()
+	if err == nil {
+		return secret, false, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", false, err
+	}
+
+	secret, err = GenerateSecret(reader)
+	if err != nil {
+		return "", false, err
+	}
+	if err := s.WriteOnce(secret); err != nil {
+		if !errors.Is(err, ErrCredentialAlreadyExists) {
+			return "", false, err
+		}
+		existing, loadErr := s.Load()
+		if loadErr != nil {
+			return "", false, loadErr
+		}
+		return existing, false, nil
+	}
+	return secret, true, nil
 }
