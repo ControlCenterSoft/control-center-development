@@ -16,10 +16,13 @@ import (
 	lifecycleapi "control-center/internal/nodelifecycle/httpapi"
 	nodesapi "control-center/internal/nodes/httpapi"
 	pxeapi "control-center/internal/pxe/httpapi"
+	productui "control-center/internal/ui"
+	uiapi "control-center/internal/ui/httpapi"
 )
 
 type productHandlerConfig struct {
-	lifecycleProjection nodelifecycle.Projection
+	lifecycleProjection     nodelifecycle.Projection
+	infrastructureInventory productui.InfrastructureInventoryProvider
 }
 
 type productHandlerOption func(*productHandlerConfig)
@@ -28,6 +31,18 @@ func withNodeLifecycleProjection(projection nodelifecycle.Projection) productHan
 	return func(config *productHandlerConfig) {
 		if projection != nil {
 			config.lifecycleProjection = projection
+		}
+	}
+}
+
+// withInfrastructureInventoryProvider wires only a read model. The default
+// runtime intentionally leaves the endpoint absent until an authoritative
+// provider is configured, rather than exposing transitional registries as if
+// they were complete Sites/Nodes/Inventory evidence.
+func withInfrastructureInventoryProvider(provider productui.InfrastructureInventoryProvider) productHandlerOption {
+	return func(config *productHandlerConfig) {
+		if provider != nil {
+			config.infrastructureInventory = provider
 		}
 	}
 }
@@ -74,5 +89,8 @@ func newProductHandler(identity *identityapi.Server, options ...productHandlerOp
 	mux.Handle("/api/v1/agent/heartbeats", guard(rbac.PermissionAgentHeartbeatEvaluate, agentState))
 	mux.Handle("/api/v1/agent/nodes", guard(rbac.PermissionAgentEnrollmentNormalize, agentState))
 	mux.Handle("/api/v1/agent/nodes/", guard(rbac.PermissionAgentEnrollmentNormalize, agentState))
+	if config.infrastructureInventory != nil {
+		mux.Handle("GET /api/v1/ui/infrastructure", guard(rbac.PermissionResourcesRead, uiapi.InfrastructureHandler(config.infrastructureInventory)))
+	}
 	return mux
 }
