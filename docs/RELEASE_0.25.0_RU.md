@@ -1,5 +1,7 @@
 # Control Center 0.25.0 — ограниченное чтение Audit
 
+Статус: официальный source release и текущий Public Stable.
+
 ## Что нового
 
 Control Center 0.25.0 добавляет permission-gated read-only API для безопасного просмотра событий Audit без ослабления append-only свойств журнала.
@@ -11,8 +13,6 @@ Control Center 0.25.0 добавляет permission-gated read-only API для �
 - Успешное привилегированное чтение само создаёт Audit evidence; если evidence записать невозможно, события клиенту не возвращаются.
 - Реализация одинаково покрыта in-memory и PostgreSQL reader contract, HTTP contract и интеграционными тестами.
 
-## Qualification
+## Проверка релиза
 
-Кандидат должен пройти полный существующий deterministic CI/qualification-контур: unit/contracts, format/vet, build, public-safety, race/restart и PostgreSQL 15–18 clean-install/supported-upgrade/adapters. Gemini используется только как дополнительный exact-SHA reviewer при фактической доступности провайдера.
-
-Публикация в `main`, tag и GitHub Release выполняется отдельным CC Release Engine B после успешного qualification.
+Точная release identity прошла обязательные qualification gates: unit/contracts, format/vet, build, public-safety, race/restart и PostgreSQL 15–18 clean-install/supported-upgrade/adapters. Публикация в canonical/source и последующее продвижение в Public Stable подтверждаются соответствующими release identities и не предоставляют дополнительных runtime-полномочий сами по себе.
