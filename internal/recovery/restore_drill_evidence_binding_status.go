@@ -10,7 +10,7 @@ const RestoreDrillEvidenceBindingStatusSchemaVersion = "recovery.restore-drill-e
 type RestoreDrillEvidenceBindingStatusState string
 
 const (
-	RestoreDrillEvidenceBindingCurrent RestoreDrillEvidenceBindingStatusState = "current"
+	RestoreDrillEvidenceBindingCurrent    RestoreDrillEvidenceBindingStatusState = "current"
 	RestoreDrillEvidenceBindingNotCurrent RestoreDrillEvidenceBindingStatusState = "not_current"
 )
 

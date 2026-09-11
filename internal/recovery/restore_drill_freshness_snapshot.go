@@ -19,21 +19,21 @@ const (
 // successful isolated restore-drill evidence for one exact target. It does not
 // describe the newest restore attempt and grants no restore or mutation authority.
 type RestoreDrillFreshnessSnapshot struct {
-	SchemaVersion              string                            `json:"schema_version"`
-	Target                     ObjectReference                   `json:"target"`
+	SchemaVersion              string                             `json:"schema_version"`
+	Target                     ObjectReference                    `json:"target"`
 	State                      RestoreDrillFreshnessSnapshotState `json:"state"`
-	RestoreID                  string                            `json:"restore_id,omitempty"`
-	RestoreResourceVersion     string                            `json:"restore_resource_version,omitempty"`
-	RestoreGeneration          uint64                            `json:"restore_generation,omitempty"`
-	AssessmentID               string                            `json:"assessment_id,omitempty"`
-	VerifiedAt                 *time.Time                        `json:"verified_at,omitempty"`
-	CheckedAt                  time.Time                         `json:"checked_at"`
-	ValidUntil                 *time.Time                        `json:"valid_until,omitempty"`
-	MaxAgeSeconds              uint64                            `json:"max_age_seconds"`
-	VerificationEvidenceDigest string                            `json:"verification_evidence_digest,omitempty"`
-	Reason                     string                            `json:"reason,omitempty"`
-	AdvisoryOnly               bool                              `json:"advisory_only"`
-	ProductionMutation         bool                              `json:"production_mutation"`
+	RestoreID                  string                             `json:"restore_id,omitempty"`
+	RestoreResourceVersion     string                             `json:"restore_resource_version,omitempty"`
+	RestoreGeneration          uint64                             `json:"restore_generation,omitempty"`
+	AssessmentID               string                             `json:"assessment_id,omitempty"`
+	VerifiedAt                 *time.Time                         `json:"verified_at,omitempty"`
+	CheckedAt                  time.Time                          `json:"checked_at"`
+	ValidUntil                 *time.Time                         `json:"valid_until,omitempty"`
+	MaxAgeSeconds              uint64                             `json:"max_age_seconds"`
+	VerificationEvidenceDigest string                             `json:"verification_evidence_digest,omitempty"`
+	Reason                     string                             `json:"reason,omitempty"`
+	AdvisoryOnly               bool                               `json:"advisory_only"`
+	ProductionMutation         bool                               `json:"production_mutation"`
 }
 
 // ReadLatestRestoreDrillFreshnessSnapshot selects the most recently verified

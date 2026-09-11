@@ -40,11 +40,15 @@ func TestValidateRestoreDrillEvidenceBindingCurrentRejectsPersistedBindingTamper
 		name   string
 		mutate func(*RestoreDrillEvidenceBinding)
 	}{
-		{name: "schema version", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.SchemaVersion = "recovery.restore-drill-evidence-binding/v999" }},
+		{name: "schema version", mutate: func(binding *RestoreDrillEvidenceBinding) {
+			binding.SchemaVersion = "recovery.restore-drill-evidence-binding/v999"
+		}},
 		{name: "binding id", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.BindingID += "-tampered" }},
 		{name: "restore resource version", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.RestoreResourceVersion += ":tampered" }},
 		{name: "assessment id", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.AssessmentID += "-tampered" }},
-		{name: "evidence digest", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.VerificationEvidenceDigest = "sha256:" + strings.Repeat("c", 64) }},
+		{name: "evidence digest", mutate: func(binding *RestoreDrillEvidenceBinding) {
+			binding.VerificationEvidenceDigest = "sha256:" + strings.Repeat("c", 64)
+		}},
 		{name: "verified at", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.VerifiedAt = binding.VerifiedAt.Add(time.Second) }},
 		{name: "advisory boundary", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.AdvisoryOnly = false }},
 		{name: "mutation boundary", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.ProductionMutation = true }},
