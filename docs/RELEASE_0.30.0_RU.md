@@ -69,4 +69,4 @@ Upgrade-path к 0.30.0 не считается подтверждённым до
 
 ## Граница готовности
 
-Наличие подготовленного кода в рабочей ветке не делает 0.30.0 release candidate или Stable. Promotion возможна только после завершения authoritative provider wiring, qualification точного итогового SHA и штатной последовательности canonical merge → main qualification → official source release → Public Stable promotion.
+Наличие подготовленного кода само по себе не делает 0.30.0 release candidate или Stable. Promotion возможна только после завершения authoritative provider wiring, qualification точного итогового состояния и прохождения штатных release/publication gates.
