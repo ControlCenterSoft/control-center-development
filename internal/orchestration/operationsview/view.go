@@ -38,16 +38,17 @@ type View struct {
 }
 
 type ChangeSummary struct {
-	ID                string      `json:"id"`
-	Action            string      `json:"action"`
-	Requester         string      `json:"requester"`
-	RevisionID        string      `json:"revision_id"`
-	Risk              policy.Risk `json:"risk"`
-	State             change.State `json:"state"`
-	ApprovalsRecorded int         `json:"approvals_recorded"`
-	ApprovalsRequired int         `json:"approvals_required"`
-	Version           uint64      `json:"version"`
-	UpdatedAt         time.Time   `json:"updated_at"`
+	ID                 string       `json:"id"`
+	Action             string       `json:"action"`
+	Requester          string       `json:"requester"`
+	RevisionID         string       `json:"revision_id"`
+	Risk               policy.Risk  `json:"risk"`
+	State              change.State `json:"state"`
+	ApprovalsRecorded  int          `json:"approvals_recorded"`
+	ApprovalsRequired  int          `json:"approvals_required"`
+	ApprovalsSatisfied bool         `json:"approvals_satisfied"`
+	Version            uint64       `json:"version"`
+	UpdatedAt          time.Time    `json:"updated_at"`
 }
 
 type JobSummary struct {
@@ -92,21 +93,23 @@ func Build(snapshot change.Snapshot, execution *job.Job, generatedAt time.Time) 
 	if err := validateChange(snapshot); err != nil {
 		return View{}, err
 	}
+	approvalsSatisfied := policy.CheckApprovals(snapshot.Requester, snapshot.Decision.Requirement, snapshot.Approvals) == nil
 
 	view := View{
 		ContractVersion: ContractVersion,
 		GeneratedAt:     generatedAt.UTC(),
 		Change: ChangeSummary{
-			ID:                snapshot.ID,
-			Action:            snapshot.Action,
-			Requester:         snapshot.Requester,
-			RevisionID:        snapshot.RevisionID,
-			Risk:              snapshot.Risk,
-			State:             snapshot.State,
-			ApprovalsRecorded: len(snapshot.Approvals),
-			ApprovalsRequired: snapshot.Decision.Requirement.Minimum,
-			Version:           snapshot.Version,
-			UpdatedAt:         snapshot.UpdatedAt.UTC(),
+			ID:                 snapshot.ID,
+			Action:             snapshot.Action,
+			Requester:          snapshot.Requester,
+			RevisionID:         snapshot.RevisionID,
+			Risk:               snapshot.Risk,
+			State:              snapshot.State,
+			ApprovalsRecorded:  len(snapshot.Approvals),
+			ApprovalsRequired:  snapshot.Decision.Requirement.Minimum,
+			ApprovalsSatisfied: approvalsSatisfied,
+			Version:            snapshot.Version,
+			UpdatedAt:          snapshot.UpdatedAt.UTC(),
 		},
 		ResultEvidence: ResultEvidence{Availability: EvidenceUnavailable},
 		Timeline: Timeline{
@@ -179,8 +182,22 @@ func validateChange(snapshot change.Snapshot) error {
 	if err := snapshot.Decision.Validate(); err != nil {
 		return fmt.Errorf("%w: invalid policy decision: %v", ErrInvalidView, err)
 	}
+
+	approvalsSatisfied := policy.CheckApprovals(snapshot.Requester, snapshot.Decision.Requirement, snapshot.Approvals) == nil
 	switch snapshot.State {
-	case change.StatePendingApproval, change.StateApproved, change.StateQueued, change.StateExecuting, change.StateVerifying, change.StateSucceeded, change.StateFailed, change.StateCancelled, change.StateRejected:
+	case change.StatePendingApproval:
+		if snapshot.Decision.Effect != policy.EffectAllow || snapshot.Decision.Requirement.Minimum == 0 || approvalsSatisfied {
+			return fmt.Errorf("%w: pending approval state contradicts policy evidence", ErrInvalidView)
+		}
+	case change.StateApproved, change.StateQueued, change.StateExecuting, change.StateVerifying, change.StateSucceeded, change.StateFailed:
+		if snapshot.Decision.Effect != policy.EffectAllow || !approvalsSatisfied {
+			return fmt.Errorf("%w: state %q lacks satisfied approval evidence", ErrInvalidView, snapshot.State)
+		}
+	case change.StateCancelled:
+		if snapshot.Decision.Effect != policy.EffectAllow {
+			return fmt.Errorf("%w: cancelled change must originate from an allowed decision", ErrInvalidView)
+		}
+	case change.StateRejected:
 	default:
 		return fmt.Errorf("%w: unsupported change state %q", ErrInvalidView, snapshot.State)
 	}
