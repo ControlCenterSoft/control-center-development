@@ -1,72 +1,73 @@
 # Control Center 0.30.0 — Sites / Nodes / Inventory
 
-Статус: **разработка, не release candidate**. Базовая версия Public Stable — **0.29.0**. Документ фиксирует границу текущего 0.30-slice и не означает готовность к публикации.
+Статус: **release candidate**. Базовая версия Public Stable — **0.29.0**. Публикация допускается только после успешной qualification точного итогового candidate SHA, повторной проверки canonical `main`, официального source release и отдельной Public Stable promotion.
 
 ## Основное изменение
 
-Control Center 0.30.0 развивает Product Web Shell в сторону фактического представления инфраструктуры: Sites, Nodes и Inventory. Ключевой принцип — UI показывает только подтверждённое read-only evidence. Отсутствующий authoritative источник, неподдерживаемый legacy-контракт или невалидная проекция не подменяются пустым либо «здоровым» состоянием.
+Control Center 0.30.0 развивает Product Web Shell до фактического read-only представления инфраструктуры: Sites, Nodes и Inventory. Ключевой принцип — UI показывает только подтверждённое evidence. Отсутствующий authoritative источник, неподдерживаемый legacy-контракт или невалидная проекция не подменяются пустым либо «здоровым» состоянием.
 
-## Реализованный slice
+## Что входит в candidate
 
-- введён versioned read-model contract `ui.infrastructure-inventory/v1` и JSON Schema;
-- добавлена deterministic Sites/Nodes проекция с аппаратной сводкой, ролями, capabilities и состоянием сетевых интерфейсов;
-- актуальность наблюдений классифицируется как `current`, `stale` или `expired` с fail-closed состоянием `unavailable` для незагруженных источников;
-- legacy enrollment не используется как доказательство полного 0.30 inventory: adapter принимает только явный agent enrollment v2 с hardware/site/freshness evidence;
-- Desired State, Actual State и version skew до подключения соответствующих authoritative projections отображаются как `unavailable`, а не вычисляются из косвенных данных;
-- добавлен read-only API boundary с валидацией provider envelope, `Cache-Control: no-store`, отказом от mutation methods и скрытием внутренних ошибок;
-- API подключается только при явной передаче authoritative provider и защищается существующим `resources.read`; без provider endpoint остаётся отсутствующим;
-- подготовлен русскоязычный responsive UI Sites/Nodes; на узком экране карточки узлов идут по одной в строке;
-- view-модель намеренно не раскрывает серийные номера, machine/product identifiers, MAC/IP-адреса и certificate identity metadata, которые не нужны для обзорного экрана.
+- versioned read-model contract `ui.infrastructure-inventory/v1` и JSON Schema;
+- deterministic Sites/Nodes projection с аппаратной сводкой, ролями, capabilities и состоянием сетевых интерфейсов;
+- freshness states `current`, `stale`, `expired` и fail-closed `unavailable`;
+- authoritative inventory provider boundary без использования legacy enrollment как доказательства полного inventory;
+- Desired State, Actual State и version skew показываются как `unavailable`, пока соответствующее authoritative evidence отсутствует;
+- read-only API boundary с проверкой provider envelope, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, запретом mutation methods и сокрытием внутренних provider errors;
+- API и UI защищены существующим `resources.read`; anonymous и unbound identities не получают доступ;
+- site-scoped delegated viewer не получает доступ к global inventory aggregate; глобальные роли с `resources.read` сохраняют read-only доступ;
+- authenticated routing Sites/Nodes включается только через подтверждённый provider boundary;
+- stale aggregate и expired node evidence остаются явно отмеченными как устаревшие/просроченные и не маскируются под current/healthy;
+- русскоязычный responsive UI, structural accessibility markers и mobile/narrow contract: одна карточка узла в строке;
+- sensitive inventory fields минимизированы на уровне read-model: обзорный экран не раскрывает серийные номера, machine/product identifiers, MAC/IP и certificate identity metadata.
 
 ## Информационная безопасность
 
 - `Unknown`/`unavailable`, `stale` и `expired` не преобразуются в `Healthy` или `Success`;
-- ошибка provider, невалидный contract envelope и отсутствие источника fail-closed возвращают unavailable evidence;
-- read endpoint не имеет execution authority и не может менять enrollment, topology, Desired State, сеть или host configuration;
-- endpoint использует отдельное read-разрешение `resources.read`, а не permissions нормализации/reconcile/mutation;
+- provider error, невалидный contract envelope и отсутствие источника обрабатываются fail-closed;
+- inventory endpoint не имеет execution authority и не может менять enrollment, topology, Desired State, сеть или host configuration;
+- endpoint использует read-разрешение `resources.read`, а не reconcile/mutation permissions;
+- глобальный aggregate не становится доступен субъекту только из-за site-scoped delegated binding;
 - детали backend/provider errors не выдаются клиенту;
-- HTTP response для inventory запрещает кеширование (`no-store`) и включает `nosniff`;
-- sensitive inventory fields минимизированы на уровне read-model, а не только скрыты CSS/HTML;
+- response не кешируется и защищён `nosniff`;
+- состав выдаваемых inventory полей минимизирован до необходимых для обзорного интерфейса;
 - существующие требования Identity/RBAC, обязательной смены первоначального `admin/admin`, session security и Audit не ослабляются.
 
 ## Коммерческая и лицензионная граница
 
-Текущий slice не добавляет сторонние runtime-библиотеки и не меняет dependency graph. Новых обязательств по redistribution, NOTICE или source-offer из-за этой части 0.30.0 не возникает.
+Scope 0.30.0 не добавляет сторонние runtime-библиотеки и не меняет dependency graph. Изменение не создаёт новых redistribution, NOTICE или source-offer обязательств.
 
-Перед promotion всё равно должны быть повторно подтверждены machine-readable license/SPDX evidence, authoritative source identity, distribution mode, commercial/redistribution disposition и release provenance точного итогового SHA.
+Перед promotion сохраняются обязательные machine-readable license/SPDX, authoritative source identity, distribution mode, commercial/redistribution disposition и release provenance gates для точного итогового SHA.
 
 ## Совместимость, установка и обновление
 
-Текущий slice не содержит SQL migration и не меняет пользовательские данные, credentials или сетевую конфигурацию. Существующий пароль `admin` при обновлении не должен сбрасываться; первоначальный `admin/admin` допустим только на чистой установке с обязательной сменой при первом входе.
+0.30.0 не добавляет SQL migration и не изменяет пользовательские данные, credentials или сетевую конфигурацию. Существующий пароль `admin` при обновлении не должен сбрасываться; первоначальный `admin/admin` допустим только на чистой установке с обязательной сменой при первом входе.
 
-Upgrade-path к 0.30.0 не считается подтверждённым до qualification финального candidate SHA. Опубликованные ранее миграции должны оставаться immutable byte-for-byte.
+Опубликованные ранее migrations остаются immutable byte-for-byte. Supported upgrade с текущего Stable 0.29.0 и clean-install считаются подтверждёнными только результатами qualification точного candidate SHA.
 
-## Что ещё не считается готовым
+## Обязательные qualification gates
 
-До release-candidate состояния необходимо как минимум:
+Точный итоговый candidate SHA должен подтвердить как минимум:
 
-- подключить authoritative production projection для Sites/Nodes/Inventory без обхода admission semantics agent enrollment v2;
-- квалифицировать отображение Desired State / Actual State и version skew на реальных authoritative источниках либо сохранить их явно unavailable;
-- включить Sites/Nodes UI в штатную authenticated navigation только после появления подтверждённого provider;
-- подтвердить границы scope/RBAC для multi-site и delegated management scenarios;
-- закончить accessibility/responsive и stale/expired UX qualification на точном candidate SHA;
-- пройти штатные install/upgrade/restart/recovery/security/commercial release gates.
-
-## Проверки для qualification
-
-Перед переводом 0.30.0 в release candidate точный итоговый SHA должен подтвердить как минимум:
-
+- public repository safety boundary;
 - formatting, `go vet`, unit/contract tests и build;
-- JSON Schema / read-model compatibility;
-- fail-closed tests: provider unavailable, malformed envelope, unknown Site, duplicate Node, stale/expired evidence;
-- RBAC: anonymous → deny, unbound identity → deny, `resources.read` roles → read-only access;
+- JSON Schema/read-model compatibility;
+- fail-closed scenarios: provider unavailable, malformed envelope, unknown Site, duplicate Node, stale/expired evidence;
+- RBAC: anonymous → deny, unbound identity → deny, site-scoped delegated viewer → deny global aggregate, global `resources.read` → read-only access;
 - отсутствие mutation authority у inventory UI/API;
-- privacy/minimization review состава выдаваемых inventory полей;
+- privacy/minimization границы inventory полей;
+- accessibility markers и mobile one-node-per-row contract;
 - PostgreSQL 15/16/17/18 clean-install и supported-upgrade;
-- restart/recovery qualification authoritative projections;
-- public repository safety boundary и license/SPDX/commercial evidence;
+- PostgreSQL adapter/restart recovery qualification;
+- race detector и restart tests;
+- неизменность опубликованных migrations;
+- license/SPDX/commercial evidence и release provenance exact SHA;
 - отсутствие переноса PASS от другого SHA.
+
+## Packaging и публикация
+
+Зелёный PR CI сам по себе не является Public Stable. После qualification exact candidate SHA требуются canonical merge в `main`, повторная main qualification, официальный tag/source release и отдельная Public Stable promotion с binary/source artifacts, SHA-256 checksum/sidecar, qualification/release manifests и provenance.
 
 ## Граница готовности
 
-Наличие подготовленного кода само по себе не делает 0.30.0 release candidate или Stable. Promotion возможна только после завершения authoritative provider wiring, qualification точного итогового состояния и прохождения штатных release/publication gates.
+0.30.0 считается готовым к Public Stable только после прохождения всех обязательных qualification/publication gates на точном итоговом состоянии. До этого версия остаётся release candidate и не должна описываться как Stable.
