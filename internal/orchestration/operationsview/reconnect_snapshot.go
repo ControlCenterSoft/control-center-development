@@ -196,6 +196,19 @@ func ValidateJobReconnectSnapshot(snapshot JobReconnectSnapshot) error {
 	if len(snapshot.Events) > MaxReconnectTimelineEvents {
 		return invalidReconnect("timeline delta exceeds bounded reconnect limit")
 	}
+	if snapshot.State == JobReconnectCurrent {
+		if snapshot.AfterVersion < snapshot.TimelineHeadVersion {
+			if len(snapshot.Events) == 0 {
+				return invalidReconnect("current reconnect delta omits unseen timeline head")
+			}
+			last := snapshot.Events[len(snapshot.Events)-1]
+			if last.JobVersion != snapshot.TimelineHeadVersion || last.Status != snapshot.TimelineHeadStatus || last.Attempt != snapshot.TimelineHeadAttempt {
+				return invalidReconnect("current reconnect delta does not terminate at timeline head")
+			}
+		} else if len(snapshot.Events) != 0 {
+			return invalidReconnect("current reconnect delta contains already-observed timeline events")
+		}
+	}
 	return nil
 }
 
