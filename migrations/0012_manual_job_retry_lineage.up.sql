@@ -14,19 +14,23 @@ CREATE TABLE IF NOT EXISTS cc_job_manual_retry_lineage (
     retry_history_digest       text        NOT NULL,
     approval_evidence_digest   text,
     requested_at               timestamptz NOT NULL,
+    UNIQUE (source_job_id, source_job_version),
     CHECK (root_job_id <> retry_job_id),
     CHECK (source_job_id <> retry_job_id),
-    CHECK (char_length(request_fingerprint) = 64),
-    CHECK (revision_digest LIKE 'sha256:%'),
-    CHECK (policy_digest LIKE 'sha256:%'),
-    CHECK (retry_history_digest LIKE 'sha256:%'),
-    CHECK (reviewed_admission_id LIKE 'sha256:%'),
-    CHECK (revalidation_admission_id LIKE 'sha256:%'),
-    CHECK (approval_evidence_digest IS NULL OR approval_evidence_digest LIKE 'sha256:%')
+    CHECK (char_length(root_job_id) BETWEEN 1 AND 255),
+    CHECK (char_length(source_job_id) BETWEEN 1 AND 255),
+    CHECK (char_length(retry_job_id) BETWEEN 1 AND 255),
+    CHECK (char_length(retry_idempotency_key) BETWEEN 1 AND 255),
+    CHECK (char_length(revision_id) BETWEEN 1 AND 255),
+    CHECK (char_length(policy_id) BETWEEN 1 AND 255),
+    CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'),
+    CHECK (revision_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CHECK (policy_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CHECK (retry_history_digest ~ '^sha256:[0-9a-f]{64}$'),
+    CHECK (reviewed_admission_id ~ '^sha256:[0-9a-f]{64}$'),
+    CHECK (revalidation_admission_id ~ '^sha256:[0-9a-f]{64}$'),
+    CHECK (approval_evidence_digest IS NULL OR approval_evidence_digest ~ '^sha256:[0-9a-f]{64}$')
 );
 
 CREATE INDEX IF NOT EXISTS cc_job_manual_retry_root_idx
     ON cc_job_manual_retry_lineage (root_job_id, requested_at, retry_job_id);
-
-CREATE INDEX IF NOT EXISTS cc_job_manual_retry_source_idx
-    ON cc_job_manual_retry_lineage (source_job_id, source_job_version);
