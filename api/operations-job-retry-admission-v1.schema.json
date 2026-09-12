@@ -18,6 +18,8 @@
     "source_max_attempts",
     "policy_id",
     "policy_digest",
+    "retry_history_digest",
+    "retry_history_observed_at",
     "used_manual_retries",
     "max_manual_retries",
     "requires_fresh_approval",
@@ -89,6 +91,14 @@
     "policy_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "retry_history_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "retry_history_observed_at": {
+      "type": "string",
+      "format": "date-time"
     },
     "used_manual_retries": {
       "type": "integer",
