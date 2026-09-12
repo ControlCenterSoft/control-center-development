@@ -19,14 +19,31 @@ func approvedCommercialEvidence() CommercialEvidence {
 	}
 }
 
+func candidateArtifactEvidence() ArtifactEvidence {
+	return ArtifactEvidence{
+		BinaryDigest:          "sha256:" + strings.Repeat("1", 64),
+		ChecksumSidecar:       true,
+		QualificationManifest: true,
+		Provenance:            true,
+	}
+}
+
+func stableArtifactEvidence() ArtifactEvidence {
+	evidence := candidateArtifactEvidence()
+	evidence.SourceDigest = "sha256:" + strings.Repeat("2", 64)
+	evidence.SHA256SUMS = true
+	evidence.ReleaseManifest = true
+	return evidence
+}
+
 func TestEvaluatePromotionGateStable(t *testing.T) {
 	decision, err := EvaluatePromotionGate("stable", PromotionEvidence{
 		Version:          "1.0.0",
 		Revision:         strings.Repeat("b", 40),
 		TestsPassed:      true,
 		SecurityPassed:   true,
-		ArtifactSigned:   true,
 		RollbackPrepared: true,
+		Artifact:         stableArtifactEvidence(),
 		Commercial:       approvedCommercialEvidence(),
 	})
 	if err != nil {
@@ -46,8 +63,14 @@ func TestEvaluatePromotionGateStableReportsBlockers(t *testing.T) {
 		"tests",
 		"security",
 		"revision",
-		"signature",
 		"rollback",
+		"artifact_digest",
+		"checksum_sidecar",
+		"qualification_manifest",
+		"provenance",
+		"source_artifact_digest",
+		"sha256sums",
+		"release_manifest",
 		"commercial_disposition",
 		"commercial_evidence",
 		"third_party_dependencies",
@@ -68,22 +91,20 @@ func TestEvaluatePromotionGateStableReportsBlockers(t *testing.T) {
 	}
 }
 
-func TestEvaluatePromotionGateCandidateRequiresRollbackAndCommercialEvidence(t *testing.T) {
+func TestEvaluatePromotionGateCandidateRequiresRollback(t *testing.T) {
 	decision, err := EvaluatePromotionGate("candidate", PromotionEvidence{
 		Version:        "0.31.0",
 		Revision:       strings.Repeat("c", 40),
 		TestsPassed:    true,
 		SecurityPassed: true,
-		ArtifactSigned: true,
+		Artifact:       candidateArtifactEvidence(),
+		Commercial:     approvedCommercialEvidence(),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if decision.Allowed {
-		t.Fatal("candidate promotion unexpectedly allowed")
-	}
-	if len(decision.Blockers) == 0 || decision.Blockers[0] != "rollback" {
-		t.Fatalf("unexpected blockers: %#v", decision.Blockers)
+	if decision.Allowed || len(decision.Blockers) != 1 || decision.Blockers[0] != "rollback" {
+		t.Fatalf("unexpected decision: %#v", decision)
 	}
 }
 
@@ -103,8 +124,8 @@ func TestEvaluatePromotionGateRejectsUnboundRevision(t *testing.T) {
 		Revision:         "latest",
 		TestsPassed:      true,
 		SecurityPassed:   true,
-		ArtifactSigned:   true,
 		RollbackPrepared: true,
+		Artifact:         candidateArtifactEvidence(),
 		Commercial:       approvedCommercialEvidence(),
 	})
 	if err != nil {
