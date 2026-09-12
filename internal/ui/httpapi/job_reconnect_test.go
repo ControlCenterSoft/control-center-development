@@ -29,22 +29,31 @@ func (stub *jobReconnectProviderStub) JobReconnect(_ context.Context, jobID stri
 func reconnectHTTPSnapshot(state operationsview.JobReconnectState) operationsview.JobReconnectSnapshot {
 	now := time.Date(2026, 9, 12, 3, 50, 0, 0, time.UTC)
 	snapshot := operationsview.JobReconnectSnapshot{
-		ContractVersion:           operationsview.JobReconnectSnapshotContractVersion,
-		State:                     state,
-		SourceAvailable:           true,
-		JobID:                     "job-31",
-		JobVersion:                2,
-		Status:                    job.StatusRunning,
-		Attempt:                   1,
-		MaxAttempts:               3,
-		UpdatedAt:                 now.Add(-time.Minute),
-		Terminal:                  false,
-		AfterVersion:              1,
-		ResumeVersion:             2,
-		TimelineHeadVersion:       2,
-		TimelineHeadStatus:        job.StatusRunning,
-		TimelineHeadAttempt:       1,
-		Events:                    []job.TimelineEntry{},
+		ContractVersion:     operationsview.JobReconnectSnapshotContractVersion,
+		State:               state,
+		SourceAvailable:     true,
+		JobID:               "job-31",
+		JobVersion:          2,
+		Status:              job.StatusRunning,
+		Attempt:             1,
+		MaxAttempts:         3,
+		UpdatedAt:           now.Add(-time.Minute),
+		Terminal:            false,
+		AfterVersion:        1,
+		ResumeVersion:       2,
+		TimelineHeadVersion: 2,
+		TimelineHeadStatus:  job.StatusRunning,
+		TimelineHeadAttempt: 1,
+		Events: []job.TimelineEntry{
+			{
+				JobID:      "job-31",
+				Event:      job.TimelineAttemptStarted,
+				Status:     job.StatusRunning,
+				Attempt:    1,
+				JobVersion: 2,
+				OccurredAt: now.Add(-time.Minute),
+			},
+		},
 		ReloadRequired:            false,
 		EvaluatedAt:               now,
 		ExecutionAuthorized:       false,
@@ -52,6 +61,7 @@ func reconnectHTTPSnapshot(state operationsview.JobReconnectState) operationsvie
 	}
 	if state == operationsview.JobReconnectReloadRequired {
 		snapshot.ReloadRequired = true
+		snapshot.Events = []job.TimelineEntry{}
 	}
 	if state == operationsview.JobReconnectUnavailable {
 		snapshot.SourceAvailable = false
@@ -59,6 +69,7 @@ func reconnectHTTPSnapshot(state operationsview.JobReconnectState) operationsvie
 		snapshot.TimelineHeadVersion = 0
 		snapshot.TimelineHeadStatus = ""
 		snapshot.TimelineHeadAttempt = 0
+		snapshot.Events = []job.TimelineEntry{}
 	}
 	return snapshot
 }
