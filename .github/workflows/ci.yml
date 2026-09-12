@@ -118,7 +118,7 @@ jobs:
   postgres-migration-qualification:
     name: PostgreSQL ${{ matrix.postgres }} / ${{ matrix.scenario }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -149,6 +149,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Go
@@ -177,6 +178,33 @@ jobs:
               ;;
           esac
           go test ./migrations -run "^${qualification_test}$" -count=1 -v
+
+      - name: Qualify exact 0.31 candidate artifact lifecycle
+        if: matrix.postgres == '16' && matrix.scenario == 'supported-upgrade'
+        shell: bash
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/qualify-candidate-031.sh
+
+      - name: Preserve qualified 0.31 candidate artifacts
+        if: matrix.postgres == '16' && matrix.scenario == 'supported-upgrade' && success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: control-center-0.31.0-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/candidate-0.31.0/control-center-0.31.0-linux-amd64.tar.gz
+            dist/candidate-0.31.0/control-center-0.31.0-linux-amd64.tar.gz.sha256
+            dist/candidate-0.31.0/control-center-0.31.0-source.tar.gz
+            dist/candidate-0.31.0/control-center-0.31.0.provenance.json
+            dist/candidate-0.31.0/control-center-0.31.0.qualification.json
+            dist/candidate-0.31.0/control-center-0.31.0.release-manifest.json
+            dist/candidate-0.31.0/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
 
   postgres-adapter-compatibility:
     name: PostgreSQL ${{ matrix.postgres }} adapters
