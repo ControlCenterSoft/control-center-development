@@ -6,10 +6,11 @@ import (
 )
 
 const (
-	SchemaV1         = "control-center.release-candidate-readiness.v1"
-	StableVersion    = "0.30.0"
-	StableTag        = "v0.30.0"
-	CandidateVersion = "0.31.0"
+	SchemaV1             = "control-center.release-candidate-readiness.v1"
+	StableVersion        = "0.30.0"
+	StableTag            = "v0.30.0"
+	StableArtifactDigest = "sha256:02d15e8ff13bbcb52b6d0c9293ab8804500991fbb41c8b575e88306a8a5ce0f2"
+	CandidateVersion     = "0.31.0"
 )
 
 type GateID string
@@ -85,8 +86,8 @@ func Evaluate(snapshot Snapshot) (Result, error) {
 	if snapshot.StableVersion != StableVersion || snapshot.StableTag != StableTag {
 		return Result{}, fmt.Errorf("unexpected stable identity %q (%q)", snapshot.StableVersion, snapshot.StableTag)
 	}
-	if !digestRE.MatchString(snapshot.StableArtifactDigest) {
-		return Result{}, fmt.Errorf("invalid stable artifact digest")
+	if snapshot.StableArtifactDigest != StableArtifactDigest {
+		return Result{}, fmt.Errorf("unexpected stable artifact digest")
 	}
 	if snapshot.CandidateVersion != CandidateVersion {
 		return Result{}, fmt.Errorf("unexpected candidate version %q", snapshot.CandidateVersion)
