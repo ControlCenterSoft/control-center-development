@@ -29,11 +29,11 @@ const (
 )
 
 const (
-	JobRetryBlockerSourceNotFailed        = "source_not_failed"
-	JobRetryBlockerSourceAlreadyRetried   = "source_already_retried"
-	JobRetryBlockerPolicyDenied           = "policy_denies_retry"
-	JobRetryBlockerManualBudgetExhausted  = "manual_retry_budget_exhausted"
-	JobRetryBlockerFreshApprovalRequired  = "fresh_approval_required"
+	JobRetryBlockerSourceNotFailed       = "source_not_failed"
+	JobRetryBlockerSourceAlreadyRetried  = "source_already_retried"
+	JobRetryBlockerPolicyDenied          = "policy_denies_retry"
+	JobRetryBlockerManualBudgetExhausted = "manual_retry_budget_exhausted"
+	JobRetryBlockerFreshApprovalRequired = "fresh_approval_required"
 )
 
 // JobRetryPolicyEvidence is an immutable policy snapshot supplied by the
