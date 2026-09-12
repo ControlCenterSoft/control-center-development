@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.pro/schemas/operations-maintenance-window-v1.schema.json",
+  "title": "Control Center Operations Maintenance Window v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "window_id",
+    "change_id",
+    "revision_id",
+    "revision_digest",
+    "starts_at",
+    "ends_at",
+    "observed_at",
+    "evaluated_at",
+    "state"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "ui.operations-maintenance-window/v1"
+    },
+    "window_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "change_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "revision_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "revision_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "starts_at": {
+      "$ref": "#/$defs/utc_time"
+    },
+    "ends_at": {
+      "$ref": "#/$defs/utc_time"
+    },
+    "observed_at": {
+      "$ref": "#/$defs/utc_time"
+    },
+    "evaluated_at": {
+      "$ref": "#/$defs/utc_time"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["scheduled", "active", "expired"]
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^\\S(?:.*\\S)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "utc_time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    }
+  }
+}
