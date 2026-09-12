@@ -214,12 +214,12 @@ func protectSpreadsheetFormula(value string) string {
 	if value == "" {
 		return value
 	}
-	trimmed := strings.TrimLeft(value, " \t\r\n")
-	if trimmed == "" {
+	candidate := strings.TrimLeft(value, " ")
+	if candidate == "" {
 		return value
 	}
-	switch trimmed[0] {
-	case '=', '+', '-', '@':
+	switch candidate[0] {
+	case '=', '+', '-', '@', '\t', '\r', '\n':
 		return "'" + value
 	default:
 		return value
