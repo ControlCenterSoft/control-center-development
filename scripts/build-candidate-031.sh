@@ -20,7 +20,17 @@ mkdir -p "$dist_dir"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 bundle="control-center-$candidate_version"
-mkdir -p "$stage/$bundle/bin" "$stage/$bundle/api" "$stage/$bundle/config" "$stage/$bundle/deploy/systemd" "$stage/$bundle/migrations" "$stage/$bundle/scripts" "$stage/$bundle/docs"
+mkdir -p \
+  "$stage/$bundle/bin" \
+  "$stage/$bundle/api" \
+  "$stage/$bundle/config" \
+  "$stage/$bundle/deploy/systemd" \
+  "$stage/$bundle/migrations" \
+  "$stage/$bundle/scripts" \
+  "$stage/$bundle/docs" \
+  "$stage/$bundle/compliance"
+
+go mod verify
 
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
   -trimpath -buildvcs=false \
@@ -39,6 +49,11 @@ printf '%s\n' "$candidate_version" > "$stage/$bundle/VERSION"
 printf '%s\n' "$commit" > "$stage/$bundle/REVISION"
 printf '%s\n' "$build_time" > "$stage/$bundle/BUILD_TIME"
 chmod 0755 "$stage/$bundle/bin/control-center" "$stage/$bundle/scripts/migrate.sh"
+
+python3 scripts/generate-compliance-031.py \
+  --candidate-sha "$commit" \
+  --binary "$stage/$bundle/bin/control-center" \
+  --output-dir "$stage/$bundle/compliance"
 
 artifact="$dist_dir/control-center-$candidate_version-linux-amd64.tar.gz"
 tar --sort=name --mtime="@$source_date_epoch" --owner=0 --group=0 --numeric-owner -C "$stage" -cf - "$bundle" | gzip -n > "$artifact"

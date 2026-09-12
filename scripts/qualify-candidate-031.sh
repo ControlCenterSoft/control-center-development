@@ -33,6 +33,8 @@ trap cleanup EXIT
 
 CANDIDATE_SHA="$candidate_sha" bash scripts/build-candidate-031.sh
 out="$repo_root/dist/candidate-0.31.0"
+evidence_dir="$out/evidence"
+mkdir -p "$evidence_dir"
 binary_artifact="$out/control-center-$candidate_version-linux-amd64.tar.gz"
 source_artifact="$out/control-center-$candidate_version-source.tar.gz"
 (
@@ -49,6 +51,68 @@ candidate_root="$work/candidate/control-center-$candidate_version"
 [[ -f "$candidate_root/deploy/systemd/control-center.service" ]]
 [[ -f "$candidate_root/config/control-center.env.example" ]]
 [[ -x "$candidate_root/scripts/migrate.sh" ]]
+[[ -f "$candidate_root/compliance/license-inventory.json" ]]
+[[ -f "$candidate_root/compliance/THIRD_PARTY_NOTICES.txt" ]]
+[[ -f "$candidate_root/compliance/sbom.cdx.json" ]]
+[[ -f "$candidate_root/compliance/commercial-oss-evidence.json" ]]
+
+python3 - "$candidate_root/compliance" "$candidate_sha" <<'PY'
+import json, pathlib, sys
+root=pathlib.Path(sys.argv[1]); sha=sys.argv[2]
+inventory=json.loads((root/"license-inventory.json").read_text(encoding="utf-8"))
+evidence=json.loads((root/"commercial-oss-evidence.json").read_text(encoding="utf-8"))
+sbom=json.loads((root/"sbom.cdx.json").read_text(encoding="utf-8"))
+assert inventory["candidate_sha"] == sha
+assert inventory["status"] == "PASS_ALLOW_ONLY"
+assert inventory["legal_clearance_claimed"] is False
+assert inventory["components"]
+assert all(c["policy"] == "ALLOW" for c in inventory["components"])
+assert all(c["spdx"] != "UNKNOWN" for c in inventory["components"])
+assert evidence["candidate_sha"] == sha
+assert evidence["status"] == "ENGINEERING_PASS_ALLOW_ONLY"
+assert evidence["commercial_legal_clearance_claimed"] is False
+assert evidence["review_count"] == 0 and evidence["block_count"] == 0 and evidence["unknown_count"] == 0
+assert sbom["bomFormat"] == "CycloneDX" and sbom["specVersion"] == "1.7"
+assert any(
+    p.get("name") == "control-center:candidate-sha" and p.get("value") == sha
+    for p in sbom["metadata"]["component"].get("properties", [])
+)
+assert (root/"THIRD_PARTY_NOTICES.txt").stat().st_size > 100
+print("OSS_LICENSE_SBOM_NOTICES=PASS")
+PY
+
+go mod verify
+scanner_dir="$work/scanner-bin"
+mkdir -p "$scanner_dir"
+GOBIN="$scanner_dir" go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+scanner_version="$("$scanner_dir/govulncheck" -version 2>&1 | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
+set +e
+"$scanner_dir/govulncheck" -json ./... >"$evidence_dir/govulncheck-v1.1.4.jsonl" 2>"$evidence_dir/govulncheck-v1.1.4.stderr"
+vuln_rc=$?
+set -e
+if [[ "$vuln_rc" -ne 0 ]]; then
+  echo "govulncheck failed or found reachable vulnerabilities (rc=$vuln_rc)" >&2
+  cat "$evidence_dir/govulncheck-v1.1.4.stderr" >&2 || true
+  cat "$evidence_dir/govulncheck-v1.1.4.jsonl" >&2 || true
+  exit "$vuln_rc"
+fi
+python3 - "$evidence_dir/security-supply-chain-evidence.json" "$candidate_sha" "$scanner_version" "$evidence_dir/govulncheck-v1.1.4.jsonl" <<'PY'
+import hashlib,json,sys
+path,sha,version,report=sys.argv[1:]
+h=hashlib.sha256(open(report,"rb").read()).hexdigest()
+data={
+  "schema":"control-center.security-supply-chain-evidence.v1",
+  "candidate_version":"0.31.0",
+  "candidate_sha":sha,
+  "status":"PASS_NO_REACHABLE_GO_VULNERABILITIES",
+  "scanner":{"name":"govulncheck","version_output":version,"report_sha256":"sha256:"+h},
+  "go_mod_verify":"PASS",
+  "security_privacy_gate_claimed":False
+}
+with open(path,"w",encoding="utf-8") as f:
+  json.dump(data,f,sort_keys=True,separators=(",",":")); f.write("\n")
+PY
+cat "$evidence_dir/security-supply-chain-evidence.json"
 
 stable_artifact="$work/control-center-$stable_version-linux-amd64.tar.gz"
 curl --fail --location --silent --show-error --retry 3 --connect-timeout 10 --max-time 180 \
@@ -102,9 +166,12 @@ qualification="$out/control-center-$candidate_version.qualification.json"
 provenance="$out/control-center-$candidate_version.provenance.json"
 release_manifest="$out/control-center-$candidate_version.release-manifest.json"
 
-python3 - "$qualification" "$candidate_sha" "$binary_digest" "$source_digest" "$stable_sha256" <<'PY'
+oss_evidence_digest="sha256:$(sha256sum "$candidate_root/compliance/commercial-oss-evidence.json" | awk '{print $1}')"
+security_supply_chain_digest="sha256:$(sha256sum "$evidence_dir/security-supply-chain-evidence.json" | awk '{print $1}')"
+
+python3 - "$qualification" "$candidate_sha" "$binary_digest" "$source_digest" "$stable_sha256" "$oss_evidence_digest" "$security_supply_chain_digest" <<'PY'
 import json,sys
-path,sha,binary_digest,source_digest,stable_digest=sys.argv[1:]
+path,sha,binary_digest,source_digest,stable_digest,oss_digest,security_digest=sys.argv[1:]
 data={
   "schema":"control-center.candidate-qualification.v1",
   "status":"PARTIAL_PASS_NOT_RC",
@@ -118,7 +185,12 @@ data={
     "upgrade_from_stable_0_30":"PASS",
     "rollback_forward_recovery":"PASS"
   },
-  "not_claimed":["security_privacy","commercial_legal_clearance","release_metadata","public_stable_promotion"]
+  "engineering_evidence":{
+    "oss_license_sbom_notices":{"status":"PASS_ALLOW_ONLY","digest":oss_digest,"commercial_legal_clearance_claimed":False},
+    "go_vulnerability_scan":{"status":"PASS_NO_REACHABLE_GO_VULNERABILITIES","digest":security_digest,"security_privacy_gate_claimed":False},
+    "release_metadata":"evaluated_separately_after_manifest"
+  },
+  "not_claimed":["security_privacy","commercial_legal_clearance","public_stable_promotion"]
 }
 with open(path,"w",encoding="utf-8") as f: json.dump(data,f,sort_keys=True,separators=(",",":")); f.write("\n")
 PY
@@ -173,6 +245,7 @@ PY
     "control-center-$candidate_version.provenance.json" \
     "control-center-$candidate_version.qualification.json" \
     "control-center-$candidate_version.release-manifest.json" > SHA256SUMS
+  sha256sum -c SHA256SUMS
 )
 
 # Validate the exact seven-file candidate set through the repository's fail-closed
@@ -219,8 +292,51 @@ go run "$validator_dir/main.go" "$validator_dir/evidence.json"
 rm -rf "$validator_dir"
 trap cleanup EXIT
 
+release_notes_source="docs/RELEASE_0.31.0_RU.md"
+release_notes_packaged="$candidate_root/docs/RELEASE_0.31.0_RU.md"
+[[ -f "$release_notes_source" && -f "$release_notes_packaged" ]]
+cmp -s "$release_notes_source" "$release_notes_packaged"
+python3 - "$evidence_dir/release-metadata-evidence.json" "$candidate_sha" "$out" "$release_notes_source" <<'PY'
+import hashlib,json,pathlib,sys
+evidence_path,sha,out_dir,notes_path=sys.argv[1:]
+out=pathlib.Path(out_dir)
+notes=pathlib.Path(notes_path)
+def digest(p):
+    return "sha256:"+hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+qualification=json.loads((out/"control-center-0.31.0.qualification.json").read_text())
+provenance=json.loads((out/"control-center-0.31.0.provenance.json").read_text())
+manifest=json.loads((out/"control-center-0.31.0.release-manifest.json").read_text())
+assert qualification["candidate_sha"] == sha
+assert provenance["candidate_sha"] == sha and provenance["publication_authority"] is False
+assert manifest["revision"] == sha and manifest["version"] == "0.31.0"
+assert manifest["stable_base"] == "0.30.0" and manifest["publication_authority"] is False
+for name, expected in manifest["artifacts"].items():
+    assert digest(out/name) == expected, (name, digest(out/name), expected)
+notes_text=notes.read_text(encoding="utf-8")
+assert "0.31.0" in notes_text
+assert "NOT RC" in notes_text and "NOT PUBLIC STABLE" in notes_text
+data={
+  "schema":"control-center.release-metadata-evidence.v1",
+  "candidate_version":"0.31.0",
+  "candidate_sha":sha,
+  "status":"PASS",
+  "release_metadata_gate":"PASS",
+  "publication_authority":False,
+  "release_notes_sha256":digest(notes),
+  "release_manifest_sha256":digest(out/"control-center-0.31.0.release-manifest.json"),
+  "provenance_sha256":digest(out/"control-center-0.31.0.provenance.json"),
+  "checksums_sha256":digest(out/"SHA256SUMS"),
+}
+with open(evidence_path,"w",encoding="utf-8") as f:
+    json.dump(data,f,sort_keys=True,separators=(",",":")); f.write("\n")
+PY
+cat "$evidence_dir/release-metadata-evidence.json"
+
 echo "CANDIDATE_PACKAGE=PASS"
 echo "CLEAN_INSTALL=PASS"
 echo "UPGRADE_FROM_STABLE_0_30=PASS"
 echo "ROLLBACK_FORWARD_RECOVERY=PASS"
+echo "OSS_LICENSE_SBOM_NOTICES=PASS"
+echo "GO_VULNERABILITY_SCAN=PASS"
+echo "RELEASE_METADATA=PASS"
 echo "CANDIDATE_SHA=$candidate_sha"
