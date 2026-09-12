@@ -2,7 +2,7 @@
 
 ## Назначение
 
-В интерфейсе Changes / Jobs действие «Повторить» не должно означать безусловный повтор уже завершившейся операции. Между просмотром Job и подтверждением оператором его durable state, policy и approval evidence могут измениться. Повтор старого решения без повторной проверки создаёт stale-view mutation и может повторно применить уже небезопасную операцию.
+В интерфейсе Changes / Jobs действие «Повторить» не должно означать безусловный повтор уже завершившейся операции. Между просмотром Job и подтверждением оператором его durable state, policy, retry history и approval evidence могут измениться. Повтор старого решения без повторной проверки создаёт stale-view mutation и может повторно применить уже небезопасную операцию.
 
 Для 0.31 подготовлен bounded контракт `ui.operations-job-retry-admission/v1`. Он формирует read-only evidence для решения о ручном retry и связывает его с:
 
@@ -10,9 +10,10 @@
 - исходным `change_id` и `action_name`;
 - точной immutable Change revision и её SHA-256 digest;
 - точным policy id/digest;
+- SHA-256 digest и временем наблюдения durable manual-retry history;
 - текущим manual-retry budget;
 - требованием свежего approval evidence, если это предписано policy;
-- единым временем наблюдения evidence.
+- единым временем наблюдения admission evidence.
 
 ## Fail-closed правила
 
@@ -23,11 +24,13 @@
 3. автоматический retry budget исходного Job уже исчерпан;
 4. terminal Job не содержит активной lease;
 5. policy явно разрешает manual retry;
-6. manual-retry budget положительный и ещё не исчерпан;
-7. если policy требует нового approval, передан корректный SHA-256 digest approval evidence;
-8. Job/policy evidence не новее общего `observed_at`.
+6. durable retry-history snapshot имеет канонический SHA-256 digest;
+7. policy и retry-history evidence не старше terminal состояния source Job;
+8. manual-retry budget положительный и ещё не исчерпан;
+9. если policy требует нового approval, передан корректный SHA-256 digest approval evidence;
+10. Job/policy/retry-history evidence не новее общего `observed_at`.
 
-Несовпадение версии возвращает `job.ErrVersionConflict` и не формирует admission. Повреждённое или внутренне противоречивое состояние считается ошибкой evidence и также работает fail-closed.
+Несовпадение версии возвращает `job.ErrVersionConflict` и не формирует admission. Отсутствующий/некорректный retry-history digest, устаревший history/policy snapshot, повреждённое или внутренне противоречивое состояние считаются ошибкой evidence и также работают fail-closed.
 
 Для корректного, но неразрешённого состояния evidence возвращает `blocked` и один или несколько bounded blocker codes:
 
@@ -36,7 +39,7 @@
 - `manual_retry_budget_exhausted`;
 - `fresh_approval_required`.
 
-Blockers канонически сортируются, а `admission_id` является детерминированным SHA-256 от полного безопасного evidence без самого `admission_id`.
+Blockers канонически сортируются, а `admission_id` является детерминированным SHA-256 от полного безопасного evidence без самого `admission_id`. В digest входят retry-history digest и время его наблюдения, поэтому evidence нельзя незаметно переиспользовать с другой историей ручных повторов.
 
 ## ИБ и приватность
 
@@ -58,11 +61,12 @@ Admission evidence специально не содержит:
 1. повторно прочитать source Job;
 2. потребовать exact version precondition (предпочтительно `If-Match`);
 3. повторно проверить актуальный policy/approval evidence;
-4. проверить durable manual-retry history/budget;
+4. повторно получить durable manual-retry history и подтвердить тот же либо более новый history digest/budget;
 5. создать **новую retry lineage**, а не переиспользовать terminal Job и его старую lease/idempotency identity;
-6. записать bounded Audit evidence о решении и связи с source Job;
-7. не выполнять автоматический retry при version/policy conflict;
-8. отдельно пройти race/PostgreSQL/restart/reconnect/negative-path qualification.
+6. атомарно учесть manual-retry budget вместе с созданием новой lineage, чтобы параллельные запросы не превысили policy cap;
+7. записать bounded Audit evidence о решении и связи с source Job;
+8. не выполнять автоматический retry при version/policy/history conflict;
+9. отдельно пройти race/PostgreSQL/restart/reconnect/negative-path qualification.
 
 До этой интеграции текущий slice является source-only подготовкой и не закрывает release gate 0.31.0.
 
