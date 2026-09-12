@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	SecurityPrivacyEvidenceSchemaV1     = "control-center.release-security-privacy-evidence.v1"
+	SecurityPrivacyEvidenceSchemaV1    = "control-center.release-security-privacy-evidence.v1"
 	SecurityPrivacyDispositionApproved = "approved"
 )
 
