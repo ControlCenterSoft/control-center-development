@@ -199,6 +199,8 @@ jobs:
             dist/candidate-0.31.0/control-center-0.31.0-linux-amd64.tar.gz
             dist/candidate-0.31.0/control-center-0.31.0-linux-amd64.tar.gz.sha256
             dist/candidate-0.31.0/control-center-0.31.0-source.tar.gz
+            dist/candidate-0.31.0/control-center-0.31.0.sbom.cdx.json
+            dist/candidate-0.31.0/THIRD_PARTY_NOTICES.md
             dist/candidate-0.31.0/control-center-0.31.0.provenance.json
             dist/candidate-0.31.0/control-center-0.31.0.qualification.json
             dist/candidate-0.31.0/control-center-0.31.0.release-manifest.json
