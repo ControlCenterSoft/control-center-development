@@ -107,6 +107,46 @@ func BuildMaintenanceWindowEvidence(
 	return evidence, nil
 }
 
+// ValidateMaintenanceWindowEvidence validates evidence received across a
+// transport/storage boundary by rebuilding the deterministic contract from
+// its inputs. Authority flags are hard-false: a maintenance window never
+// grants execution or production-mutation permission on its own.
+func ValidateMaintenanceWindowEvidence(evidence MaintenanceWindowEvidence) error {
+	if evidence.ContractVersion != MaintenanceWindowContractVersion {
+		return invalidMaintenanceWindow("contract_version is invalid")
+	}
+	if evidence.ExecutionAuthorized || evidence.ProductionMutationAllowed {
+		return invalidMaintenanceWindow("maintenance window evidence must not grant execution authority")
+	}
+
+	rebuilt, err := BuildMaintenanceWindowEvidence(
+		evidence.ChangeID,
+		evidence.RevisionID,
+		evidence.RevisionDigest,
+		evidence.Required,
+		evidence.Window,
+		evidence.EvaluatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	if evidence.State != rebuilt.State {
+		return invalidMaintenanceWindow("state is inconsistent with evaluated_at and window")
+	}
+	if !evidence.EvaluatedAt.Equal(rebuilt.EvaluatedAt) {
+		return invalidMaintenanceWindow("evaluated_at is inconsistent")
+	}
+	if (evidence.Window == nil) != (rebuilt.Window == nil) {
+		return invalidMaintenanceWindow("window presence is inconsistent")
+	}
+	if evidence.Window != nil {
+		if !evidence.Window.StartsAt.Equal(rebuilt.Window.StartsAt) || !evidence.Window.EndsAt.Equal(rebuilt.Window.EndsAt) {
+			return invalidMaintenanceWindow("window timestamps are inconsistent")
+		}
+	}
+	return nil
+}
+
 func normalizeMaintenanceWindow(window MaintenanceWindow) (MaintenanceWindow, error) {
 	if window.StartsAt.IsZero() || window.EndsAt.IsZero() {
 		return MaintenanceWindow{}, invalidMaintenanceWindow("starts_at and ends_at are required")
