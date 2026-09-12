@@ -2,7 +2,7 @@ package releasecandidate
 
 import "fmt"
 
-var RequiredArtifactNames = []string{
+var requiredArtifactNames = [...]string{
 	"control-center-0.31.0-linux-amd64.tar.gz",
 	"control-center-0.31.0-linux-amd64.tar.gz.sha256",
 	"control-center-0.31.0-source.tar.gz",
@@ -10,6 +10,12 @@ var RequiredArtifactNames = []string{
 	"control-center-0.31.0.qualification.json",
 	"control-center-0.31.0.release-manifest.json",
 	"SHA256SUMS",
+}
+
+// RequiredArtifactNames returns a defensive copy so callers cannot weaken the
+// expected candidate bundle by mutating package-level state.
+func RequiredArtifactNames() []string {
+	return append([]string(nil), requiredArtifactNames[:]...)
 }
 
 type ArtifactEvidence struct {
@@ -40,8 +46,8 @@ func ValidateArtifactManifest(manifest ArtifactManifest) error {
 		return fmt.Errorf("invalid candidate sha")
 	}
 
-	required := make(map[string]struct{}, len(RequiredArtifactNames))
-	for _, name := range RequiredArtifactNames {
+	required := make(map[string]struct{}, len(requiredArtifactNames))
+	for _, name := range requiredArtifactNames {
 		required[name] = struct{}{}
 	}
 	seen := make(map[string]struct{}, len(manifest.Artifacts))
@@ -57,7 +63,7 @@ func ValidateArtifactManifest(manifest ArtifactManifest) error {
 		}
 		seen[artifact.Name] = struct{}{}
 	}
-	for _, name := range RequiredArtifactNames {
+	for _, name := range requiredArtifactNames {
 		if _, ok := seen[name]; !ok {
 			return fmt.Errorf("required candidate artifact %q is missing", name)
 		}
