@@ -29,6 +29,20 @@ Readiness относится к одному точному candidate SHA. Evide
 
 Отсутствующий, `pending` или `blocked` gate остаётся blocker. Неизвестный или дублированный gate, неправильный Stable artifact, evidence от другого candidate SHA или `pass` без SHA-256 evidence отклоняются как malformed input.
 
+## Exact artifact contract
+
+Runner-free подготовка фиксирует ожидаемую форму candidate bundle по уже опубликованной форме Stable 0.30.0. Для 0.31.0 обязательны ровно следующие public release assets:
+
+- `control-center-0.31.0-linux-amd64.tar.gz`;
+- `control-center-0.31.0-linux-amd64.tar.gz.sha256`;
+- `control-center-0.31.0-source.tar.gz`;
+- `control-center-0.31.0.provenance.json`;
+- `control-center-0.31.0.qualification.json`;
+- `control-center-0.31.0.release-manifest.json`;
+- `SHA256SUMS`.
+
+Artifact manifest привязан к exact candidate SHA. Для каждого элемента требуется SHA-256 digest; отсутствующий, дублированный или неожиданный файл делает manifest невалидным. Этот контракт только проверяет форму и identity будущего bundle: он не создаёт артефакты и не является доказательством их qualification.
+
 ## Граница данных
 
 Readiness snapshot содержит только версии, tag, SHA/digest и статусы gates. В него не должны попадать:
