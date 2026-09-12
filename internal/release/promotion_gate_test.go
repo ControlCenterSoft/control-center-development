@@ -5,8 +5,13 @@ import (
 	"testing"
 )
 
-func approvedCommercialEvidence() CommercialEvidence {
+func releaseBinding(version, revision string) ReleaseEvidenceBinding {
+	return ReleaseEvidenceBinding{Version: version, Revision: revision}
+}
+
+func approvedCommercialEvidence(version, revision string) CommercialEvidence {
 	return CommercialEvidence{
+		Binding:                   releaseBinding(version, revision),
 		Disposition:               CommercialDispositionApproved,
 		EvidenceDigest:            "sha256:" + strings.Repeat("a", 64),
 		DependenciesReviewed:      true,
@@ -19,8 +24,9 @@ func approvedCommercialEvidence() CommercialEvidence {
 	}
 }
 
-func candidateArtifactEvidence() ArtifactEvidence {
+func candidateArtifactEvidence(version, revision string) ArtifactEvidence {
 	return ArtifactEvidence{
+		Binding:               releaseBinding(version, revision),
 		BinaryDigest:          "sha256:" + strings.Repeat("1", 64),
 		ChecksumSidecar:       true,
 		QualificationManifest: true,
@@ -28,24 +34,37 @@ func candidateArtifactEvidence() ArtifactEvidence {
 	}
 }
 
-func stableArtifactEvidence() ArtifactEvidence {
-	evidence := candidateArtifactEvidence()
+func stableArtifactEvidence(version, revision string) ArtifactEvidence {
+	evidence := candidateArtifactEvidence(version, revision)
 	evidence.SourceDigest = "sha256:" + strings.Repeat("2", 64)
 	evidence.SHA256SUMS = true
 	evidence.ReleaseManifest = true
 	return evidence
 }
 
+func candidatePromotionEvidence(version, revision string) PromotionEvidence {
+	binding := releaseBinding(version, revision)
+	return PromotionEvidence{
+		Version:              version,
+		Revision:             revision,
+		TestsPassed:          true,
+		QualificationBinding: binding,
+		SecurityPassed:       true,
+		SecurityBinding:      binding,
+		RollbackPrepared:     true,
+		RollbackBinding:      binding,
+		Artifact:             candidateArtifactEvidence(version, revision),
+		Commercial:           approvedCommercialEvidence(version, revision),
+	}
+}
+
 func TestEvaluatePromotionGateStable(t *testing.T) {
-	decision, err := EvaluatePromotionGate("stable", PromotionEvidence{
-		Version:          "1.0.0",
-		Revision:         strings.Repeat("b", 40),
-		TestsPassed:      true,
-		SecurityPassed:   true,
-		RollbackPrepared: true,
-		Artifact:         stableArtifactEvidence(),
-		Commercial:       approvedCommercialEvidence(),
-	})
+	version := "1.0.0"
+	revision := strings.Repeat("b", 40)
+	evidence := candidatePromotionEvidence(version, revision)
+	evidence.Artifact = stableArtifactEvidence(version, revision)
+
+	decision, err := EvaluatePromotionGate("stable", evidence)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -64,6 +83,7 @@ func TestEvaluatePromotionGateStableReportsBlockers(t *testing.T) {
 		"security",
 		"revision",
 		"rollback",
+		"artifact_binding",
 		"artifact_digest",
 		"checksum_sidecar",
 		"qualification_manifest",
@@ -71,6 +91,7 @@ func TestEvaluatePromotionGateStableReportsBlockers(t *testing.T) {
 		"source_artifact_digest",
 		"sha256sums",
 		"release_manifest",
+		"commercial_binding",
 		"commercial_disposition",
 		"commercial_evidence",
 		"third_party_dependencies",
@@ -92,14 +113,13 @@ func TestEvaluatePromotionGateStableReportsBlockers(t *testing.T) {
 }
 
 func TestEvaluatePromotionGateCandidateRequiresRollback(t *testing.T) {
-	decision, err := EvaluatePromotionGate("candidate", PromotionEvidence{
-		Version:        "0.31.0",
-		Revision:       strings.Repeat("c", 40),
-		TestsPassed:    true,
-		SecurityPassed: true,
-		Artifact:       candidateArtifactEvidence(),
-		Commercial:     approvedCommercialEvidence(),
-	})
+	version := "0.31.0"
+	revision := strings.Repeat("c", 40)
+	evidence := candidatePromotionEvidence(version, revision)
+	evidence.RollbackPrepared = false
+	evidence.RollbackBinding = ReleaseEvidenceBinding{}
+
+	decision, err := EvaluatePromotionGate("candidate", evidence)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,19 +139,69 @@ func TestEvaluatePromotionGateDevelopmentDoesNotRequireReleaseEvidence(t *testin
 }
 
 func TestEvaluatePromotionGateRejectsUnboundRevision(t *testing.T) {
-	decision, err := EvaluatePromotionGate("candidate", PromotionEvidence{
-		Version:          "0.31.0",
-		Revision:         "latest",
-		TestsPassed:      true,
-		SecurityPassed:   true,
-		RollbackPrepared: true,
-		Artifact:         candidateArtifactEvidence(),
-		Commercial:       approvedCommercialEvidence(),
-	})
+	version := "0.31.0"
+	revision := "latest"
+	evidence := candidatePromotionEvidence(version, revision)
+
+	decision, err := EvaluatePromotionGate("candidate", evidence)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if decision.Allowed || len(decision.Blockers) != 1 || decision.Blockers[0] != "revision" {
+	want := []string{"revision", "tests_binding", "security_binding", "rollback_binding", "artifact_binding", "commercial_binding"}
+	if decision.Allowed || len(decision.Blockers) != len(want) {
 		t.Fatalf("unexpected decision: %#v", decision)
+	}
+	for i := range want {
+		if decision.Blockers[i] != want[i] {
+			t.Fatalf("blockers=%#v want=%#v", decision.Blockers, want)
+		}
+	}
+}
+
+func TestEvaluatePromotionGateRejectsCrossRevisionEvidence(t *testing.T) {
+	version := "0.31.0"
+	revision := strings.Repeat("c", 40)
+	other := strings.Repeat("d", 40)
+	evidence := candidatePromotionEvidence(version, revision)
+	evidence.QualificationBinding = releaseBinding(version, other)
+	evidence.SecurityBinding = releaseBinding(version, other)
+	evidence.RollbackBinding = releaseBinding(version, other)
+	evidence.Artifact.Binding = releaseBinding(version, other)
+	evidence.Commercial.Binding = releaseBinding(version, other)
+
+	decision, err := EvaluatePromotionGate("candidate", evidence)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"tests_binding", "security_binding", "rollback_binding", "artifact_binding", "commercial_binding"}
+	if decision.Allowed || len(decision.Blockers) != len(want) {
+		t.Fatalf("unexpected decision: %#v", decision)
+	}
+	for i := range want {
+		if decision.Blockers[i] != want[i] {
+			t.Fatalf("blockers=%#v want=%#v", decision.Blockers, want)
+		}
+	}
+}
+
+func TestEvaluatePromotionGateRejectsCrossVersionEvidence(t *testing.T) {
+	version := "0.31.0"
+	revision := strings.Repeat("c", 40)
+	evidence := candidatePromotionEvidence(version, revision)
+	evidence.Artifact.Binding = releaseBinding("0.32.0", revision)
+	evidence.Commercial.Binding = releaseBinding("0.32.0", revision)
+
+	decision, err := EvaluatePromotionGate("candidate", evidence)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"artifact_binding", "commercial_binding"}
+	if decision.Allowed || len(decision.Blockers) != len(want) {
+		t.Fatalf("unexpected decision: %#v", decision)
+	}
+	for i := range want {
+		if decision.Blockers[i] != want[i] {
+			t.Fatalf("blockers=%#v want=%#v", decision.Blockers, want)
+		}
 	}
 }
