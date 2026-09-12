@@ -15,9 +15,9 @@ var (
 )
 
 // JobRetryCurrentEvidenceSource supplies the authoritative evidence that must
-// be re-read immediately before a manual retry mutation. Implementations must
-// return current durable/canonical evidence and must not mutate the Job, Change
-// or approval state as a side effect of these reads.
+// be re-read immediately before a new manual retry mutation. Implementations
+// must return current durable/canonical evidence and must not mutate the Job,
+// Change or approval state as a side effect of these reads.
 type JobRetryCurrentEvidenceSource interface {
 	CurrentRevision(context.Context, job.Job) (revisionID string, revisionDigest string, err error)
 	CurrentRetryPolicy(context.Context, job.Job) (JobRetryPolicyEvidence, error)
@@ -47,14 +47,34 @@ func CreateManualRetryWithRevalidation(
 	if repository == nil {
 		return job.Job{}, job.ManualRetryLineage{}, false, errors.New("manual retry repository is required")
 	}
-	if evidenceSource == nil {
-		return job.Job{}, job.ManualRetryLineage{}, false, errors.New("retry evidence source is required")
-	}
 	if request.RequestedAt.IsZero() {
 		return job.Job{}, job.ManualRetryLineage{}, false, errors.New("manual retry request time is required")
 	}
 	if err := validateReviewedRetryAdmission(request.Reviewed); err != nil {
 		return job.Job{}, job.ManualRetryLineage{}, false, err
+	}
+
+	// A committed lineage is authoritative evidence that this exact reviewed
+	// admission already crossed the atomic mutation boundary. Return it before
+	// re-reading policy/history so a lost HTTP response can be retried even
+	// after retry-history counters have advanced or an evidence provider is
+	// temporarily unavailable. Different child identity still fails closed.
+	existing, err := repository.GetManualRetryLineageByAdmission(ctx, request.Reviewed.AdmissionID)
+	if err == nil {
+		retry, getErr := repository.Get(ctx, existing.RetryJobID)
+		if getErr != nil {
+			return job.Job{}, job.ManualRetryLineage{}, false, getErr
+		}
+		if request.RetryJobID != existing.RetryJobID || request.RetryIdempotencyKey != retry.IdempotencyKey {
+			return job.Job{}, job.ManualRetryLineage{}, false, job.ErrManualRetryAdmissionConflict
+		}
+		return retry, existing, false, nil
+	}
+	if !errors.Is(err, job.ErrManualRetryLineageNotFound) {
+		return job.Job{}, job.ManualRetryLineage{}, false, err
+	}
+	if evidenceSource == nil {
+		return job.Job{}, job.ManualRetryLineage{}, false, errors.New("retry evidence source is required")
 	}
 
 	source, err := repository.Get(ctx, request.Reviewed.JobID)
