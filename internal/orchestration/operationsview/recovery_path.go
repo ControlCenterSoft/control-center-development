@@ -94,8 +94,8 @@ func BuildRecoveryPathEvidence(
 		return RecoveryPathEvidence{}, invalidRecoveryPath("evaluated_at is required")
 	}
 	now = now.UTC()
-	if observation.BackupCount <= 0 {
-		return RecoveryPathEvidence{}, invalidRecoveryPath("backup_count must be positive")
+	if observation.BackupCount < 0 {
+		return RecoveryPathEvidence{}, invalidRecoveryPath("backup_count must be non-negative")
 	}
 	if observation.VerifiedBackupCount < 0 || observation.VerifiedBackupCount > observation.BackupCount {
 		return RecoveryPathEvidence{}, invalidRecoveryPath("verified_backup_count is outside backup_count")
@@ -105,6 +105,9 @@ func BuildRecoveryPathEvidence(
 	}
 	if !validRecoveryVerificationOutcome(observation.VerificationOutcome) {
 		return RecoveryPathEvidence{}, invalidRecoveryPath("verification_outcome is invalid")
+	}
+	if observation.BackupCount == 0 && observation.VerificationOutcome == recovery.VerificationPassed {
+		return RecoveryPathEvidence{}, invalidRecoveryPath("passed verification requires at least one backup")
 	}
 
 	verifiedAt, err := normalizeOptionalRecoveryPathTime("verification_observed_at", observation.VerificationObservedAt, now)
@@ -149,6 +152,9 @@ func BuildRecoveryPathEvidence(
 	case observation.RecoveryPointState != recovery.RecoveryPointReady:
 		evidence.State = RecoveryPathBlocked
 		evidence.BlockReason = RecoveryBlockPointNotReady
+	case observation.BackupCount == 0:
+		evidence.State = RecoveryPathBlocked
+		evidence.BlockReason = RecoveryBlockBackupUnverified
 	case observation.VerifiedBackupCount != observation.BackupCount:
 		evidence.State = RecoveryPathBlocked
 		evidence.BlockReason = RecoveryBlockBackupUnverified
