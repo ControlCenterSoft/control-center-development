@@ -127,7 +127,6 @@ func TestJobReconnectHandlerRejectsInvalidRequestAndProviderEvidence(t *testing.
 		{name: "method", method: http.MethodPost, url: "/ops/job-reconnect?job_id=job-31", provider: &jobReconnectProviderStub{}, wantStatus: http.StatusMethodNotAllowed},
 		{name: "job id", method: http.MethodGet, url: "/ops/job-reconnect?job_id=%20job-31%20", provider: &jobReconnectProviderStub{}, wantStatus: http.StatusBadRequest},
 		{name: "cursor", method: http.MethodGet, url: "/ops/job-reconnect?job_id=job-31&after_version=-1", provider: &jobReconnectProviderStub{}, wantStatus: http.StatusBadRequest},
-		{name: "nil provider", method: http.MethodGet, url: "/ops/job-reconnect?job_id=job-31", provider: nil, wantStatus: http.StatusServiceUnavailable},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -140,11 +139,18 @@ func TestJobReconnectHandlerRejectsInvalidRequestAndProviderEvidence(t *testing.
 		})
 	}
 
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/ops/job-reconnect?job_id=job-31", nil)
+	JobReconnectHandler(nil).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("nil provider status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
 	bad := reconnectHTTPSnapshot(operationsview.JobReconnectCurrent)
 	bad.ExecutionAuthorized = true
 	provider := &jobReconnectProviderStub{snapshot: bad}
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/ops/job-reconnect?job_id=job-31", nil)
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/ops/job-reconnect?job_id=job-31", nil)
 	JobReconnectHandler(provider).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("authority-bearing provider evidence status = %d, body = %s", recorder.Code, recorder.Body.String())
