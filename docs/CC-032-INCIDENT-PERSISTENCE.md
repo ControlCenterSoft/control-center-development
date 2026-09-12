@@ -1,8 +1,8 @@
-# Control Center 0.32 — Incident read-model persistence
+# Control Center 0.32 — Incident persistence and operator mutations
 
-Status: implementation slice for the 0.32 Incidents / Status / Reports line. It builds on the existing `work/cc032-incidents-readmodel-nr2-20260912` domain/query contract and intentionally does not duplicate that work.
+Status: implementation slice for the 0.32 Incidents / Status / Reports line. It builds on the existing incident domain/query contract and intentionally stays inside the 0.32 release boundary.
 
-## Implemented boundary
+## Implemented persistence boundary
 
 This slice adds PostgreSQL persistence for the validated `internal/incidents` read model:
 
@@ -12,19 +12,37 @@ This slice adds PostgreSQL persistence for the validated `internal/incidents` re
 - optimistic-concurrency replacement using `ObjectPrecondition` plus `ValidateSuccessor` generation/resource-version semantics;
 - fail-closed read verification: mirrored columns must exactly match the validated JSON document;
 - bounded newest-first list queries with the same keyset pagination and exact filters defined by `incidents.ListQuery`;
-- one-extra-row pagination instead of an unbounded count query.
+- one-extra-row pagination instead of an unbounded count query;
+- explicit `MutationWriter` / `MutationRepository` contract for authenticated operator adapters.
+
+## Implemented operator mutation preparation
+
+`internal/incidents/mutation.go` now prepares side-effect-free, optimistic-concurrency-guarded operator mutations without performing authorization or persistence itself:
+
+- **acknowledge**: only `open -> acknowledged`, actor-bound, bounded optional note, timeline event, generation/resource-version successor validation;
+- **resolve**: only `acknowledged -> resolved`, mandatory resolution text, optional bounded evidence references, terminal timeline event and rejection of future-dated evidence;
+- **runbook/evidence metadata update**: allowed only before resolution, append-only evidence identities, conflicting evidence rebinding rejected, exact evidence repeats ignored, runbook update plus operator timeline note;
+- resolved incident metadata is immutable through this mutation path;
+- evidence/runbook annotation advances `resource_version` but keeps lifecycle `generation` stable; acknowledge/resolve are semantic lifecycle changes and increment generation;
+- every prepared mutation carries the exact `ObjectPrecondition` that persistence must validate atomically.
+
+The mutation helpers clone nested slices/pointers before modification so a failed or successful preparation cannot mutate the caller's current read model in memory.
 
 ## Security and integrity rules
 
-Persistence does not authorize callers. HTTP/API adapters must check the dedicated incident-read permission before calling this repository and must derive any scope restriction from the authenticated principal rather than trusting arbitrary client scope input.
+Persistence and mutation preparation do **not** authorize callers. HTTP/API adapters must check the dedicated incident operator permission, derive scope from the authenticated principal, enforce any required step-up/MFA policy, and emit immutable audit evidence before exposing a mutation as successful.
 
-The repository deliberately fails closed when:
+The implementation deliberately fails closed when:
 
 - a stored JSON document no longer satisfies the domain contract;
 - indexed columns disagree with the JSON document;
-- the optimistic concurrency precondition no longer matches;
+- an optimistic concurrency precondition no longer matches;
 - a resource version or object ID collides;
-- a generation cannot be represented by PostgreSQL `bigint`.
+- a generation cannot be represented by PostgreSQL `bigint`;
+- an operator attempts an invalid lifecycle transition;
+- evidence metadata attempts to reuse an existing evidence identity with different digest/time/redaction metadata;
+- an evidence reference claims collection after the operator event;
+- a no-op metadata request would only churn `resource_version`.
 
 The complete document remains bounded by the domain contract (affected resources, signals, timeline, and evidence counts). Query-critical fields are mirrored only to support indexed filtering; the JSON document remains the authoritative serialized read model.
 
@@ -36,15 +54,18 @@ The up migration creates only new 0.32 tables/indexes and does not mutate existi
 
 Still separate from this slice:
 
-- RBAC/API handler and authenticated scope binding;
+- RBAC/API handler, authenticated scope binding and step-up policy;
 - ingestion/correlation write path and immutable audit emission;
-- incident acknowledgement/resolution mutation service;
 - status-page privacy projection;
 - email/webhook notification fan-out;
 - technical report/API export.
 
-Those layers must consume the read-model contract rather than defining competing incident structures.
+Those layers must consume the incident contracts rather than defining competing structures.
+
+## Test coverage prepared
+
+Runner-free test code now covers acknowledgement successor semantics, stale-precondition rejection, mandatory acknowledgement before resolution, terminal resolution evidence, future-evidence rejection, append-only evidence metadata, stable generation for annotation-only writes, resolved-state immutability, evidence-identity conflict and no-op rejection.
 
 ## CI / runner boundary
 
-This work was prepared on a `work/**` branch only. No pull request, workflow dispatch, rerun, check rerun, merge, release action, or other runner-triggering operation is part of this slice.
+This work is prepared only on `work/cc032-incidents-persistence-nr1-20260912`. No pull request, workflow dispatch, rerun, check rerun, merge, release action, or other intentional runner-triggering operation is part of this slice. Commits use `[skip ci]`; the repository's push-triggered CI does not target `work/**` branches.
