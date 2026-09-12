@@ -24,8 +24,7 @@
       "const": "v0.30.0"
     },
     "stable_artifact_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "const": "sha256:02d15e8ff13bbcb52b6d0c9293ab8804500991fbb41c8b575e88306a8a5ce0f2"
     },
     "candidate_version": {
       "const": "0.31.0"
