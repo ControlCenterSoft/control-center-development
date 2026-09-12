@@ -17,7 +17,7 @@ func TestCreateManualRetryWithRevalidationReplaysCommittedLineageWithoutEvidence
 	repository, _ := job.NewMemoryManualRetryRepository(jobs)
 	reviewed, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
 	evidenceSource.policy.ObservedAt = now.Add(6 * time.Second)
-	evidenceSource.historyObserved = now.Add(7 * time.Second)
+	evidenceSource.history.ObservedAt = now.Add(7 * time.Second)
 	request := JobRetryMutationRequest{
 		Reviewed:            reviewed,
 		RetryJobID:          "job-replay-after-commit",
@@ -51,7 +51,7 @@ func TestCreateManualRetryWithRevalidationRejectsDifferentChildOnCommittedAdmiss
 	repository, _ := job.NewMemoryManualRetryRepository(jobs)
 	reviewed, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
 	evidenceSource.policy.ObservedAt = now.Add(6 * time.Second)
-	evidenceSource.historyObserved = now.Add(7 * time.Second)
+	evidenceSource.history.ObservedAt = now.Add(7 * time.Second)
 
 	request := JobRetryMutationRequest{
 		Reviewed:            reviewed,
