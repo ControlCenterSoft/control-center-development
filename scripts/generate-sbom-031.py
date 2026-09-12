@@ -21,10 +21,39 @@ def sha256_file(path: pathlib.Path) -> str:
 def parse_go_mod(path: pathlib.Path):
     text = path.read_text(encoding="utf-8")
     modules = {}
-    for line in text.splitlines():
-        match = re.match(r"^\s*([^\s()]+)\s+(v[^\s]+)(?:\s+//.*)?$", line)
-        if match:
-            modules[match.group(1)] = match.group(2)
+    in_require_block = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("//"):
+            continue
+        if line == "require (":
+            in_require_block = True
+            continue
+        if in_require_block and line == ")":
+            in_require_block = False
+            continue
+
+        module = None
+        version = None
+        if line.startswith("require "):
+            fields = line.split()
+            if len(fields) >= 3:
+                module, version = fields[1], fields[2]
+        elif in_require_block:
+            fields = line.split()
+            if len(fields) >= 2:
+                module, version = fields[0], fields[1]
+
+        if module is None:
+            continue
+        if not re.fullmatch(r"v[^\s]+", version or ""):
+            fail(f"invalid go.mod require version: {line}")
+        if module in modules and modules[module] != version:
+            fail(f"conflicting go.mod require versions for {module}")
+        modules[module] = version
+
+    if in_require_block:
+        fail("unterminated go.mod require block")
     toolchain = re.search(r"^toolchain\s+go([0-9.]+)\s*$", text, re.MULTILINE)
     if not toolchain:
         fail("go.mod toolchain is missing")
