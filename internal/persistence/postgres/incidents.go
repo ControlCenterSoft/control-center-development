@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"control-center/internal/corecontracts"
 	"control-center/internal/incidents"
@@ -29,6 +30,7 @@ func NewIncidentReadRepository(db *sql.DB) (*IncidentReadRepository, error) {
 
 // Create inserts one incident and its affected-resource index atomically.
 func (r *IncidentReadRepository) Create(ctx context.Context, incident incidents.Incident) error {
+	canonicalizeIncidentMirrorTimes(&incident)
 	if err := validateIncidentForPersistence(incident); err != nil {
 		return err
 	}
@@ -55,11 +57,11 @@ INSERT INTO cc_incident_read_models (
 		string(incident.Severity),
 		string(incident.Status),
 		incident.Title,
-		incident.StartedAt.UTC(),
-		incident.LastObservedAt.UTC(),
+		incident.StartedAt,
+		incident.LastObservedAt,
 		document,
-		incident.CreatedAt.UTC(),
-		incident.UpdatedAt.UTC(),
+		incident.CreatedAt,
+		incident.UpdatedAt,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -82,6 +84,7 @@ func (r *IncidentReadRepository) Replace(
 	next incidents.Incident,
 	desiredChanged bool,
 ) error {
+	canonicalizeIncidentMirrorTimes(&next)
 	if err := validateIncidentForPersistence(next); err != nil {
 		return err
 	}
@@ -128,11 +131,11 @@ WHERE object_id=$1 AND resource_version=$14`,
 		string(next.Severity),
 		string(next.Status),
 		next.Title,
-		next.StartedAt.UTC(),
-		next.LastObservedAt.UTC(),
+		next.StartedAt,
+		next.LastObservedAt,
 		document,
-		next.CreatedAt.UTC(),
-		next.UpdatedAt.UTC(),
+		next.CreatedAt,
+		next.UpdatedAt,
 		current.ResourceVersion,
 	)
 	if err != nil {
@@ -280,6 +283,16 @@ func validateIncidentForPersistence(incident incidents.Incident) error {
 		return fmt.Errorf("%w: generation exceeds PostgreSQL bigint", incidents.ErrInvalidIncident)
 	}
 	return nil
+}
+
+// PostgreSQL timestamptz has microsecond precision. Canonicalizing mirrored
+// timestamps before JSON serialization guarantees that the canonical document
+// and indexed columns round-trip to exactly the same instants.
+func canonicalizeIncidentMirrorTimes(incident *incidents.Incident) {
+	incident.CreatedAt = incident.CreatedAt.UTC().Truncate(time.Microsecond)
+	incident.UpdatedAt = incident.UpdatedAt.UTC().Truncate(time.Microsecond)
+	incident.StartedAt = incident.StartedAt.UTC().Truncate(time.Microsecond)
+	incident.LastObservedAt = incident.LastObservedAt.UTC().Truncate(time.Microsecond)
 }
 
 func replaceIncidentResources(ctx context.Context, tx *sql.Tx, incident incidents.Incident) error {
