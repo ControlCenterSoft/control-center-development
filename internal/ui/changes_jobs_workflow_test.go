@@ -10,7 +10,112 @@ import (
 	"control-center/internal/orchestration/events"
 	"control-center/internal/orchestration/job"
 	"control-center/internal/orchestration/operationsview"
+	"control-center/internal/recovery"
 )
+
+func TestOperationsWorkflowEvidenceEndToEndFromPersistedSourcesToOperatorView(t *testing.T) {
+	now := time.Date(2026, 9, 12, 6, 30, 0, 0, time.UTC)
+	digest := workflowTestDigest("a")
+
+	changeSnapshot := validChangeSnapshot("change-a", "service.ensure", now.Add(-4*time.Minute))
+	changeSnapshot.State = change.StateSucceeded
+
+	sourceJob := validJob("job-a", "change-a", "service.ensure", now.Add(-4*time.Minute))
+	sourceJob.Status = job.StatusSucceeded
+	sourceJob.Attempt = 1
+	sourceJob.Version = 7
+	sourceJob.CreatedAt = now.Add(-10 * time.Minute)
+	sourceJob.UpdatedAt = now.Add(-4 * time.Minute)
+	sourceJob.Output = &events.Output{
+		Health: []events.Health{{
+			ResourceID: "resource-a",
+			Status:     events.HealthHealthy,
+			CheckedAt:  now.Add(-5 * time.Minute),
+		}},
+		AuditEvents: []events.AuditEvent{{
+			ID:            "audit-a",
+			OccurredAt:    now.Add(-4 * time.Minute),
+			Actor:         "system",
+			Action:        "service.ensure",
+			Outcome:       "succeeded",
+			CorrelationID: "corr-a",
+		}},
+	}
+
+	approvalEvidence, err := operationsview.BuildApprovalEvidence(operationsview.ApprovalEvidenceInput{
+		Change:          changeSnapshot,
+		RevisionDigest: digest,
+		ObservedAt:      now.Add(-3 * time.Minute),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resultEvidence, err := operationsview.BuildJobResultEvidence(operationsview.JobResultEvidenceInput{
+		Change:          changeSnapshot,
+		Job:             sourceJob,
+		RevisionDigest: digest,
+		ObservedAt:      now.Add(-2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedAt := now.Add(-5 * time.Minute)
+	recoveryEvidence, err := operationsview.BuildRecoveryPathEvidence(
+		"change-a",
+		"revision-a",
+		digest,
+		operationsview.RecoveryPathObservation{
+			RecoveryPointID:        "rp-a",
+			RecoveryPointState:     recovery.RecoveryPointReady,
+			BackupCount:            1,
+			VerifiedBackupCount:    1,
+			VerificationOutcome:    recovery.VerificationPassed,
+			VerificationObservedAt: &verifiedAt,
+		},
+		now.Add(-3*time.Minute),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workflowEvidence, err := operationsview.BuildOperationsWorkflowEvidence(operationsview.OperationsWorkflowEvidenceInput{
+		Approval:   approvalEvidence,
+		Result:     resultEvidence,
+		Recovery:   recoveryEvidence,
+		ObservedAt: now.Add(-time.Minute),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workflowEvidence.State != operationsview.OperationsWorkflowEvidenceComplete || !workflowEvidence.EvidenceComplete {
+		t.Fatalf("source evidence chain is not complete: %#v", workflowEvidence)
+	}
+
+	view, err := BuildChangesJobsView(ChangesJobsInput{
+		Changes:       []change.Snapshot{changeSnapshot},
+		Jobs:          []job.Job{sourceJob},
+		ChangesLoaded: true,
+		JobsLoaded:    true,
+		Now:           now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enriched, err := ApplyVerifiedOperationsWorkflowEvidence(
+		view,
+		map[string]string{"revision-a": digest},
+		[]operationsview.OperationsWorkflowEvidence{workflowEvidence},
+		true,
+		now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := enriched.Changes[0].WorkflowEvidence
+	if summary.Availability != EvidenceAvailable || summary.State != operationsview.OperationsWorkflowEvidenceComplete || !summary.EvidenceComplete || summary.Outcome != job.StatusSucceeded {
+		t.Fatalf("end-to-end workflow evidence not exposed safely: %#v", summary)
+	}
+}
 
 func TestApplyVerifiedOperationsWorkflowEvidenceProjectsExactCurrentJob(t *testing.T) {
 	now := time.Date(2026, 9, 12, 6, 20, 0, 0, time.UTC)
