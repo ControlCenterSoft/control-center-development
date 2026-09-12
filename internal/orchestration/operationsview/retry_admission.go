@@ -54,12 +54,14 @@ type JobRetryPolicyEvidence struct {
 // reviewed. ExpectedJobVersion is deliberately separate from Job.Version so a
 // stale operator view fails closed.
 type JobRetryAdmissionInput struct {
-	Job                job.Job
-	ExpectedJobVersion uint64
-	RevisionID         string
-	RevisionDigest     string
-	Policy             JobRetryPolicyEvidence
-	ObservedAt         time.Time
+	Job                    job.Job
+	ExpectedJobVersion     uint64
+	RevisionID             string
+	RevisionDigest         string
+	Policy                 JobRetryPolicyEvidence
+	RetryHistoryDigest     string
+	RetryHistoryObservedAt time.Time
+	ObservedAt             time.Time
 }
 
 // JobRetryAdmissionEvidence is a bounded, privacy-safe retry preflight. It is
@@ -80,6 +82,8 @@ type JobRetryAdmissionEvidence struct {
 	SourceMaxAttempts      int                    `json:"source_max_attempts"`
 	PolicyID               string                 `json:"policy_id"`
 	PolicyDigest           string                 `json:"policy_digest"`
+	RetryHistoryDigest     string                 `json:"retry_history_digest"`
+	RetryHistoryObservedAt time.Time              `json:"retry_history_observed_at"`
 	UsedManualRetries      uint32                 `json:"used_manual_retries"`
 	MaxManualRetries       uint32                 `json:"max_manual_retries"`
 	RequiresFreshApproval  bool                   `json:"requires_fresh_approval"`
@@ -130,11 +134,20 @@ func BuildJobRetryAdmissionEvidence(input JobRetryAdmissionInput) (JobRetryAdmis
 	if err := validateRetryPolicy(input.Policy); err != nil {
 		return JobRetryAdmissionEvidence{}, err
 	}
+	if !validRetryDigest(input.RetryHistoryDigest) {
+		return JobRetryAdmissionEvidence{}, fmt.Errorf("%w: canonical retry history digest is required", ErrInvalidJobRetryAdmission)
+	}
+	if input.RetryHistoryObservedAt.IsZero() {
+		return JobRetryAdmissionEvidence{}, fmt.Errorf("%w: retry history observation time is required", ErrInvalidJobRetryAdmission)
+	}
+	if input.Policy.ObservedAt.Before(source.UpdatedAt) || input.RetryHistoryObservedAt.Before(source.UpdatedAt) {
+		return JobRetryAdmissionEvidence{}, fmt.Errorf("%w: retry policy/history evidence predates source Job state", ErrInvalidJobRetryAdmission)
+	}
 	if input.ObservedAt.IsZero() {
 		return JobRetryAdmissionEvidence{}, fmt.Errorf("%w: observation time is required", ErrInvalidJobRetryAdmission)
 	}
 	observedAt := input.ObservedAt.UTC()
-	if source.UpdatedAt.After(observedAt) || input.Policy.ObservedAt.After(observedAt) {
+	if source.UpdatedAt.After(observedAt) || input.Policy.ObservedAt.After(observedAt) || input.RetryHistoryObservedAt.After(observedAt) {
 		return JobRetryAdmissionEvidence{}, fmt.Errorf("%w: source evidence is newer than admission observation", ErrInvalidJobRetryAdmission)
 	}
 
@@ -173,6 +186,8 @@ func BuildJobRetryAdmissionEvidence(input JobRetryAdmissionInput) (JobRetryAdmis
 		SourceMaxAttempts:      source.MaxAttempts,
 		PolicyID:               input.Policy.PolicyID,
 		PolicyDigest:           input.Policy.PolicyDigest,
+		RetryHistoryDigest:     input.RetryHistoryDigest,
+		RetryHistoryObservedAt: input.RetryHistoryObservedAt.UTC(),
 		UsedManualRetries:      input.Policy.UsedManualRetries,
 		MaxManualRetries:       input.Policy.MaxManualRetries,
 		RequiresFreshApproval:  input.Policy.RequiresFreshApproval,
