@@ -44,12 +44,14 @@ func retryTestPolicy(now time.Time) JobRetryPolicyEvidence {
 func TestBuildJobRetryAdmissionEvidenceEligibleAndDeterministic(t *testing.T) {
 	now := time.Date(2026, 9, 12, 4, 20, 0, 0, time.UTC)
 	input := JobRetryAdmissionInput{
-		Job:                failedRetryTestJob(now),
-		ExpectedJobVersion: 7,
-		RevisionID:         "rev-31-eligible",
-		RevisionDigest:     retryTestDigest,
-		Policy:             retryTestPolicy(now),
-		ObservedAt:         now,
+		Job:                    failedRetryTestJob(now),
+		ExpectedJobVersion:     7,
+		RevisionID:             "rev-31-eligible",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 retryTestPolicy(now),
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	}
 
 	first, err := BuildJobRetryAdmissionEvidence(input)
@@ -74,12 +76,14 @@ func TestBuildJobRetryAdmissionEvidenceEligibleAndDeterministic(t *testing.T) {
 func TestBuildJobRetryAdmissionEvidenceRejectsStaleVersion(t *testing.T) {
 	now := time.Date(2026, 9, 12, 4, 20, 0, 0, time.UTC)
 	_, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                failedRetryTestJob(now),
-		ExpectedJobVersion: 6,
-		RevisionID:         "rev-31-stale",
-		RevisionDigest:     retryTestDigest,
-		Policy:             retryTestPolicy(now),
-		ObservedAt:         now,
+		Job:                    failedRetryTestJob(now),
+		ExpectedJobVersion:     6,
+		RevisionID:             "rev-31-stale",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 retryTestPolicy(now),
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	})
 	if !errors.Is(err, job.ErrVersionConflict) {
 		t.Fatalf("stale version error = %v, want ErrVersionConflict", err)
@@ -95,12 +99,14 @@ func TestBuildJobRetryAdmissionEvidenceBlocksPolicyAndApprovalGaps(t *testing.T)
 	policy.RequiresFreshApproval = true
 
 	evidence, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                failedRetryTestJob(now),
-		ExpectedJobVersion: 7,
-		RevisionID:         "rev-31-blocked",
-		RevisionDigest:     retryTestDigest,
-		Policy:             policy,
-		ObservedAt:         now,
+		Job:                    failedRetryTestJob(now),
+		ExpectedJobVersion:     7,
+		RevisionID:             "rev-31-blocked",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 policy,
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -126,12 +132,14 @@ func TestBuildJobRetryAdmissionEvidenceAcceptsBoundApprovalDigest(t *testing.T) 
 	policy.ApprovalEvidenceDigest = retryTestDigest
 
 	evidence, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                failedRetryTestJob(now),
-		ExpectedJobVersion: 7,
-		RevisionID:         "rev-31-approved",
-		RevisionDigest:     retryTestDigest,
-		Policy:             policy,
-		ObservedAt:         now,
+		Job:                    failedRetryTestJob(now),
+		ExpectedJobVersion:     7,
+		RevisionID:             "rev-31-approved",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 policy,
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -151,12 +159,14 @@ func TestBuildJobRetryAdmissionEvidenceBlocksNonFailedSource(t *testing.T) {
 	source.Attempt = 1
 
 	evidence, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                source,
-		ExpectedJobVersion: source.Version,
-		RevisionID:         "rev-31-success",
-		RevisionDigest:     retryTestDigest,
-		Policy:             retryTestPolicy(now),
-		ObservedAt:         now,
+		Job:                    source,
+		ExpectedJobVersion:     source.Version,
+		RevisionID:             "rev-31-success",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 retryTestPolicy(now),
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -172,27 +182,50 @@ func TestBuildJobRetryAdmissionEvidenceRejectsInconsistentFailedAttemptState(t *
 	source.Attempt = 2
 
 	_, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                source,
-		ExpectedJobVersion: source.Version,
-		RevisionID:         "rev-31-invalid-attempt",
-		RevisionDigest:     retryTestDigest,
-		Policy:             retryTestPolicy(now),
-		ObservedAt:         now,
+		Job:                    source,
+		ExpectedJobVersion:     source.Version,
+		RevisionID:             "rev-31-invalid-attempt",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 retryTestPolicy(now),
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	})
 	if !errors.Is(err, ErrInvalidJobRetryAdmission) {
 		t.Fatalf("invalid failed-attempt state error = %v", err)
 	}
 }
 
+func TestBuildJobRetryAdmissionEvidenceRejectsHistoryOlderThanSourceJob(t *testing.T) {
+	now := time.Date(2026, 9, 12, 4, 20, 0, 0, time.UTC)
+	source := failedRetryTestJob(now)
+
+	_, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
+		Job:                    source,
+		ExpectedJobVersion:     source.Version,
+		RevisionID:             "rev-31-stale-history",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 retryTestPolicy(now),
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: source.UpdatedAt.Add(-time.Second),
+		ObservedAt:             now,
+	})
+	if !errors.Is(err, ErrInvalidJobRetryAdmission) {
+		t.Fatalf("stale retry history error = %v", err)
+	}
+}
+
 func TestJobRetryAdmissionEvidenceDoesNotProjectSensitiveJobPayload(t *testing.T) {
 	now := time.Date(2026, 9, 12, 4, 20, 0, 0, time.UTC)
 	evidence, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                failedRetryTestJob(now),
-		ExpectedJobVersion: 7,
-		RevisionID:         "rev-31-redaction",
-		RevisionDigest:     retryTestDigest,
-		Policy:             retryTestPolicy(now),
-		ObservedAt:         now,
+		Job:                    failedRetryTestJob(now),
+		ExpectedJobVersion:     7,
+		RevisionID:             "rev-31-redaction",
+		RevisionDigest:         retryTestDigest,
+		Policy:                 retryTestPolicy(now),
+		RetryHistoryDigest:     retryTestDigest,
+		RetryHistoryObservedAt: now.Add(-20 * time.Second),
+		ObservedAt:             now,
 	})
 	if err != nil {
 		t.Fatal(err)
