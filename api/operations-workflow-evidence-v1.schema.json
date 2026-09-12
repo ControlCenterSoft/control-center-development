@@ -10,10 +10,14 @@
     "revision_id",
     "revision_digest",
     "approval_state",
+    "approval_satisfied",
     "approval_observed_at",
     "job_id",
     "job_version",
     "outcome",
+    "result_output_present",
+    "health_checks",
+    "audit_events",
     "result_observed_at",
     "recovery_point_id",
     "recovery_state",
@@ -47,6 +51,9 @@
       "type": "string",
       "enum": ["denied", "not_required", "pending", "satisfied"]
     },
+    "approval_satisfied": {
+      "type": "boolean"
+    },
     "approval_observed_at": {
       "type": "string",
       "format": "date-time"
@@ -64,9 +71,24 @@
       "type": "string",
       "enum": ["cancelled", "succeeded", "failed"]
     },
+    "result_output_present": {
+      "type": "boolean"
+    },
     "result_output_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "health_checks": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "audit_events": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "worst_health": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "failed", "unknown"]
     },
     "result_observed_at": {
       "type": "string",
@@ -116,5 +138,27 @@
     "production_mutation_allowed": {
       "const": false
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"result_output_present": {"const": false}}
+      },
+      "then": {
+        "properties": {"outcome": {"const": "cancelled"}},
+        "not": {"required": ["result_output_digest"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"health_checks": {"const": 0}}
+      },
+      "then": {
+        "not": {"required": ["worst_health"]}
+      },
+      "else": {
+        "required": ["worst_health"]
+      }
+    }
+  ]
 }
