@@ -24,9 +24,16 @@ permissions:
 
 jobs:
   review:
+    # Automatic Gemini review is opt-in. Keep it paused after provider-side
+    # quota/availability failures; explicit workflow_dispatch remains available
+    # for a deliberate one-off check once the provider is usable again.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false)
+      (
+        vars.GEMINI_REVIEW_ENABLED == 'true' &&
+        github.event.pull_request.head.repo.fork == false &&
+        github.event.pull_request.draft == false
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
