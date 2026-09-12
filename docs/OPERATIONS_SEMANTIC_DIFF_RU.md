@@ -41,4 +41,10 @@ Fail-closed поведение обязательно: неполная identity
 4. связать approval UI с exact revision/hash и запретить approval при изменившемся target revision;
 5. сохранить `no-store`, fail-closed и redaction границы административного UI.
 
+## Граница qualification
+
+Qualification относится только к точному SHA текущего slice: результат более раннего commit не переносится после содержательного изменения. Перед интеграцией обязателен один полный Public CI проход с public-safety, format/vet, unit/contract, build, race/restart и поддерживаемыми PostgreSQL clean-install/upgrade/adapter проверками. Повторный hosted rerun без конкретного инфраструктурного сбоя не считается новой полезной проверкой.
+
+После merge итоговое дерево `main` должно пройти тот же Public CI повторно уже в интегрированном состоянии. Только после этого semantic diff может считаться подтверждённой частью линии 0.31.0; это всё ещё не означает release candidate или Stable до закрытия остальных release gates.
+
 Новых сторонних runtime dependencies, SQL migrations и коммерческих redistribution obligations этот slice не добавляет.
