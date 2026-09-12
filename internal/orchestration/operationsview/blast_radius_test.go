@@ -67,7 +67,7 @@ func TestBuildBlastRadiusEvidenceRejectsNonCanonicalMetadata(t *testing.T) {
 			input: BlastRadiusInput{
 				ChangeID: "change-a", RevisionID: "revision-a", RevisionDigest: "sha256:" + strings.Repeat("c", 64),
 				ObservedAt: time.Date(2026, 9, 12, 0, 15, 0, 0, time.UTC),
-				Resources: []BlastRadiusResource{{ResourceID: "node-a", Kind: "node", Relation: BlastRadiusDirect, ReasonCode: "contains secret text"}},
+				Resources:  []BlastRadiusResource{{ResourceID: "node-a", Kind: "node", Relation: BlastRadiusDirect, ReasonCode: "contains secret text"}},
 			},
 		},
 		{
@@ -75,7 +75,7 @@ func TestBuildBlastRadiusEvidenceRejectsNonCanonicalMetadata(t *testing.T) {
 			input: BlastRadiusInput{
 				ChangeID: "change-a", RevisionID: "revision-a", RevisionDigest: "sha256:" + strings.Repeat("d", 64),
 				ObservedAt: time.Date(2026, 9, 12, 0, 15, 0, 0, time.UTC),
-				Resources: []BlastRadiusResource{{ResourceID: "node-a", Kind: "node", Relation: "guessed", ReasonCode: "dependency.unknown"}},
+				Resources:  []BlastRadiusResource{{ResourceID: "node-a", Kind: "node", Relation: "guessed", ReasonCode: "dependency.unknown"}},
 			},
 		},
 	}
