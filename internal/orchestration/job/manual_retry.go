@@ -13,9 +13,10 @@ import (
 const MaxManualRetryIdentifierLength = 255
 
 var (
-	ErrManualRetrySourceNotFailed  = errors.New("manual retry source job is not retryable")
-	ErrManualRetryAdmissionConflict = errors.New("manual retry admission already represents different lineage")
-	ErrManualRetryLineageNotFound   = errors.New("manual retry lineage not found")
+	ErrManualRetrySourceNotFailed      = errors.New("manual retry source job is not retryable")
+	ErrManualRetrySourceAlreadyRetried = errors.New("manual retry source job version already has a retry lineage")
+	ErrManualRetryAdmissionConflict    = errors.New("manual retry admission already represents different lineage")
+	ErrManualRetryLineageNotFound      = errors.New("manual retry lineage not found")
 )
 
 // ManualRetryRequest is the durable mutation contract for creating a fresh Job
@@ -24,43 +25,46 @@ var (
 // output, LastError, lease data, credentials and secrets are never projected
 // through this request.
 type ManualRetryRequest struct {
-	SourceJobID               string
-	ExpectedSourceVersion     uint64
-	RetryJobID                string
-	RetryIdempotencyKey       string
-	ReviewedAdmissionID       string
-	RevalidationAdmissionID   string
-	RevisionID                string
-	RevisionDigest            string
-	PolicyID                  string
-	PolicyDigest              string
-	RetryHistoryDigest        string
-	ApprovalEvidenceDigest    string
-	RequestedAt               time.Time
+	SourceJobID             string
+	ExpectedSourceVersion   uint64
+	RetryJobID              string
+	RetryIdempotencyKey     string
+	ReviewedAdmissionID     string
+	RevalidationAdmissionID string
+	RevisionID              string
+	RevisionDigest          string
+	PolicyID                string
+	PolicyDigest            string
+	RetryHistoryDigest      string
+	ApprovalEvidenceDigest  string
+	RequestedAt             time.Time
 }
 
 // ManualRetryLineage is immutable evidence that one reviewed admission created
-// one fresh queued Job while preserving the failed source Job unchanged.
+// one fresh queued Job while preserving the failed source Job unchanged. The
+// child idempotency key is retained only for internal replay matching and is
+// deliberately excluded from JSON/evidence projection.
 type ManualRetryLineage struct {
-	RootJobID                 string    `json:"root_job_id"`
-	SourceJobID               string    `json:"source_job_id"`
-	SourceJobVersion          uint64    `json:"source_job_version"`
-	RetryJobID                string    `json:"retry_job_id"`
-	RetryIdempotencyKey       string    `json:"retry_idempotency_key"`
-	ReviewedAdmissionID       string    `json:"reviewed_admission_id"`
-	RevalidationAdmissionID   string    `json:"revalidation_admission_id"`
-	RevisionID                string    `json:"revision_id"`
-	RevisionDigest            string    `json:"revision_digest"`
-	PolicyID                  string    `json:"policy_id"`
-	PolicyDigest              string    `json:"policy_digest"`
-	RetryHistoryDigest        string    `json:"retry_history_digest"`
-	ApprovalEvidenceDigest    string    `json:"approval_evidence_digest,omitempty"`
-	RequestedAt               time.Time `json:"requested_at"`
+	RootJobID               string    `json:"root_job_id"`
+	SourceJobID             string    `json:"source_job_id"`
+	SourceJobVersion        uint64    `json:"source_job_version"`
+	RetryJobID              string    `json:"retry_job_id"`
+	RetryIdempotencyKey     string    `json:"-"`
+	ReviewedAdmissionID     string    `json:"reviewed_admission_id"`
+	RevalidationAdmissionID string    `json:"revalidation_admission_id"`
+	RevisionID              string    `json:"revision_id"`
+	RevisionDigest          string    `json:"revision_digest"`
+	PolicyID                string    `json:"policy_id"`
+	PolicyDigest            string    `json:"policy_digest"`
+	RetryHistoryDigest      string    `json:"retry_history_digest"`
+	ApprovalEvidenceDigest  string    `json:"approval_evidence_digest,omitempty"`
+	RequestedAt             time.Time `json:"requested_at"`
 }
 
 // ManualRetryRepository atomically binds a reviewed failed Job version to one
-// fresh Job lineage. Implementations must reject stale source versions and must
-// make exact replay idempotent without creating a second child Job.
+// fresh Job lineage. Implementations must reject stale source versions, reject a
+// second lineage from the same exact failed source version, and make exact
+// replay idempotent without creating a second child Job.
 type ManualRetryRepository interface {
 	Get(context.Context, string) (Job, error)
 	CreateManualRetry(context.Context, ManualRetryRequest) (retry Job, lineage ManualRetryLineage, created bool, err error)
@@ -72,14 +76,18 @@ type ManualRetryRepository interface {
 // authorization/policy layer must still revalidate the reviewed admission
 // immediately before calling CreateManualRetry.
 func ValidateManualRetryRequest(request ManualRetryRequest) error {
-	for name, value := range map[string]string{
-		"source job id":         request.SourceJobID,
-		"retry job id":          request.RetryJobID,
-		"retry idempotency key": request.RetryIdempotencyKey,
-		"revision id":           request.RevisionID,
-		"policy id":             request.PolicyID,
-	} {
-		if err := validateManualRetryIdentifier(name, value); err != nil {
+	identifiers := []struct {
+		name  string
+		value string
+	}{
+		{"source job id", request.SourceJobID},
+		{"retry job id", request.RetryJobID},
+		{"retry idempotency key", request.RetryIdempotencyKey},
+		{"revision id", request.RevisionID},
+		{"policy id", request.PolicyID},
+	}
+	for _, identifier := range identifiers {
+		if err := validateManualRetryIdentifier(identifier.name, identifier.value); err != nil {
 			return err
 		}
 	}
@@ -89,15 +97,19 @@ func ValidateManualRetryRequest(request ManualRetryRequest) error {
 	if request.SourceJobID == request.RetryJobID {
 		return errors.New("retry job must have a fresh job id")
 	}
-	for name, value := range map[string]string{
-		"reviewed admission id":      request.ReviewedAdmissionID,
-		"revalidation admission id":  request.RevalidationAdmissionID,
-		"revision digest":            request.RevisionDigest,
-		"policy digest":              request.PolicyDigest,
-		"retry history digest":       request.RetryHistoryDigest,
-	} {
-		if !validManualRetryDigest(value) {
-			return fmt.Errorf("canonical %s is required", name)
+	digests := []struct {
+		name  string
+		value string
+	}{
+		{"reviewed admission id", request.ReviewedAdmissionID},
+		{"revalidation admission id", request.RevalidationAdmissionID},
+		{"revision digest", request.RevisionDigest},
+		{"policy digest", request.PolicyDigest},
+		{"retry history digest", request.RetryHistoryDigest},
+	}
+	for _, digest := range digests {
+		if !validManualRetryDigest(digest.value) {
+			return fmt.Errorf("canonical %s is required", digest.name)
 		}
 	}
 	if request.ApprovalEvidenceDigest != "" && !validManualRetryDigest(request.ApprovalEvidenceDigest) {
@@ -110,8 +122,9 @@ func ValidateManualRetryRequest(request ManualRetryRequest) error {
 }
 
 // ManualRetryRequestFingerprint is stable across transport retries. RequestedAt
-// is deliberately excluded so replay of the same logical mutation remains
-// idempotent even when the caller has to resend after an uncertain response.
+// and RevalidationAdmissionID are deliberately excluded: a replay may perform a
+// later fresh revalidation while representing the same operator-reviewed
+// mutation. Semantic revision/policy/history/approval digests remain bound.
 func ManualRetryRequestFingerprint(request ManualRetryRequest) (string, error) {
 	if err := ValidateManualRetryRequest(request); err != nil {
 		return "", err
@@ -123,7 +136,6 @@ func ManualRetryRequestFingerprint(request ManualRetryRequest) (string, error) {
 		request.RetryJobID,
 		request.RetryIdempotencyKey,
 		request.ReviewedAdmissionID,
-		request.RevalidationAdmissionID,
 		request.RevisionID,
 		request.RevisionDigest,
 		request.PolicyID,
