@@ -79,6 +79,10 @@ Promotion gate работает fail-closed: отсутствующее, неи�
 
 `development` сохраняет прежнюю границу: для обычной разработки обязательны базовые tests/security evidence, но release-only artifact/commercial/rollback evidence не требуется. Это не позволяет трактовать development build как RC/Stable.
 
+## Runner-free проверка slice
+
+Для изолированного release-gate кода выполнены локальные side-effect-free проверки без GitHub runner: `gofmt`, `go test` и `go vet` — PASS. Это проверяет синтаксис и детерминированную логику подготовленного promotion/commercial/artifact gate, но не заменяет полную repository qualification exact head.
+
 ## Runner policy
 
 Ветка подготовлена как `work/**` без Pull Request. Текущая Public CI конфигурация не запускается на push в `work/**`; Pull Request намеренно не создаётся этой runner-free задачей. Полная repository qualification, PR и интеграция выполняются только отдельным runner/release-потоком для точного candidate SHA.
