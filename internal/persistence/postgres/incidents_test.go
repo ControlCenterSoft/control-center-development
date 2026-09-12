@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"control-center/internal/corecontracts"
 	"control-center/internal/incidents"
 )
 
@@ -66,5 +67,37 @@ func TestBuildIncidentListSQLDoesNotMutateNormalizedQuery(t *testing.T) {
 	_, _ = buildIncidentListSQL(query)
 	if !reflect.DeepEqual(query, before) {
 		t.Fatalf("query mutated:\n got %#v\nwant %#v", query, before)
+	}
+}
+
+func TestCanonicalizeIncidentMirrorTimesMatchesPostgresPrecision(t *testing.T) {
+	location := time.FixedZone("source", 3*60*60)
+	created := time.Date(2026, 9, 12, 14, 0, 0, 123456789, location)
+	incident := incidents.Incident{
+		ObjectMetadata: corecontracts.ObjectMetadata{
+			CreatedAt: created,
+			UpdatedAt: created.Add(3*time.Second + 444*time.Nanosecond),
+		},
+		StartedAt:      created.Add(time.Second + 222*time.Nanosecond),
+		LastObservedAt: created.Add(2*time.Second + 333*time.Nanosecond),
+	}
+
+	canonicalizeIncidentMirrorTimes(&incident)
+	for name, got := range map[string]time.Time{
+		"created_at":       incident.CreatedAt,
+		"updated_at":       incident.UpdatedAt,
+		"started_at":       incident.StartedAt,
+		"last_observed_at": incident.LastObservedAt,
+	} {
+		if got.Location() != time.UTC {
+			t.Fatalf("%s location = %v, want UTC", name, got.Location())
+		}
+		if got.Nanosecond()%1000 != 0 {
+			t.Fatalf("%s nanoseconds = %d, want microsecond precision", name, got.Nanosecond())
+		}
+	}
+	wantCreated := created.UTC().Truncate(time.Microsecond)
+	if !incident.CreatedAt.Equal(wantCreated) {
+		t.Fatalf("created_at = %s, want %s", incident.CreatedAt, wantCreated)
 	}
 }
