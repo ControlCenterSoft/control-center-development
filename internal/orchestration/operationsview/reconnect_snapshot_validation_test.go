@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"control-center/internal/orchestration/job"
 )
 
 func TestValidateJobReconnectSnapshotRejectsOmittedUnseenHead(t *testing.T) {
