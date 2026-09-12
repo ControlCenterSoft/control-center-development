@@ -6,6 +6,7 @@ import "strings"
 // candidate artifact. Control Center currently uses SHA-256 release identity and
 // provenance; a detached cryptographic signature is not implied by this model.
 type ArtifactEvidence struct {
+	Binding               ReleaseEvidenceBinding
 	BinaryDigest          string
 	SourceDigest          string
 	ChecksumSidecar       bool
