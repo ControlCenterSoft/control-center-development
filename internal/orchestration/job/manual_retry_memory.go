@@ -20,6 +20,7 @@ type MemoryManualRetryRepository struct {
 	jobs        *MemoryRepository
 	byAdmission map[string]memoryManualRetryRecord
 	byRetryJob  map[string]ManualRetryLineage
+	bySource    map[string]ManualRetryLineage
 }
 
 func NewMemoryManualRetryRepository(jobs *MemoryRepository) (*MemoryManualRetryRepository, error) {
@@ -30,6 +31,7 @@ func NewMemoryManualRetryRepository(jobs *MemoryRepository) (*MemoryManualRetryR
 		jobs:        jobs,
 		byAdmission: make(map[string]memoryManualRetryRecord),
 		byRetryJob:  make(map[string]ManualRetryLineage),
+		bySource:    make(map[string]ManualRetryLineage),
 	}, nil
 }
 
@@ -69,6 +71,9 @@ func (r *MemoryManualRetryRepository) CreateManualRetry(ctx context.Context, req
 	}
 	if source.Status != StatusFailed || source.Attempt < source.MaxAttempts || source.Lease != nil {
 		return Job{}, ManualRetryLineage{}, false, ErrManualRetrySourceNotFailed
+	}
+	if _, exists := r.bySource[manualRetrySourceKey(source.ID, source.Version)]; exists {
+		return Job{}, ManualRetryLineage{}, false, ErrManualRetrySourceAlreadyRetried
 	}
 	if _, exists := r.jobs.jobs[request.RetryJobID]; exists {
 		return Job{}, ManualRetryLineage{}, false, fmt.Errorf("retry job id already exists: %s", request.RetryJobID)
@@ -130,6 +135,7 @@ func (r *MemoryManualRetryRepository) CreateManualRetry(ctx context.Context, req
 		lineage:     lineage,
 	}
 	r.byRetryJob[retry.ID] = lineage
+	r.bySource[manualRetrySourceKey(source.ID, source.Version)] = lineage
 	return clone(retry), lineage, true, nil
 }
 
@@ -168,6 +174,10 @@ func (r *MemoryManualRetryRepository) ListManualRetryLineage(ctx context.Context
 		return result[i].RequestedAt.Before(result[j].RequestedAt)
 	})
 	return result, nil
+}
+
+func manualRetrySourceKey(jobID string, version uint64) string {
+	return fmt.Sprintf("%s\x00%d", jobID, version)
 }
 
 var _ ManualRetryRepository = (*MemoryManualRetryRepository)(nil)
