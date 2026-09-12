@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"control-center/internal/orchestration/operationsview"
 )
 
 // ChangeEvidenceSnapshot carries operator-safe availability evidence for one
@@ -143,6 +145,14 @@ func cloneChangesJobsView(view ChangesJobsView) ChangesJobsView {
 	result.Changes = append([]ChangeOperationalView(nil), view.Changes...)
 	for index := range result.Changes {
 		result.Changes[index].Jobs = append([]JobOperationalView(nil), view.Changes[index].Jobs...)
+		result.Changes[index].WorkflowEvidence.BlockReasons = append(
+			[]operationsview.OperationsWorkflowBlockReason(nil),
+			view.Changes[index].WorkflowEvidence.BlockReasons...,
+		)
+		if view.Changes[index].WorkflowEvidence.ObservedAt != nil {
+			observedAt := *view.Changes[index].WorkflowEvidence.ObservedAt
+			result.Changes[index].WorkflowEvidence.ObservedAt = &observedAt
+		}
 	}
 	return result
 }
