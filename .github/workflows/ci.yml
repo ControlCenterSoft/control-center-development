@@ -297,3 +297,114 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/control_center_test?sslmode=disable
         run: go test -race -count=1 ./...
+
+  release-candidate-evidence:
+    name: 0.31 release evidence aggregation
+    if: always()
+    needs:
+      - public-safety
+      - static-analysis
+      - unit
+      - build
+      - postgres-migration-qualification
+      - postgres-adapter-compatibility
+      - race
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Require upstream qualification PASS
+        shell: bash
+        env:
+          PUBLIC_SAFETY: ${{ needs.public-safety.result }}
+          STATIC_ANALYSIS: ${{ needs.static-analysis.result }}
+          UNIT: ${{ needs.unit.result }}
+          BUILD: ${{ needs.build.result }}
+          POSTGRES_MIGRATION: ${{ needs.postgres-migration-qualification.result }}
+          POSTGRES_ADAPTER: ${{ needs.postgres-adapter-compatibility.result }}
+          RACE: ${{ needs.race.result }}
+        run: |
+          set -euo pipefail
+          for value in "$PUBLIC_SAFETY" "$STATIC_ANALYSIS" "$UNIT" "$BUILD" "$POSTGRES_MIGRATION" "$POSTGRES_ADAPTER" "$RACE"; do
+            [[ "$value" == success ]]
+          done
+
+      - name: Download exact qualified 0.31 candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: control-center-0.31.0-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/candidate-0.31.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Aggregate exact-bound engineering release evidence
+        shell: bash
+        env:
+          PUBLIC_SAFETY: ${{ needs.public-safety.result }}
+          STATIC_ANALYSIS: ${{ needs.static-analysis.result }}
+          UNIT: ${{ needs.unit.result }}
+          BUILD: ${{ needs.build.result }}
+          POSTGRES_MIGRATION: ${{ needs.postgres-migration-qualification.result }}
+          POSTGRES_ADAPTER: ${{ needs.postgres-adapter-compatibility.result }}
+          RACE: ${{ needs.race.result }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/aggregate-release-evidence-031.py \
+            --candidate-dir dist/candidate-0.31.0 \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --public-safety "$PUBLIC_SAFETY" \
+            --static-analysis "$STATIC_ANALYSIS" \
+            --unit "$UNIT" \
+            --build "$BUILD" \
+            --postgres-migration "$POSTGRES_MIGRATION" \
+            --postgres-adapter "$POSTGRES_ADAPTER" \
+            --race "$RACE" \
+            --workflow-evidence-output dist/candidate-0.31.0/control-center-0.31.0.workflow-evidence.json \
+            --readiness-output dist/candidate-0.31.0/control-center-0.31.0.readiness.json
+
+          validator_dir="$(mktemp -d "$PWD/.readiness-validator.XXXXXX")"
+          trap 'rm -rf "$validator_dir"' EXIT
+          cat > "$validator_dir/main.go" <<'GO'
+          package main
+          import (
+            "encoding/json"
+            "fmt"
+            "os"
+            "control-center/internal/releasecandidate"
+          )
+          func main() {
+            raw, err := os.ReadFile(os.Args[1]); if err != nil { panic(err) }
+            var snapshot releasecandidate.Snapshot
+            if err := json.Unmarshal(raw, &snapshot); err != nil { panic(err) }
+            result, err := releasecandidate.Evaluate(snapshot); if err != nil { panic(err) }
+            if result.Ready { panic("commercial/legal blocker must keep candidate not ready") }
+            if len(result.Blockers) != 1 || result.Blockers[0] != releasecandidate.GateCommercialLegal {
+              panic(fmt.Sprintf("unexpected blockers: %v", result.Blockers))
+            }
+            fmt.Println("READINESS_SNAPSHOT=PASS_BLOCKED_ONLY_ON_COMMERCIAL_LEGAL")
+          }
+          GO
+          go run "$validator_dir/main.go" dist/candidate-0.31.0/control-center-0.31.0.readiness.json
+
+      - name: Preserve exact-bound release evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: control-center-0.31.0-release-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/candidate-0.31.0/control-center-0.31.0.workflow-evidence.json
+            dist/candidate-0.31.0/control-center-0.31.0.readiness.json
+          if-no-files-found: error
+          retention-days: 14
