@@ -12,8 +12,8 @@ type PromotionEvidence struct {
 	Revision         string
 	TestsPassed      bool
 	SecurityPassed   bool
-	ArtifactSigned   bool
 	RollbackPrepared bool
+	Artifact         ArtifactEvidence
 	Commercial       CommercialEvidence
 }
 
@@ -33,7 +33,7 @@ func EvaluatePromotionGate(targetChannel string, evidence PromotionEvidence) (Pr
 		return PromotionDecision{}, fmt.Errorf("version is required")
 	}
 
-	blockers := make([]string, 0, 13)
+	blockers := make([]string, 0, 20)
 	if !evidence.TestsPassed {
 		blockers = append(blockers, "tests")
 	}
@@ -44,12 +44,10 @@ func EvaluatePromotionGate(targetChannel string, evidence PromotionEvidence) (Pr
 		if !validReleaseRevision(evidence.Revision) {
 			blockers = append(blockers, "revision")
 		}
-		if !evidence.ArtifactSigned {
-			blockers = append(blockers, "signature")
-		}
 		if !evidence.RollbackPrepared {
 			blockers = append(blockers, "rollback")
 		}
+		blockers = append(blockers, EvaluateArtifactGate(channel, evidence.Artifact)...)
 		blockers = append(blockers, EvaluateCommercialGate(evidence.Commercial)...)
 	}
 	return PromotionDecision{Allowed: len(blockers) == 0, Blockers: blockers}, nil
