@@ -34,6 +34,12 @@ func TestJobRetryAdmissionSchemaMatchesImplementationBounds(t *testing.T) {
 			PolicyID struct {
 				MaxLength int `json:"maxLength"`
 			} `json:"policy_id"`
+			RetryHistoryDigest struct {
+				Pattern string `json:"pattern"`
+			} `json:"retry_history_digest"`
+			RetryHistoryObservedAt struct {
+				Format string `json:"format"`
+			} `json:"retry_history_observed_at"`
 			Blockers struct {
 				MaxItems int `json:"maxItems"`
 			} `json:"blockers"`
@@ -56,6 +62,12 @@ func TestJobRetryAdmissionSchemaMatchesImplementationBounds(t *testing.T) {
 		if bound != MaxJobRetryAdmissionIdentifierLength {
 			t.Fatalf("%s maxLength drift: schema=%d code=%d", name, bound, MaxJobRetryAdmissionIdentifierLength)
 		}
+	}
+	if schema.Properties.RetryHistoryDigest.Pattern != "^sha256:[0-9a-f]{64}$" {
+		t.Fatalf("retry history digest pattern drift: %q", schema.Properties.RetryHistoryDigest.Pattern)
+	}
+	if schema.Properties.RetryHistoryObservedAt.Format != "date-time" {
+		t.Fatalf("retry history observation format drift: %q", schema.Properties.RetryHistoryObservedAt.Format)
 	}
 	if schema.Properties.Blockers.MaxItems != MaxJobRetryAdmissionBlockers {
 		t.Fatalf("blocker bound drift: schema=%d code=%d", schema.Properties.Blockers.MaxItems, MaxJobRetryAdmissionBlockers)
