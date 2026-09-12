@@ -54,7 +54,7 @@ type ChangeOperationalView struct {
 	RevisionID        string                  `json:"revision_id"`
 	Risk              policy.Risk             `json:"risk"`
 	State             change.State            `json:"state"`
-	PolicyEffect      policy.Effect            `json:"policy_effect"`
+	PolicyEffect      policy.Effect           `json:"policy_effect"`
 	Approvals         ApprovalSummary         `json:"approvals"`
 	Version           uint64                  `json:"version"`
 	UpdatedAt         time.Time               `json:"updated_at"`

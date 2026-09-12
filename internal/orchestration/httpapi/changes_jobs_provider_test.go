@@ -67,8 +67,8 @@ func TestServerChangesJobsProjectsCurrentChangeAndDurableJobs(t *testing.T) {
 
 func TestServerChangesJobsFailsClosedOnDurableJobReadFailure(t *testing.T) {
 	server := &Server{
-		jobs: failingChangesJobsRepository{Repository: job.NewMemoryRepository()},
-		now:  time.Now,
+		jobs:    failingChangesJobsRepository{Repository: job.NewMemoryRepository()},
+		now:     time.Now,
 		changes: map[string]*changeRecord{},
 	}
 	if _, err := server.ChangesJobs(context.Background()); err == nil || !errors.Is(err, errChangesJobsList) {

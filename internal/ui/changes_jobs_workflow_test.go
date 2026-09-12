@@ -43,18 +43,18 @@ func TestOperationsWorkflowEvidenceEndToEndFromPersistedSourcesToOperatorView(t 
 	}
 
 	approvalEvidence, err := operationsview.BuildApprovalEvidence(operationsview.ApprovalEvidenceInput{
-		Change:          changeSnapshot,
+		Change:         changeSnapshot,
 		RevisionDigest: digest,
-		ObservedAt:      now.Add(-3 * time.Minute),
+		ObservedAt:     now.Add(-3 * time.Minute),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	resultEvidence, err := operationsview.BuildJobResultEvidence(operationsview.JobResultEvidenceInput{
-		Change:          changeSnapshot,
-		Job:             sourceJob,
+		Change:         changeSnapshot,
+		Job:            sourceJob,
 		RevisionDigest: digest,
-		ObservedAt:      now.Add(-2 * time.Minute),
+		ObservedAt:     now.Add(-2 * time.Minute),
 	})
 	if err != nil {
 		t.Fatal(err)
