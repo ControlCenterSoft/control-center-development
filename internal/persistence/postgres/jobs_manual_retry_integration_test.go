@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"control-center/internal/orchestration/change"
-	"control-center/internal/orchestration/events"
 	orchestrationapi "control-center/internal/orchestration/httpapi"
 	"control-center/internal/orchestration/job"
 	"control-center/internal/orchestration/policy"
@@ -105,13 +104,21 @@ func TestPostgresManualRetryCreatesOneAtomicChildLineage(t *testing.T) {
 		t.Fatalf("bind source job: %v", err)
 	}
 
-	claimed, ok, err := repository.Claim(ctx, "worker-manual-retry", now.Add(time.Second), time.Minute)
-	if err != nil || !ok || claimed.ID != source.ID {
-		t.Fatalf("claim source=%#v ok=%v err=%v", claimed, ok, err)
+	// Use an isolated durable fixture instead of Claim(), because integration
+	// tests share a database and Claim intentionally selects the oldest globally
+	// eligible Job. This update models the exact terminal state that a worker
+	// would persist after the only allowed automatic attempt is exhausted.
+	if _, err := db.ExecContext(ctx, `
+UPDATE cc_jobs
+SET status='failed', attempt=max_attempts, next_attempt_at=NULL,
+    lease_token=NULL, lease_worker_id=NULL, lease_expires_at=NULL,
+    last_error='private failure detail', updated_at=$2, version=version+1
+WHERE id=$1`, source.ID, now.Add(2*time.Second)); err != nil {
+		t.Fatalf("prepare failed source: %v", err)
 	}
-	failed, err := repository.Fail(ctx, claimed.ID, claimed.Lease.Token, "private failure detail", events.Output{}, job.RetryPolicy{}, now.Add(2*time.Second))
-	if err != nil || failed.Status != job.StatusFailed {
-		t.Fatalf("fail source=%#v err=%v", failed, err)
+	failed, err := repository.Get(ctx, source.ID)
+	if err != nil || failed.Status != job.StatusFailed || failed.Attempt != failed.MaxAttempts || failed.Lease != nil {
+		t.Fatalf("failed source fixture=%#v err=%v", failed, err)
 	}
 
 	request := job.ManualRetryRequest{
