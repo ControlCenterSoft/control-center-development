@@ -8,13 +8,16 @@ import (
 
 // PromotionEvidence captures release evidence required before channel promotion.
 type PromotionEvidence struct {
-	Version          string
-	Revision         string
-	TestsPassed      bool
-	SecurityPassed   bool
-	RollbackPrepared bool
-	Artifact         ArtifactEvidence
-	Commercial       CommercialEvidence
+	Version              string
+	Revision             string
+	TestsPassed          bool
+	QualificationBinding ReleaseEvidenceBinding
+	SecurityPassed       bool
+	SecurityBinding      ReleaseEvidenceBinding
+	RollbackPrepared     bool
+	RollbackBinding      ReleaseEvidenceBinding
+	Artifact             ArtifactEvidence
+	Commercial           CommercialEvidence
 }
 
 // PromotionDecision describes whether an artifact may enter a target channel.
@@ -33,7 +36,7 @@ func EvaluatePromotionGate(targetChannel string, evidence PromotionEvidence) (Pr
 		return PromotionDecision{}, fmt.Errorf("version is required")
 	}
 
-	blockers := make([]string, 0, 20)
+	blockers := make([]string, 0, 25)
 	if !evidence.TestsPassed {
 		blockers = append(blockers, "tests")
 	}
@@ -44,10 +47,24 @@ func EvaluatePromotionGate(targetChannel string, evidence PromotionEvidence) (Pr
 		if !validReleaseRevision(evidence.Revision) {
 			blockers = append(blockers, "revision")
 		}
+		if evidence.TestsPassed && !evidence.QualificationBinding.matches(evidence.Version, evidence.Revision) {
+			blockers = append(blockers, "tests_binding")
+		}
+		if evidence.SecurityPassed && !evidence.SecurityBinding.matches(evidence.Version, evidence.Revision) {
+			blockers = append(blockers, "security_binding")
+		}
 		if !evidence.RollbackPrepared {
 			blockers = append(blockers, "rollback")
+		} else if !evidence.RollbackBinding.matches(evidence.Version, evidence.Revision) {
+			blockers = append(blockers, "rollback_binding")
+		}
+		if !evidence.Artifact.Binding.matches(evidence.Version, evidence.Revision) {
+			blockers = append(blockers, "artifact_binding")
 		}
 		blockers = append(blockers, EvaluateArtifactGate(channel, evidence.Artifact)...)
+		if !evidence.Commercial.Binding.matches(evidence.Version, evidence.Revision) {
+			blockers = append(blockers, "commercial_binding")
+		}
 		blockers = append(blockers, EvaluateCommercialGate(evidence.Commercial)...)
 	}
 	return PromotionDecision{Allowed: len(blockers) == 0, Blockers: blockers}, nil
