@@ -35,10 +35,14 @@ CANDIDATE_SHA="$candidate_sha" bash scripts/build-candidate-031.sh
 out="$repo_root/dist/candidate-0.31.0"
 binary_artifact="$out/control-center-$candidate_version-linux-amd64.tar.gz"
 source_artifact="$out/control-center-$candidate_version-source.tar.gz"
+sbom_artifact="$out/control-center-$candidate_version.sbom.cdx.json"
+notices_artifact="$out/THIRD_PARTY_NOTICES.md"
 (
   cd "$out"
   sha256sum -c "control-center-$candidate_version-linux-amd64.tar.gz.sha256"
 )
+[[ -s "$sbom_artifact" ]] || { echo "candidate SBOM missing" >&2; exit 1; }
+[[ -s "$notices_artifact" ]] || { echo "candidate third-party notices missing" >&2; exit 1; }
 
 mkdir -p "$work/candidate" "$work/stable"
 tar -xzf "$binary_artifact" -C "$work/candidate"
@@ -49,6 +53,33 @@ candidate_root="$work/candidate/control-center-$candidate_version"
 [[ -f "$candidate_root/deploy/systemd/control-center.service" ]]
 [[ -f "$candidate_root/config/control-center.env.example" ]]
 [[ -x "$candidate_root/scripts/migrate.sh" ]]
+[[ -f "$candidate_root/THIRD_PARTY_NOTICES.md" ]]
+[[ -f "$candidate_root/docs/SBOM.cdx.json" ]]
+[[ -f "$candidate_root/third_party/manifest-0.31.json" ]]
+cmp -s "$notices_artifact" "$candidate_root/THIRD_PARTY_NOTICES.md"
+cmp -s "$sbom_artifact" "$candidate_root/docs/SBOM.cdx.json"
+
+python3 - "$sbom_artifact" "$candidate_sha" <<'PY'
+import json,re,sys
+path,sha=sys.argv[1:]
+with open(path,encoding="utf-8") as f: bom=json.load(f)
+assert bom.get("bomFormat")=="CycloneDX"
+assert bom.get("specVersion")=="1.7"
+root=bom.get("metadata",{}).get("component",{})
+assert root.get("name")=="control-center" and root.get("version")=="0.31.0"
+props={p.get("name"):p.get("value") for p in root.get("properties",[])}
+assert props.get("control-center:candidate-sha")==sha
+components=bom.get("components",[])
+assert len(components)==9
+refs={c.get("bom-ref") for c in components}
+assert len(refs)==9 and all(refs)
+for component in components:
+    licenses=component.get("licenses",[])
+    assert licenses and licenses[0].get("license",{}).get("id") in {"MIT","BSD-3-Clause"}
+    cprops={p.get("name"):p.get("value") for p in component.get("properties",[])}
+    assert re.fullmatch(r"[0-9a-f]{64}",cprops.get("control-center:license-sha256", ""))
+print("CANDIDATE_SBOM=PASS")
+PY
 
 stable_artifact="$work/control-center-$stable_version-linux-amd64.tar.gz"
 curl --fail --location --silent --show-error --retry 3 --connect-timeout 10 --max-time 180 \
@@ -96,36 +127,43 @@ forward_applied="$(PGDATABASE="$upgrade_db" psql -X -Atqc "SELECT count(*) FROM 
 
 binary_digest="sha256:$(sha256sum "$binary_artifact" | awk '{print $1}')"
 source_digest="sha256:$(sha256sum "$source_artifact" | awk '{print $1}')"
+sbom_digest="sha256:$(sha256sum "$sbom_artifact" | awk '{print $1}')"
+notices_digest="sha256:$(sha256sum "$notices_artifact" | awk '{print $1}')"
 sidecar="$out/control-center-$candidate_version-linux-amd64.tar.gz.sha256"
 sidecar_digest="sha256:$(sha256sum "$sidecar" | awk '{print $1}')"
 qualification="$out/control-center-$candidate_version.qualification.json"
 provenance="$out/control-center-$candidate_version.provenance.json"
 release_manifest="$out/control-center-$candidate_version.release-manifest.json"
 
-python3 - "$qualification" "$candidate_sha" "$binary_digest" "$source_digest" "$stable_sha256" <<'PY'
+python3 - "$qualification" "$candidate_sha" "$binary_digest" "$source_digest" "$sbom_digest" "$notices_digest" "$stable_sha256" <<'PY'
 import json,sys
-path,sha,binary_digest,source_digest,stable_digest=sys.argv[1:]
+path,sha,binary_digest,source_digest,sbom_digest,notices_digest,stable_digest=sys.argv[1:]
 data={
   "schema":"control-center.candidate-qualification.v1",
   "status":"PARTIAL_PASS_NOT_RC",
   "candidate_version":"0.31.0",
   "candidate_sha":sha,
   "stable_base":{"version":"0.30.0","artifact_digest":"sha256:"+stable_digest},
-  "artifacts":{"linux_amd64":binary_digest,"source":source_digest},
+  "artifacts":{"linux_amd64":binary_digest,"source":source_digest,"sbom":sbom_digest,"third_party_notices":notices_digest},
   "gates":{
     "candidate_artifact_packaging":"PASS",
     "clean_install":"PASS",
     "upgrade_from_stable_0_30":"PASS",
     "rollback_forward_recovery":"PASS"
   },
+  "commercial_engineering_subgates":{
+    "dependency_license_inventory":"PASS",
+    "sbom":"PASS",
+    "third_party_notices":"PASS"
+  },
   "not_claimed":["security_privacy","commercial_legal_clearance","release_metadata","public_stable_promotion"]
 }
 with open(path,"w",encoding="utf-8") as f: json.dump(data,f,sort_keys=True,separators=(",",":")); f.write("\n")
 PY
 
-python3 - "$provenance" "$candidate_sha" "$binary_digest" "$source_digest" <<'PY'
+python3 - "$provenance" "$candidate_sha" "$binary_digest" "$source_digest" "$sbom_digest" "$notices_digest" <<'PY'
 import json,os,sys
-path,sha,binary_digest,source_digest=sys.argv[1:]
+path,sha,binary_digest,source_digest,sbom_digest,notices_digest=sys.argv[1:]
 data={
   "schema":"control-center.candidate-provenance.v1",
   "candidate_version":"0.31.0",
@@ -134,7 +172,9 @@ data={
   "builder":"github-actions" if os.getenv("GITHUB_ACTIONS")=="true" else "local-qualified-runner",
   "subjects":[
     {"name":"control-center-0.31.0-linux-amd64.tar.gz","digest":binary_digest},
-    {"name":"control-center-0.31.0-source.tar.gz","digest":source_digest}
+    {"name":"control-center-0.31.0-source.tar.gz","digest":source_digest},
+    {"name":"control-center-0.31.0.sbom.cdx.json","digest":sbom_digest},
+    {"name":"THIRD_PARTY_NOTICES.md","digest":notices_digest}
   ],
   "publication_authority":False
 }
@@ -143,9 +183,9 @@ PY
 
 qualification_digest="sha256:$(sha256sum "$qualification" | awk '{print $1}')"
 provenance_digest="sha256:$(sha256sum "$provenance" | awk '{print $1}')"
-python3 - "$release_manifest" "$candidate_sha" "$binary_digest" "$sidecar_digest" "$source_digest" "$qualification_digest" "$provenance_digest" <<'PY'
+python3 - "$release_manifest" "$candidate_sha" "$binary_digest" "$sidecar_digest" "$source_digest" "$sbom_digest" "$notices_digest" "$qualification_digest" "$provenance_digest" <<'PY'
 import json,sys
-path,sha,binary_digest,sidecar_digest,source_digest,qualification_digest,provenance_digest=sys.argv[1:]
+path,sha,binary_digest,sidecar_digest,source_digest,sbom_digest,notices_digest,qualification_digest,provenance_digest=sys.argv[1:]
 data={
   "schema":"control-center.candidate-release-manifest.v1",
   "status":"candidate-only-not-public-stable",
@@ -157,6 +197,8 @@ data={
     "control-center-0.31.0-linux-amd64.tar.gz":binary_digest,
     "control-center-0.31.0-linux-amd64.tar.gz.sha256":sidecar_digest,
     "control-center-0.31.0-source.tar.gz":source_digest,
+    "control-center-0.31.0.sbom.cdx.json":sbom_digest,
+    "THIRD_PARTY_NOTICES.md":notices_digest,
     "control-center-0.31.0.qualification.json":qualification_digest,
     "control-center-0.31.0.provenance.json":provenance_digest
   }
@@ -170,12 +212,14 @@ PY
     "control-center-$candidate_version-linux-amd64.tar.gz" \
     "control-center-$candidate_version-linux-amd64.tar.gz.sha256" \
     "control-center-$candidate_version-source.tar.gz" \
+    "control-center-$candidate_version.sbom.cdx.json" \
+    "THIRD_PARTY_NOTICES.md" \
     "control-center-$candidate_version.provenance.json" \
     "control-center-$candidate_version.qualification.json" \
     "control-center-$candidate_version.release-manifest.json" > SHA256SUMS
 )
 
-# Validate the exact seven-file candidate set through the repository's fail-closed
+# Validate the exact candidate set through the repository's fail-closed
 # releasecandidate contract without adding a second workflow/job.
 validator_dir="$(mktemp -d "$repo_root/.candidate-validator.XXXXXX")"
 trap 'rm -rf "$validator_dir"; cleanup' EXIT
@@ -186,6 +230,8 @@ names=[
  "control-center-0.31.0-linux-amd64.tar.gz",
  "control-center-0.31.0-linux-amd64.tar.gz.sha256",
  "control-center-0.31.0-source.tar.gz",
+ "control-center-0.31.0.sbom.cdx.json",
+ "THIRD_PARTY_NOTICES.md",
  "control-center-0.31.0.provenance.json",
  "control-center-0.31.0.qualification.json",
  "control-center-0.31.0.release-manifest.json",
@@ -220,6 +266,8 @@ rm -rf "$validator_dir"
 trap cleanup EXIT
 
 echo "CANDIDATE_PACKAGE=PASS"
+echo "CANDIDATE_SBOM=PASS"
+echo "THIRD_PARTY_NOTICES=PASS"
 echo "CLEAN_INSTALL=PASS"
 echo "UPGRADE_FROM_STABLE_0_30=PASS"
 echo "ROLLBACK_FORWARD_RECOVERY=PASS"
