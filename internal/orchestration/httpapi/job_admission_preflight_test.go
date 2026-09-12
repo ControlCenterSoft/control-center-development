@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -67,6 +68,34 @@ func TestEvaluateJobAdmissionRejectsStaleApprovedRevision(t *testing.T) {
 	}
 	if state := record.machine.Snapshot().State; state != change.StateApproved {
 		t.Fatalf("preflight must be side-effect-free, state=%q", state)
+	}
+}
+
+func TestEnqueueWithAdmissionPreflightStopsBeforeMutationForStaleRevision(t *testing.T) {
+	now := time.Date(2026, 9, 12, 5, 0, 0, 0, time.UTC)
+	revision, record := approvedAdmissionRecord(t, now)
+	newer, err := orchestrationconfig.NewRevision("rev-current", 2, now.Add(-10*time.Second), []byte(`{"generation":2}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{
+		revisions: map[string]orchestrationconfig.Revision{
+			revision.ID(): revision,
+			newer.ID():    newer,
+		},
+		currentRevision: newer.ID(),
+		now:             func() time.Time { return now },
+	}
+
+	err = server.enqueueWithAdmissionPreflight(context.Background(), record)
+	if !errors.Is(err, errJobAdmissionBlocked) {
+		t.Fatalf("stale Change must be stopped before durable enqueue, err=%v", err)
+	}
+	if state := record.machine.Snapshot().State; state != change.StateApproved {
+		t.Fatalf("stale admission changed state before enqueue: %q", state)
+	}
+	if record.jobID != "" {
+		t.Fatalf("stale admission created Job binding %q", record.jobID)
 	}
 }
 

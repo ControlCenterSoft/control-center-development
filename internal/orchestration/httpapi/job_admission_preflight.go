@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -57,4 +58,16 @@ func (s *Server) evaluateJobAdmission(record *changeRecord) (executionguard.Deci
 		return decision, &jobAdmissionBlockError{Blockers: append([]string(nil), decision.Blockers...)}
 	}
 	return decision, nil
+}
+
+// enqueueWithAdmissionPreflight is the fail-closed admission wrapper for the
+// existing durable enqueue path. It deliberately delegates actual mutation to
+// enqueue only after the side-effect-free exact-revision check succeeds.
+//
+// Callers are responsible for the same Server mutex discipline as enqueue.
+func (s *Server) enqueueWithAdmissionPreflight(ctx context.Context, record *changeRecord) error {
+	if _, err := s.evaluateJobAdmission(record); err != nil {
+		return err
+	}
+	return s.enqueue(ctx, record)
 }
