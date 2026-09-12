@@ -8,8 +8,9 @@ import (
 func completeSnapshot() Snapshot {
 	candidateSHA := strings.Repeat("b", 40)
 	digest := "sha256:" + strings.Repeat("c", 64)
-	gates := make([]GateEvidence, 0, len(RequiredGates))
-	for _, gate := range RequiredGates {
+	required := RequiredGates()
+	gates := make([]GateEvidence, 0, len(required))
+	for _, gate := range required {
 		gates = append(gates, GateEvidence{
 			Gate:           gate,
 			Status:         GatePass,
@@ -38,6 +39,15 @@ func TestEvaluateReadyOnlyWhenEveryRequiredGatePasses(t *testing.T) {
 	}
 	if len(result.Blockers) != 0 {
 		t.Fatalf("Blockers = %v, want empty", result.Blockers)
+	}
+}
+
+func TestRequiredGatesReturnsDefensiveCopy(t *testing.T) {
+	first := RequiredGates()
+	first[0] = GateID("weakened")
+	second := RequiredGates()
+	if second[0] != GateManualRetryLineage {
+		t.Fatalf("RequiredGates() policy mutated through caller: %v", second)
 	}
 }
 
