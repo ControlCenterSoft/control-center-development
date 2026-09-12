@@ -6,8 +6,9 @@ import (
 )
 
 func completeArtifactManifest() ArtifactManifest {
-	artifacts := make([]ArtifactEvidence, 0, len(RequiredArtifactNames))
-	for _, name := range RequiredArtifactNames {
+	required := RequiredArtifactNames()
+	artifacts := make([]ArtifactEvidence, 0, len(required))
+	for _, name := range required {
 		artifacts = append(artifacts, ArtifactEvidence{
 			Name:   name,
 			Digest: "sha256:" + strings.Repeat("e", 64),
@@ -24,6 +25,15 @@ func completeArtifactManifest() ArtifactManifest {
 func TestValidateArtifactManifestAcceptsExactRequiredSet(t *testing.T) {
 	if err := ValidateArtifactManifest(completeArtifactManifest()); err != nil {
 		t.Fatalf("ValidateArtifactManifest() error = %v", err)
+	}
+}
+
+func TestRequiredArtifactNamesReturnsDefensiveCopy(t *testing.T) {
+	first := RequiredArtifactNames()
+	first[0] = "weakened"
+	second := RequiredArtifactNames()
+	if second[0] != "control-center-0.31.0-linux-amd64.tar.gz" {
+		t.Fatalf("RequiredArtifactNames() policy mutated through caller: %v", second)
 	}
 }
 
