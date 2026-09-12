@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -102,7 +103,7 @@ func TestVersionBoundCancellationPreservesRunningLeaseAndRejectsPreClaimView(t *
 	handler := versionBoundCancellationMiddleware(cancelRepositoryHandler(repository, created.ID))
 
 	stale := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/"+created.ID+"/cancel", nil)
-	stale.Header.Set("If-Match", `"`+uintString(created.Version)+`"`)
+	stale.Header.Set("If-Match", `"`+strconv.FormatUint(created.Version, 10)+`"`)
 	staleResult := httptest.NewRecorder()
 	handler.ServeHTTP(staleResult, stale)
 	if staleResult.Code != http.StatusPreconditionFailed {
@@ -110,7 +111,7 @@ func TestVersionBoundCancellationPreservesRunningLeaseAndRejectsPreClaimView(t *
 	}
 
 	current := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/"+created.ID+"/cancel", nil)
-	current.Header.Set("If-Match", `"`+uintString(claimed.Version)+`"`)
+	current.Header.Set("If-Match", `"`+strconv.FormatUint(claimed.Version, 10)+`"`)
 	currentResult := httptest.NewRecorder()
 	handler.ServeHTTP(currentResult, current)
 	if currentResult.Code != http.StatusAccepted {
@@ -184,22 +185,4 @@ func cancelRepositoryHandler(repository job.Repository, jobID string) http.Handl
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(result)
 	})
-}
-
-func uintString(value uint64) string {
-	return strings.TrimSpace(json.Number(string(rune(0))).String())[:0] + formatUint(value)
-}
-
-func formatUint(value uint64) string {
-	if value == 0 {
-		return "0"
-	}
-	var digits [20]byte
-	index := len(digits)
-	for value > 0 {
-		index--
-		digits[index] = byte('0' + value%10)
-		value /= 10
-	}
-	return string(digits[index:])
 }
