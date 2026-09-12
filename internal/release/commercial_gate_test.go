@@ -6,7 +6,7 @@ import (
 )
 
 func TestEvaluateCommercialGateApproved(t *testing.T) {
-	blockers := EvaluateCommercialGate(approvedCommercialEvidence())
+	blockers := EvaluateCommercialGate(approvedCommercialEvidence("0.31.0", strings.Repeat("c", 40)))
 	if len(blockers) != 0 {
 		t.Fatalf("unexpected blockers: %#v", blockers)
 	}
@@ -35,7 +35,7 @@ func TestEvaluateCommercialGateApprovedLabelAloneFailsClosed(t *testing.T) {
 }
 
 func TestEvaluateCommercialGateRejectsMalformedDigest(t *testing.T) {
-	evidence := approvedCommercialEvidence()
+	evidence := approvedCommercialEvidence("0.31.0", strings.Repeat("c", 40))
 	evidence.EvidenceDigest = "sha256:" + strings.Repeat("G", 64)
 	blockers := EvaluateCommercialGate(evidence)
 	if len(blockers) != 1 || blockers[0] != "commercial_evidence" {
@@ -44,7 +44,7 @@ func TestEvaluateCommercialGateRejectsMalformedDigest(t *testing.T) {
 }
 
 func TestEvaluateCommercialGateDispositionIsCaseAndSpaceNormalized(t *testing.T) {
-	evidence := approvedCommercialEvidence()
+	evidence := approvedCommercialEvidence("0.31.0", strings.Repeat("c", 40))
 	evidence.Disposition = "  APPROVED  "
 	blockers := EvaluateCommercialGate(evidence)
 	if len(blockers) != 0 {
@@ -53,7 +53,7 @@ func TestEvaluateCommercialGateDispositionIsCaseAndSpaceNormalized(t *testing.T)
 }
 
 func TestEvaluateCommercialGateBlockedDispositionCannotPromote(t *testing.T) {
-	evidence := approvedCommercialEvidence()
+	evidence := approvedCommercialEvidence("0.31.0", strings.Repeat("c", 40))
 	evidence.Disposition = "blocked"
 	blockers := EvaluateCommercialGate(evidence)
 	if len(blockers) != 1 || blockers[0] != "commercial_disposition" {
