@@ -15,8 +15,8 @@ retry_history_digest,approval_evidence_digest,requested_at,request_fingerprint`
 
 // CreateManualRetry atomically preserves one failed source Job and creates one
 // fresh queued Job plus immutable retry-lineage evidence. The source row is
-// locked before replay detection so concurrent requests for the same source are
-// serialized and exact reviewed-admission replay cannot create two child Jobs.
+// locked before replay/source-lineage detection so concurrent requests for the
+// same source version are serialized and cannot create two child Jobs.
 func (r *JobRepository) CreateManualRetry(ctx context.Context, request job.ManualRetryRequest) (job.Job, job.ManualRetryLineage, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return job.Job{}, job.ManualRetryLineage{}, false, err
@@ -64,9 +64,21 @@ func (r *JobRepository) CreateManualRetry(ctx context.Context, request job.Manua
 	if source.Status != job.StatusFailed || source.Attempt < source.MaxAttempts || source.Lease != nil {
 		return job.Job{}, job.ManualRetryLineage{}, false, job.ErrManualRetrySourceNotFailed
 	}
+	var priorSourceAdmission string
+	err = tx.QueryRowContext(ctx, `SELECT reviewed_admission_id FROM cc_job_manual_retry_lineage WHERE source_job_id=$1 AND source_job_version=$2`, source.ID, source.Version).Scan(&priorSourceAdmission)
+	if err == nil {
+		return job.Job{}, job.ManualRetryLineage{}, false, job.ErrManualRetrySourceAlreadyRetried
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return job.Job{}, job.ManualRetryLineage{}, false, err
+	}
 
 	rootJobID := source.ID
-	if err := tx.QueryRowContext(ctx, `SELECT root_job_id FROM cc_job_manual_retry_lineage WHERE retry_job_id=$1`, source.ID).Scan(&rootJobID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	var parentRoot string
+	err = tx.QueryRowContext(ctx, `SELECT root_job_id FROM cc_job_manual_retry_lineage WHERE retry_job_id=$1`, source.ID).Scan(&parentRoot)
+	if err == nil {
+		rootJobID = parentRoot
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return job.Job{}, job.ManualRetryLineage{}, false, err
 	}
 
