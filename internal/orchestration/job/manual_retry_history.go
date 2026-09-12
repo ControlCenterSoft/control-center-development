@@ -36,8 +36,8 @@ type ManualRetryHistoryEvidence struct {
 }
 
 type manualRetryHistoryDigestPayload struct {
-	ContractVersion string                   `json:"contract_version"`
-	RootJobID       string                   `json:"root_job_id"`
+	ContractVersion string                    `json:"contract_version"`
+	RootJobID       string                    `json:"root_job_id"`
 	Entries         []manualRetryHistoryEntry `json:"entries"`
 }
 
