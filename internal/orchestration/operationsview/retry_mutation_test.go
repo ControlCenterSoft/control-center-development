@@ -14,12 +14,11 @@ import (
 const mutationRetryDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 type retryMutationEvidenceSource struct {
-	revisionID       string
-	revisionDigest   string
-	policy           JobRetryPolicyEvidence
-	historyDigest    string
-	historyObserved  time.Time
-	err              error
+	revisionID     string
+	revisionDigest string
+	policy         JobRetryPolicyEvidence
+	history        job.ManualRetryHistoryEvidence
+	err            error
 }
 
 func (s retryMutationEvidenceSource) CurrentRevision(context.Context, job.Job) (string, string, error) {
@@ -30,8 +29,8 @@ func (s retryMutationEvidenceSource) CurrentRetryPolicy(context.Context, job.Job
 	return s.policy, s.err
 }
 
-func (s retryMutationEvidenceSource) CurrentRetryHistory(context.Context, job.Job) (string, time.Time, error) {
-	return s.historyDigest, s.historyObserved, s.err
+func (s retryMutationEvidenceSource) CurrentRetryHistory(context.Context, job.Job) (job.ManualRetryHistoryEvidence, error) {
+	return s.history, s.err
 }
 
 func failedRetryMutationSource(t *testing.T, jobs *job.MemoryRepository, now time.Time) job.Job {
@@ -69,12 +68,21 @@ func reviewedRetryMutationEvidence(t *testing.T, source job.Job, now time.Time) 
 		MaxManualRetries:  2,
 		ObservedAt:        now.Add(3 * time.Second),
 	}
+	history := job.ManualRetryHistoryEvidence{
+		ContractVersion:      job.ManualRetryHistoryContractVersion,
+		RootJobID:            source.ID,
+		SourceJobID:          source.ID,
+		SourceJobVersion:     source.Version,
+		UsedManualRetries:    0,
+		SourceAlreadyRetried: false,
+		Digest:               mutationRetryDigest,
+		ObservedAt:           now.Add(4 * time.Second),
+	}
 	evidenceSource := retryMutationEvidenceSource{
-		revisionID:      "revision-mutation-1",
-		revisionDigest:  mutationRetryDigest,
-		policy:          policy,
-		historyDigest:   mutationRetryDigest,
-		historyObserved: now.Add(4 * time.Second),
+		revisionID:     "revision-mutation-1",
+		revisionDigest: mutationRetryDigest,
+		policy:         policy,
+		history:        history,
 	}
 	reviewed, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
 		Job:                    source,
@@ -82,8 +90,9 @@ func reviewedRetryMutationEvidence(t *testing.T, source job.Job, now time.Time) 
 		RevisionID:             evidenceSource.revisionID,
 		RevisionDigest:         evidenceSource.revisionDigest,
 		Policy:                 policy,
-		RetryHistoryDigest:     evidenceSource.historyDigest,
-		RetryHistoryObservedAt: evidenceSource.historyObserved,
+		RetryHistoryDigest:     history.Digest,
+		RetryHistoryObservedAt: history.ObservedAt,
+		SourceAlreadyRetried:   history.SourceAlreadyRetried,
 		ObservedAt:             now.Add(5 * time.Second),
 	})
 	if err != nil {
@@ -105,7 +114,7 @@ func TestCreateManualRetryWithRevalidationCreatesFreshQueuedLineage(t *testing.T
 	// The mutation re-reads fresher evidence. Timestamps may advance while the
 	// semantic revision/policy/history boundary remains identical.
 	evidenceSource.policy.ObservedAt = now.Add(6 * time.Second)
-	evidenceSource.historyObserved = now.Add(7 * time.Second)
+	evidenceSource.history.ObservedAt = now.Add(7 * time.Second)
 
 	retry, lineage, created, err := CreateManualRetryWithRevalidation(ctx, repository, evidenceSource, JobRetryMutationRequest{
 		Reviewed:            reviewed,
@@ -136,7 +145,7 @@ func TestCreateManualRetryWithRevalidationRejectsChangedPolicyOrHistory(t *testi
 	repository, _ := job.NewMemoryManualRetryRepository(jobs)
 	reviewed, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
 	evidenceSource.policy.ObservedAt = now.Add(6 * time.Second)
-	evidenceSource.historyObserved = now.Add(7 * time.Second)
+	evidenceSource.history.ObservedAt = now.Add(7 * time.Second)
 	evidenceSource.policy.PolicyDigest = "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 
 	_, _, _, err := CreateManualRetryWithRevalidation(ctx, repository, evidenceSource, JobRetryMutationRequest{
@@ -153,7 +162,7 @@ func TestCreateManualRetryWithRevalidationRejectsChangedPolicyOrHistory(t *testi
 	}
 
 	evidenceSource.policy.PolicyDigest = reviewed.PolicyDigest
-	evidenceSource.historyDigest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	evidenceSource.history.Digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 	_, _, _, err = CreateManualRetryWithRevalidation(ctx, repository, evidenceSource, JobRetryMutationRequest{
 		Reviewed:            reviewed,
 		RetryJobID:          "job-history-stale-child",
@@ -173,8 +182,9 @@ func TestCreateManualRetryWithRevalidationRejectsBlockedCurrentEvidence(t *testi
 	repository, _ := job.NewMemoryManualRetryRepository(jobs)
 	reviewed, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
 	evidenceSource.policy.ObservedAt = now.Add(6 * time.Second)
-	evidenceSource.historyObserved = now.Add(7 * time.Second)
+	evidenceSource.history.ObservedAt = now.Add(7 * time.Second)
 	evidenceSource.policy.UsedManualRetries = evidenceSource.policy.MaxManualRetries
+	evidenceSource.history.UsedManualRetries = evidenceSource.policy.MaxManualRetries
 
 	_, _, _, err := CreateManualRetryWithRevalidation(ctx, repository, evidenceSource, JobRetryMutationRequest{
 		Reviewed:            reviewed,
@@ -213,7 +223,7 @@ func TestCreateManualRetryWithRevalidationRejectsSourceVersionAdvance(t *testing
 	jobs := job.NewMemoryRepository()
 	source := failedRetryMutationSource(t, jobs, now)
 	repository, _ := job.NewMemoryManualRetryRepository(jobs)
-	reviewed, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
+	_, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
 
 	// Creating the first retry from the source leaves the source unchanged, so
 	// use an explicit current-version mismatch in the reviewed evidence while
@@ -234,7 +244,7 @@ func TestCreateManualRetryWithRevalidationRejectsSourceVersionAdvance(t *testing
 			MaxManualRetries:  2,
 			ObservedAt:        now.Add(7 * time.Second),
 		},
-		RetryHistoryDigest:     evidenceSource.historyDigest,
+		RetryHistoryDigest:     evidenceSource.history.Digest,
 		RetryHistoryObservedAt: now.Add(7 * time.Second),
 		ObservedAt:             now.Add(8 * time.Second),
 	})
@@ -251,6 +261,26 @@ func TestCreateManualRetryWithRevalidationRejectsSourceVersionAdvance(t *testing
 	if !errors.Is(err, ErrJobRetryAdmissionStale) {
 		t.Fatalf("source version error = %v, want ErrJobRetryAdmissionStale", err)
 	}
+}
 
-	_ = reviewed
+func TestCreateManualRetryWithRevalidationRejectsPolicyHistoryUsageMismatch(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 12, 6, 25, 0, 0, time.UTC)
+	jobs := job.NewMemoryRepository()
+	source := failedRetryMutationSource(t, jobs, now)
+	repository, _ := job.NewMemoryManualRetryRepository(jobs)
+	reviewed, evidenceSource := reviewedRetryMutationEvidence(t, source, now)
+	evidenceSource.policy.ObservedAt = now.Add(6 * time.Second)
+	evidenceSource.history.ObservedAt = now.Add(7 * time.Second)
+	evidenceSource.policy.UsedManualRetries = 1
+
+	_, _, _, err := CreateManualRetryWithRevalidation(ctx, repository, evidenceSource, JobRetryMutationRequest{
+		Reviewed:            reviewed,
+		RetryJobID:          "job-usage-mismatch-child",
+		RetryIdempotencyKey: "usage-mismatch-key",
+		RequestedAt:         now.Add(8 * time.Second),
+	})
+	if !errors.Is(err, ErrJobRetryAdmissionStale) {
+		t.Fatalf("usage mismatch error = %v, want ErrJobRetryAdmissionStale", err)
+	}
 }
