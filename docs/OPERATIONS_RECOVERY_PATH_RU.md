@@ -53,8 +53,10 @@ Evidence обязательно содержит:
 
 Этот слой не создаёт backup и не выполняет restore. Recovery subsystem остаётся authoritative источником RecoveryPoint/Backup/Restore metadata и restore-drill evidence. Operational evidence — только bounded projection для оператора и последующего release-gate wiring.
 
-Наличие `PASSED` в projection не заменяет проверку provenance recovery metadata и qualification конкретного backup/restore provider. При подключении источника runtime должен получать данные из валидированного recovery metadata graph и не строить `ready` по произвольному клиентскому вводу.
+Предпочтительный runtime-путь — `BuildRecoveryPathEvidenceFromGraph`: он принимает только полный recovery metadata graph, сначала пропускает его через `ValidateRecoveryMetadataGraph`, затем проверяет привязку recovery point к конкретному Change, учитывает только подтверждённые backup records и ограничивает срок действия recovery evidence. Это не позволяет построить `ready` из произвольных клиентских счётчиков.
+
+Наличие `PASSED` в projection не заменяет проверку provenance recovery metadata и qualification конкретного backup/restore provider. Runtime не должен строить `ready` по произвольному клиентскому вводу.
 
 ## Связь с release scope 0.31
 
-Срез закрывает typed recovery-path evidence и exact-revision binding для Changes / Jobs operational UI. Он не объявляет 0.31 Release Candidate или Public Stable. До полного release gate отдельно остаются квалификация runtime wiring, install/upgrade, оставшиеся retry/cancel/reconnect сценарии, а также финальные security/commercial checks.
+Срез закрывает typed recovery-path evidence, trusted graph adapter и exact-revision binding для Changes / Jobs operational UI. Он не объявляет 0.31 Release Candidate или Public Stable. До полного release gate отдельно остаются qualification runtime wiring, install/upgrade, оставшиеся retry/cancel/reconnect сценарии, а также финальные security/commercial checks.
