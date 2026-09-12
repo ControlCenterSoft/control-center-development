@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.pro/schemas/operations-recovery-evidence-v1.schema.json",
+  "title": "Control Center Operations Recovery Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "recovery_plan_id",
+    "change_id",
+    "revision_id",
+    "revision_digest",
+    "strategy",
+    "readiness",
+    "observed_at",
+    "validated_at",
+    "verification_digest",
+    "operator_action_required"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "ui.operations-recovery-evidence/v1"
+    },
+    "recovery_plan_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "change_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "revision_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "revision_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": ["rollback", "rollforward", "manual_recovery"]
+    },
+    "readiness": {
+      "type": "string",
+      "enum": ["ready", "degraded", "unavailable"]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verification_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "operator_action_required": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^\\S(?:.*\\S)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}
