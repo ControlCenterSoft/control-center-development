@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	defaultMaxRows      = 10000
-	defaultMaxColumns   = 128
-	defaultMaxCellBytes = 64 * 1024
+	defaultMaxRows        = 10000
+	defaultMaxColumns     = 128
+	defaultMaxCellBytes   = 64 * 1024
+	defaultMaxOutputBytes = 64 * 1024 * 1024
 )
 
 // Row is one reporting record. Formula fields are resolved by exact key.
@@ -32,16 +33,18 @@ type Column struct {
 
 // ExportLimits bounds report materialization before any bytes are returned.
 type ExportLimits struct {
-	MaxRows      int
-	MaxColumns   int
-	MaxCellBytes int
+	MaxRows        int
+	MaxColumns     int
+	MaxCellBytes   int
+	MaxOutputBytes int
 }
 
 func DefaultExportLimits() ExportLimits {
 	return ExportLimits{
-		MaxRows:      defaultMaxRows,
-		MaxColumns:   defaultMaxColumns,
-		MaxCellBytes: defaultMaxCellBytes,
+		MaxRows:        defaultMaxRows,
+		MaxColumns:     defaultMaxColumns,
+		MaxCellBytes:   defaultMaxCellBytes,
+		MaxOutputBytes: defaultMaxOutputBytes,
 	}
 }
 
@@ -84,7 +87,7 @@ func ExportCSV(columns []Column, rows []Row, limits ExportLimits) ([]byte, error
 		headers[i] = header
 	}
 
-	var buffer bytes.Buffer
+	buffer := cappedBuffer{maxBytes: limits.MaxOutputBytes}
 	writer := csv.NewWriter(&buffer)
 	if err := writer.Write(headers); err != nil {
 		return nil, fmt.Errorf("write CSV header: %w", err)
@@ -113,7 +116,7 @@ func ExportCSV(columns []Column, rows []Row, limits ExportLimits) ([]byte, error
 	if err := writer.Error(); err != nil {
 		return nil, fmt.Errorf("flush CSV: %w", err)
 	}
-	return buffer.Bytes(), nil
+	return append([]byte(nil), buffer.Bytes()...), nil
 }
 
 func normalizedLimits(limits ExportLimits) ExportLimits {
@@ -126,6 +129,9 @@ func normalizedLimits(limits ExportLimits) ExportLimits {
 	}
 	if limits.MaxCellBytes <= 0 {
 		limits.MaxCellBytes = defaults.MaxCellBytes
+	}
+	if limits.MaxOutputBytes <= 0 {
+		limits.MaxOutputBytes = defaults.MaxOutputBytes
 	}
 	return limits
 }
@@ -224,4 +230,16 @@ func protectSpreadsheetFormula(value string) string {
 	default:
 		return value
 	}
+}
+
+type cappedBuffer struct {
+	bytes.Buffer
+	maxBytes int
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if b.maxBytes <= 0 || b.Len()+len(p) > b.maxBytes {
+		return 0, fmt.Errorf("CSV output exceeds %d bytes", b.maxBytes)
+	}
+	return b.Buffer.Write(p)
 }
