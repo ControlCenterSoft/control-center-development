@@ -83,6 +83,9 @@ func ValidateChangesJobsView(view ChangesJobsView) error {
 				return fmt.Errorf("%w: job %q has unsupported health summary %q", ErrInvalidChangesJobsView, jobView.ID, jobView.Output.WorstHealth)
 			}
 		}
+		if err := validateWorkflowEvidenceSummary(changeView.WorkflowEvidence, changeView.Jobs); err != nil {
+			return fmt.Errorf("%w: change %q workflow evidence is invalid: %v", ErrInvalidChangesJobsView, changeView.ID, err)
+		}
 	}
 	if view.JobCount != totalJobs {
 		return fmt.Errorf("%w: job_count=%d does not match jobs=%d", ErrInvalidChangesJobsView, view.JobCount, totalJobs)

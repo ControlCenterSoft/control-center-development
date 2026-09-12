@@ -52,7 +52,8 @@ func TestChangesJobsHandlerReturnsValidatedSnapshot(t *testing.T) {
 				Approvals: productui.ApprovalSummary{Satisfied: true}, Version: 1, UpdatedAt: generatedAt,
 				SemanticDiff: productui.EvidenceUnavailable, BlastRadius: productui.EvidenceUnavailable,
 				MaintenanceWindow: productui.EvidenceUnavailable, RecoveryEvidence: productui.EvidenceUnavailable,
-				Jobs: []productui.JobOperationalView{},
+				WorkflowEvidence: productui.WorkflowEvidenceSummary{Availability: productui.EvidenceUnavailable},
+				Jobs:             []productui.JobOperationalView{},
 			}},
 		}, nil
 	})
@@ -61,7 +62,7 @@ func TestChangesJobsHandlerReturnsValidatedSnapshot(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), `"change_count":1`) || !strings.Contains(w.Body.String(), `"state":"current"`) {
+	if !strings.Contains(w.Body.String(), `"change_count":1`) || !strings.Contains(w.Body.String(), `"state":"current"`) || !strings.Contains(w.Body.String(), `"workflow_evidence":{"availability":"unavailable"`) {
 		t.Fatalf("body=%s", w.Body.String())
 	}
 	if got := w.Header().Get("Cache-Control"); got != "no-store" {
