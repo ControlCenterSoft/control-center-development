@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://control-center.pro/schemas/operations-job-reconnect-v1.schema.json",
+  "title": "Control Center Operations Job Reconnect Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "state",
+    "source_available",
+    "job_id",
+    "job_version",
+    "status",
+    "attempt",
+    "max_attempts",
+    "updated_at",
+    "terminal",
+    "after_version",
+    "resume_version",
+    "events",
+    "reload_required",
+    "evaluated_at",
+    "execution_authorized",
+    "production_mutation_allowed"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "ui.operations-job-reconnect/v1"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["current", "reload_required", "unavailable"]
+    },
+    "source_available": {
+      "type": "boolean"
+    },
+    "job_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "job_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_attempts": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "terminal": {
+      "type": "boolean"
+    },
+    "after_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "resume_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timeline_head_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timeline_head_status": {
+      "$ref": "#/$defs/status"
+    },
+    "timeline_head_attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/timeline_entry"
+      }
+    },
+    "reload_required": {
+      "type": "boolean"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "execution_authorized": {
+      "const": false
+    },
+    "production_mutation_allowed": {
+      "const": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"state": {"const": "unavailable"}},
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "source_available": {"const": false},
+          "reload_required": {"const": true},
+          "events": {"maxItems": 0}
+        },
+        "not": {
+          "anyOf": [
+            {"required": ["timeline_head_version"]},
+            {"required": ["timeline_head_status"]},
+            {"required": ["timeline_head_attempt"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"state": {"const": "current"}},
+        "required": ["state"]
+      },
+      "then": {
+        "required": ["timeline_head_version", "timeline_head_status"],
+        "properties": {
+          "source_available": {"const": true},
+          "reload_required": {"const": false}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"state": {"const": "reload_required"}},
+        "required": ["state"]
+      },
+      "then": {
+        "required": ["timeline_head_version", "timeline_head_status"],
+        "properties": {
+          "source_available": {"const": true},
+          "reload_required": {"const": true},
+          "events": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^\\S(?:.*\\S)?$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "retry_wait",
+        "cancel_requested",
+        "cancelled",
+        "succeeded",
+        "failed"
+      ]
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "observed",
+        "created",
+        "attempt_started",
+        "retry_scheduled",
+        "cancel_requested",
+        "cancelled",
+        "succeeded",
+        "failed"
+      ]
+    },
+    "timeline_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jobId", "event", "status", "attempt", "jobVersion", "occurredAt"],
+      "properties": {
+        "jobId": {"$ref": "#/$defs/identifier"},
+        "event": {"$ref": "#/$defs/event"},
+        "status": {"$ref": "#/$defs/status"},
+        "attempt": {"type": "integer", "minimum": 0},
+        "jobVersion": {"type": "integer", "minimum": 1},
+        "occurredAt": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}
