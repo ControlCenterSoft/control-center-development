@@ -21,7 +21,7 @@ var (
 type JobRetryCurrentEvidenceSource interface {
 	CurrentRevision(context.Context, job.Job) (revisionID string, revisionDigest string, err error)
 	CurrentRetryPolicy(context.Context, job.Job) (JobRetryPolicyEvidence, error)
-	CurrentRetryHistory(context.Context, job.Job) (digest string, observedAt time.Time, err error)
+	CurrentRetryHistory(context.Context, job.Job) (job.ManualRetryHistoryEvidence, error)
 }
 
 // JobRetryMutationRequest binds one mutation attempt to the exact admission
@@ -96,9 +96,15 @@ func CreateManualRetryWithRevalidation(
 	if err != nil {
 		return job.Job{}, job.ManualRetryLineage{}, false, err
 	}
-	historyDigest, historyObservedAt, err := evidenceSource.CurrentRetryHistory(ctx, source)
+	history, err := evidenceSource.CurrentRetryHistory(ctx, source)
 	if err != nil {
 		return job.Job{}, job.ManualRetryLineage{}, false, err
+	}
+	if history.ContractVersion != job.ManualRetryHistoryContractVersion || history.SourceJobID != source.ID || history.SourceJobVersion != source.Version {
+		return job.Job{}, job.ManualRetryLineage{}, false, fmt.Errorf("%w: retry history is not bound to the exact source Job", ErrJobRetryAdmissionStale)
+	}
+	if policy.UsedManualRetries != history.UsedManualRetries {
+		return job.Job{}, job.ManualRetryLineage{}, false, fmt.Errorf("%w: policy retry usage does not match durable retry history", ErrJobRetryAdmissionStale)
 	}
 
 	current, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
@@ -107,8 +113,9 @@ func CreateManualRetryWithRevalidation(
 		RevisionID:             revisionID,
 		RevisionDigest:         revisionDigest,
 		Policy:                 policy,
-		RetryHistoryDigest:     historyDigest,
-		RetryHistoryObservedAt: historyObservedAt,
+		RetryHistoryDigest:     history.Digest,
+		RetryHistoryObservedAt: history.ObservedAt,
+		SourceAlreadyRetried:   history.SourceAlreadyRetried,
 		ObservedAt:             request.RequestedAt,
 	})
 	if err != nil {
@@ -172,6 +179,7 @@ func sameReviewedRetryBoundary(reviewed, current JobRetryAdmissionEvidence) bool
 		reviewed.SourceStatus == current.SourceStatus &&
 		reviewed.SourceAttempt == current.SourceAttempt &&
 		reviewed.SourceMaxAttempts == current.SourceMaxAttempts &&
+		reviewed.SourceAlreadyRetried == current.SourceAlreadyRetried &&
 		reviewed.PolicyID == current.PolicyID &&
 		reviewed.PolicyDigest == current.PolicyDigest &&
 		reviewed.RetryHistoryDigest == current.RetryHistoryDigest &&
