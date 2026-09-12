@@ -70,25 +70,47 @@ func TestBuildIncidentListSQLDoesNotMutateNormalizedQuery(t *testing.T) {
 	}
 }
 
-func TestCanonicalizeIncidentMirrorTimesMatchesPostgresPrecision(t *testing.T) {
+func TestCanonicalizeIncidentTimesMatchesPostgresPrecision(t *testing.T) {
 	location := time.FixedZone("source", 3*60*60)
 	created := time.Date(2026, 9, 12, 14, 0, 0, 123456789, location)
+	updated := created.Add(3*time.Second + 444*time.Nanosecond)
+	started := created.Add(time.Second + 222*time.Nanosecond)
+	observed := created.Add(2*time.Second + 333*time.Nanosecond)
 	incident := incidents.Incident{
 		ObjectMetadata: corecontracts.ObjectMetadata{
 			CreatedAt: created,
-			UpdatedAt: created.Add(3*time.Second + 444*time.Nanosecond),
+			UpdatedAt: updated,
 		},
-		StartedAt:      created.Add(time.Second + 222*time.Nanosecond),
-		LastObservedAt: created.Add(2*time.Second + 333*time.Nanosecond),
+		StartedAt:      started,
+		LastObservedAt: observed,
+		Acknowledgement: &incidents.Acknowledgement{
+			At: updated,
+		},
+		Signals: []incidents.Signal{{
+			ObservedAt: observed,
+			Evidence: []incidents.EvidenceRef{{Collected: observed}},
+		}},
+		Timeline: []incidents.TimelineEntry{{
+			At:       updated,
+			Evidence: []incidents.EvidenceRef{{Collected: updated}},
+		}},
+		Evidence: []incidents.EvidenceRef{{Collected: observed}},
 	}
 
-	canonicalizeIncidentMirrorTimes(&incident)
-	for name, got := range map[string]time.Time{
-		"created_at":       incident.CreatedAt,
-		"updated_at":       incident.UpdatedAt,
-		"started_at":       incident.StartedAt,
-		"last_observed_at": incident.LastObservedAt,
-	} {
+	canonicalizeIncidentTimes(&incident)
+	values := map[string]time.Time{
+		"created_at":                incident.CreatedAt,
+		"updated_at":                incident.UpdatedAt,
+		"started_at":                incident.StartedAt,
+		"last_observed_at":          incident.LastObservedAt,
+		"acknowledgement.at":        incident.Acknowledgement.At,
+		"signal.observed_at":        incident.Signals[0].ObservedAt,
+		"signal.evidence.collected": incident.Signals[0].Evidence[0].Collected,
+		"timeline.at":               incident.Timeline[0].At,
+		"timeline.evidence":         incident.Timeline[0].Evidence[0].Collected,
+		"evidence.collected":        incident.Evidence[0].Collected,
+	}
+	for name, got := range values {
 		if got.Location() != time.UTC {
 			t.Fatalf("%s location = %v, want UTC", name, got.Location())
 		}
