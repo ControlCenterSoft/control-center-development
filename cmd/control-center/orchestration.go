@@ -94,7 +94,7 @@ func newOrchestrationHandler(identity *identityapi.Server, db *sql.DB, middlewar
 	server, err := orchestrationapi.New(orchestrationapi.Config{
 		Registry: registry, Jobs: versionBoundRepository, Persistence: state,
 		Middleware: func(next http.Handler) http.Handler {
-			return middleware(versionBoundCancellationMiddleware(next))
+			return middleware(jobReconnectETagMiddleware(versionBoundCancellationMiddleware(next)))
 		},
 		Evaluator: policy.ThresholdEvaluator{
 			PolicyID: "baseline-v1", ApprovalPermission: string(rbac.PermissionChangesApprove),
