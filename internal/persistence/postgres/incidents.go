@@ -30,7 +30,7 @@ func NewIncidentReadRepository(db *sql.DB) (*IncidentReadRepository, error) {
 
 // Create inserts one incident and its affected-resource index atomically.
 func (r *IncidentReadRepository) Create(ctx context.Context, incident incidents.Incident) error {
-	canonicalizeIncidentMirrorTimes(&incident)
+	canonicalizeIncidentTimes(&incident)
 	if err := validateIncidentForPersistence(incident); err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (r *IncidentReadRepository) Replace(
 	next incidents.Incident,
 	desiredChanged bool,
 ) error {
-	canonicalizeIncidentMirrorTimes(&next)
+	canonicalizeIncidentTimes(&next)
 	if err := validateIncidentForPersistence(next); err != nil {
 		return err
 	}
@@ -285,14 +285,36 @@ func validateIncidentForPersistence(incident incidents.Incident) error {
 	return nil
 }
 
-// PostgreSQL timestamptz has microsecond precision. Canonicalizing mirrored
-// timestamps before JSON serialization guarantees that the canonical document
-// and indexed columns round-trip to exactly the same instants.
-func canonicalizeIncidentMirrorTimes(incident *incidents.Incident) {
-	incident.CreatedAt = incident.CreatedAt.UTC().Truncate(time.Microsecond)
-	incident.UpdatedAt = incident.UpdatedAt.UTC().Truncate(time.Microsecond)
-	incident.StartedAt = incident.StartedAt.UTC().Truncate(time.Microsecond)
-	incident.LastObservedAt = incident.LastObservedAt.UTC().Truncate(time.Microsecond)
+// PostgreSQL timestamptz has microsecond precision. Canonicalizing every time
+// in the document before validation/serialization prevents a nested timeline or
+// evidence timestamp from moving past a rounded object-lifetime boundary.
+func canonicalizeIncidentTimes(incident *incidents.Incident) {
+	incident.CreatedAt = postgresTime(incident.CreatedAt)
+	incident.UpdatedAt = postgresTime(incident.UpdatedAt)
+	incident.StartedAt = postgresTime(incident.StartedAt)
+	incident.LastObservedAt = postgresTime(incident.LastObservedAt)
+	if incident.Acknowledgement != nil {
+		incident.Acknowledgement.At = postgresTime(incident.Acknowledgement.At)
+	}
+	for idx := range incident.Signals {
+		incident.Signals[idx].ObservedAt = postgresTime(incident.Signals[idx].ObservedAt)
+		for evidence := range incident.Signals[idx].Evidence {
+			incident.Signals[idx].Evidence[evidence].Collected = postgresTime(incident.Signals[idx].Evidence[evidence].Collected)
+		}
+	}
+	for idx := range incident.Timeline {
+		incident.Timeline[idx].At = postgresTime(incident.Timeline[idx].At)
+		for evidence := range incident.Timeline[idx].Evidence {
+			incident.Timeline[idx].Evidence[evidence].Collected = postgresTime(incident.Timeline[idx].Evidence[evidence].Collected)
+		}
+	}
+	for idx := range incident.Evidence {
+		incident.Evidence[idx].Collected = postgresTime(incident.Evidence[idx].Collected)
+	}
+}
+
+func postgresTime(value time.Time) time.Time {
+	return value.UTC().Truncate(time.Microsecond)
 }
 
 func replaceIncidentResources(ctx context.Context, tx *sql.Tx, incident incidents.Incident) error {
