@@ -27,10 +27,10 @@ const (
 type OperationsWorkflowBlockReason string
 
 const (
-	OperationsWorkflowBlockApproval          OperationsWorkflowBlockReason = "approval_not_satisfied"
-	OperationsWorkflowBlockRecovery          OperationsWorkflowBlockReason = "recovery_not_ready"
-	OperationsWorkflowBlockVerification      OperationsWorkflowBlockReason = "post_condition_not_verified"
-	OperationsWorkflowBlockAudit             OperationsWorkflowBlockReason = "audit_evidence_missing"
+	OperationsWorkflowBlockApproval     OperationsWorkflowBlockReason = "approval_not_satisfied"
+	OperationsWorkflowBlockRecovery     OperationsWorkflowBlockReason = "recovery_not_ready"
+	OperationsWorkflowBlockVerification OperationsWorkflowBlockReason = "post_condition_not_verified"
+	OperationsWorkflowBlockAudit        OperationsWorkflowBlockReason = "audit_evidence_missing"
 )
 
 // OperationsWorkflowEvidence binds the already-built approval, terminal Job
@@ -44,11 +44,16 @@ type OperationsWorkflowEvidence struct {
 	RevisionID                string                          `json:"revision_id"`
 	RevisionDigest            string                          `json:"revision_digest"`
 	ApprovalState             ApprovalEvidenceState           `json:"approval_state"`
+	ApprovalSatisfied         bool                            `json:"approval_satisfied"`
 	ApprovalObservedAt        time.Time                       `json:"approval_observed_at"`
 	JobID                     string                          `json:"job_id"`
 	JobVersion                uint64                          `json:"job_version"`
 	Outcome                   job.Status                      `json:"outcome"`
+	ResultOutputPresent       bool                            `json:"result_output_present"`
 	ResultOutputDigest        string                          `json:"result_output_digest,omitempty"`
+	HealthChecks              int                             `json:"health_checks"`
+	AuditEvents               int                             `json:"audit_events"`
+	WorstHealth               events.HealthStatus             `json:"worst_health,omitempty"`
 	ResultObservedAt          time.Time                       `json:"result_observed_at"`
 	RecoveryPointID           string                          `json:"recovery_point_id"`
 	RecoveryState             RecoveryPathState               `json:"recovery_state"`
@@ -92,9 +97,6 @@ func BuildOperationsWorkflowEvidence(input OperationsWorkflowEvidenceInput) (Ope
 	if err := ValidateRecoveryPathEvidence(recovery); err != nil {
 		return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("recovery evidence is invalid")
 	}
-	if recovery.ContractVersion != RecoveryPathEvidenceContractVersion {
-		return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("recovery contract_version is invalid")
-	}
 
 	if err := validateOperationsWorkflowIdentifier("change_id", approval.ChangeID); err != nil {
 		return OperationsWorkflowEvidence{}, err
@@ -117,6 +119,12 @@ func BuildOperationsWorkflowEvidence(input OperationsWorkflowEvidenceInput) (Ope
 	if !result.Outcome.Terminal() {
 		return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("result outcome is not terminal")
 	}
+	if err := validateOperationsWorkflowApproval(approval.State, approval.Satisfied); err != nil {
+		return OperationsWorkflowEvidence{}, err
+	}
+	if err := validateOperationsWorkflowResultSummary(result.OutputPresent, result.OutputDigest, result.HealthChecks, result.AuditEvents, result.WorstHealth, result.Outcome); err != nil {
+		return OperationsWorkflowEvidence{}, err
+	}
 	if approval.ObservedAt.IsZero() || result.ObservedAt.IsZero() || recovery.EvaluatedAt.IsZero() {
 		return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("component observation time is required")
 	}
@@ -137,28 +145,15 @@ func BuildOperationsWorkflowEvidence(input OperationsWorkflowEvidenceInput) (Ope
 		return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("revision_digest mismatch across evidence")
 	}
 
-	if result.OutputPresent {
-		if !validOperationsWorkflowDigest(result.OutputDigest) {
-			return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("result output_digest is invalid")
-		}
-	} else if result.Outcome != job.StatusCancelled {
-		return OperationsWorkflowEvidence{}, invalidOperationsWorkflow("terminal non-cancelled Job is missing result output")
-	}
-
-	blockReasons := make([]OperationsWorkflowBlockReason, 0, 4)
-	if !approval.Satisfied || (approval.State != ApprovalEvidenceSatisfied && approval.State != ApprovalEvidenceNotRequired) {
-		blockReasons = append(blockReasons, OperationsWorkflowBlockApproval)
-	}
-	if recovery.State != RecoveryPathReady {
-		blockReasons = append(blockReasons, OperationsWorkflowBlockRecovery)
-	}
-	if result.Outcome == job.StatusSucceeded && (result.HealthChecks == 0 || result.WorstHealth != events.HealthHealthy) {
-		blockReasons = append(blockReasons, OperationsWorkflowBlockVerification)
-	}
-	if result.AuditEvents == 0 {
-		blockReasons = append(blockReasons, OperationsWorkflowBlockAudit)
-	}
-
+	blockReasons := operationsWorkflowBlockReasons(
+		approval.State,
+		approval.Satisfied,
+		recovery.State,
+		result.Outcome,
+		result.HealthChecks,
+		result.WorstHealth,
+		result.AuditEvents,
+	)
 	state := OperationsWorkflowEvidenceComplete
 	if len(blockReasons) != 0 {
 		state = OperationsWorkflowEvidenceBlocked
@@ -170,11 +165,16 @@ func BuildOperationsWorkflowEvidence(input OperationsWorkflowEvidenceInput) (Ope
 		RevisionID:                approval.RevisionID,
 		RevisionDigest:            approval.RevisionDigest,
 		ApprovalState:             approval.State,
+		ApprovalSatisfied:         approval.Satisfied,
 		ApprovalObservedAt:        approval.ObservedAt.UTC(),
 		JobID:                     result.JobID,
 		JobVersion:                result.JobVersion,
 		Outcome:                   result.Outcome,
+		ResultOutputPresent:       result.OutputPresent,
 		ResultOutputDigest:        result.OutputDigest,
+		HealthChecks:              result.HealthChecks,
+		AuditEvents:               result.AuditEvents,
+		WorstHealth:               result.WorstHealth,
 		ResultObservedAt:          result.ObservedAt.UTC(),
 		RecoveryPointID:           recovery.RecoveryPointID,
 		RecoveryState:             recovery.State,
@@ -186,6 +186,171 @@ func BuildOperationsWorkflowEvidence(input OperationsWorkflowEvidenceInput) (Ope
 		ExecutionAuthorized:       false,
 		ProductionMutationAllowed: false,
 	}, nil
+}
+
+// ValidateOperationsWorkflowEvidence is the strict storage/transport consumer
+// boundary. It re-derives every bounded status from the serialized summaries and
+// rejects attempts to upgrade incomplete evidence or failure outcomes into
+// execution authority or a false-success state.
+func ValidateOperationsWorkflowEvidence(evidence OperationsWorkflowEvidence) error {
+	if evidence.ContractVersion != OperationsWorkflowEvidenceContractVersion {
+		return invalidOperationsWorkflow("contract_version is invalid")
+	}
+	if evidence.ExecutionAuthorized || evidence.ProductionMutationAllowed {
+		return invalidOperationsWorkflow("workflow evidence must not grant execution authority")
+	}
+	for name, value := range map[string]string{
+		"change_id": evidence.ChangeID, "revision_id": evidence.RevisionID,
+		"job_id": evidence.JobID, "recovery_point_id": evidence.RecoveryPointID,
+	} {
+		if err := validateOperationsWorkflowIdentifier(name, value); err != nil {
+			return err
+		}
+	}
+	if !validOperationsWorkflowDigest(evidence.RevisionDigest) {
+		return invalidOperationsWorkflow("revision_digest is invalid")
+	}
+	if evidence.JobVersion == 0 || !evidence.Outcome.Terminal() {
+		return invalidOperationsWorkflow("terminal job identity is invalid")
+	}
+	if err := validateOperationsWorkflowApproval(evidence.ApprovalState, evidence.ApprovalSatisfied); err != nil {
+		return err
+	}
+	if err := validateOperationsWorkflowResultSummary(
+		evidence.ResultOutputPresent,
+		evidence.ResultOutputDigest,
+		evidence.HealthChecks,
+		evidence.AuditEvents,
+		evidence.WorstHealth,
+		evidence.Outcome,
+	); err != nil {
+		return err
+	}
+	if evidence.ApprovalObservedAt.IsZero() || evidence.ResultObservedAt.IsZero() || evidence.RecoveryEvaluatedAt.IsZero() || evidence.ObservedAt.IsZero() {
+		return invalidOperationsWorkflow("evidence timestamps are required")
+	}
+	if evidence.ApprovalObservedAt.After(evidence.ObservedAt) || evidence.ResultObservedAt.After(evidence.ObservedAt) || evidence.RecoveryEvaluatedAt.After(evidence.ObservedAt) {
+		return invalidOperationsWorkflow("component evidence is newer than workflow observation")
+	}
+	if evidence.ApprovalObservedAt.After(evidence.ResultObservedAt) {
+		return invalidOperationsWorkflow("approval evidence is newer than terminal result evidence")
+	}
+	if !validOperationsWorkflowRecoveryState(evidence.RecoveryState) {
+		return invalidOperationsWorkflow("recovery_state is invalid")
+	}
+
+	wantReasons := operationsWorkflowBlockReasons(
+		evidence.ApprovalState,
+		evidence.ApprovalSatisfied,
+		evidence.RecoveryState,
+		evidence.Outcome,
+		evidence.HealthChecks,
+		evidence.WorstHealth,
+		evidence.AuditEvents,
+	)
+	if len(evidence.BlockReasons) != len(wantReasons) {
+		return invalidOperationsWorkflow("block_reasons are inconsistent with component evidence")
+	}
+	for i := range wantReasons {
+		if evidence.BlockReasons[i] != wantReasons[i] {
+			return invalidOperationsWorkflow("block_reasons are inconsistent with component evidence")
+		}
+	}
+	wantState := OperationsWorkflowEvidenceComplete
+	if len(wantReasons) != 0 {
+		wantState = OperationsWorkflowEvidenceBlocked
+	}
+	if evidence.State != wantState || evidence.EvidenceComplete != (wantState == OperationsWorkflowEvidenceComplete) {
+		return invalidOperationsWorkflow("state is inconsistent with component evidence")
+	}
+	return nil
+}
+
+func operationsWorkflowBlockReasons(
+	approvalState ApprovalEvidenceState,
+	approvalSatisfied bool,
+	recoveryState RecoveryPathState,
+	outcome job.Status,
+	healthChecks int,
+	worstHealth events.HealthStatus,
+	auditEvents int,
+) []OperationsWorkflowBlockReason {
+	blockReasons := make([]OperationsWorkflowBlockReason, 0, 4)
+	if !approvalSatisfied || (approvalState != ApprovalEvidenceSatisfied && approvalState != ApprovalEvidenceNotRequired) {
+		blockReasons = append(blockReasons, OperationsWorkflowBlockApproval)
+	}
+	if recoveryState != RecoveryPathReady {
+		blockReasons = append(blockReasons, OperationsWorkflowBlockRecovery)
+	}
+	if outcome == job.StatusSucceeded && (healthChecks == 0 || worstHealth != events.HealthHealthy) {
+		blockReasons = append(blockReasons, OperationsWorkflowBlockVerification)
+	}
+	if auditEvents == 0 {
+		blockReasons = append(blockReasons, OperationsWorkflowBlockAudit)
+	}
+	return blockReasons
+}
+
+func validateOperationsWorkflowApproval(state ApprovalEvidenceState, satisfied bool) error {
+	switch state {
+	case ApprovalEvidenceSatisfied, ApprovalEvidenceNotRequired:
+		if !satisfied {
+			return invalidOperationsWorkflow("approval state is satisfied but satisfied=false")
+		}
+	case ApprovalEvidencePending, ApprovalEvidenceDenied:
+		if satisfied {
+			return invalidOperationsWorkflow("approval state is not satisfied but satisfied=true")
+		}
+	default:
+		return invalidOperationsWorkflow("approval_state is invalid")
+	}
+	return nil
+}
+
+func validateOperationsWorkflowResultSummary(outputPresent bool, outputDigest string, healthChecks, auditEvents int, worstHealth events.HealthStatus, outcome job.Status) error {
+	if healthChecks < 0 || auditEvents < 0 {
+		return invalidOperationsWorkflow("result evidence counts must be non-negative")
+	}
+	if outputPresent {
+		if !validOperationsWorkflowDigest(outputDigest) {
+			return invalidOperationsWorkflow("result output_digest is invalid")
+		}
+	} else {
+		if outputDigest != "" {
+			return invalidOperationsWorkflow("result output_digest requires output_present")
+		}
+		if outcome != job.StatusCancelled {
+			return invalidOperationsWorkflow("terminal non-cancelled Job is missing result output")
+		}
+	}
+	if healthChecks == 0 {
+		if worstHealth != "" {
+			return invalidOperationsWorkflow("worst_health requires health evidence")
+		}
+		return nil
+	}
+	if !validOperationsWorkflowHealth(worstHealth) {
+		return invalidOperationsWorkflow("worst_health is invalid")
+	}
+	return nil
+}
+
+func validOperationsWorkflowHealth(value events.HealthStatus) bool {
+	switch value {
+	case events.HealthHealthy, events.HealthDegraded, events.HealthFailed, events.HealthUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOperationsWorkflowRecoveryState(value RecoveryPathState) bool {
+	switch value {
+	case RecoveryPathReady, RecoveryPathBlocked, RecoveryPathExpired:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateOperationsWorkflowIdentifier(name, value string) error {
