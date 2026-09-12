@@ -45,9 +45,10 @@ Unknown, stale, incomplete или противоречивое evidence не о�
 - exact-revision operational workflow evidence binding `approval → terminal Job result → recovery`, включая false-success guard, strict storage/transport validator и bounded operator summary — отдельный NR2 slice;
 - fail-closed привязку aggregate workflow evidence к текущему Changes / Jobs snapshot с повторной сверкой revision digest, approval state, exact Job version/outcome и result summary — NR2;
 - authoritative read-only Changes / Jobs provider поверх текущих Change state machines и durable Job repository, а также runtime API boundary `GET /api/v1/ui/changes-jobs`, защищённый `orchestration.jobs.read` — NR2;
-- runner-free E2E test-код, собирающий approval/result/recovery evidence из исходных typed contracts и проводящий его до operator view без подмены failed/blocked semantics — NR2.
+- runner-free E2E test-код, собирающий approval/result/recovery evidence из исходных typed contracts и проводящий его до operator view без подмены failed/blocked semantics — NR2;
+- fail-closed Release Candidate readiness aggregator/schema — NR2: привязан к официальному Stable 0.30.0 и его exact Linux artifact digest, принимает только bounded evidence одного candidate SHA и возвращает `ready=true` только после полного набора обязательных gates.
 
-Runtime endpoint намеренно отсутствует, если authoritative provider не подключён; недоступный provider/evidence возвращается fail-closed, а не как пустое успешное состояние. Наличие этих веток не меняет canonical `main` и не является release evidence.
+Runtime endpoint намеренно отсутствует, если authoritative provider не подключён; недоступный provider/evidence возвращается fail-closed, а не как пустое успешное состояние. Readiness aggregator не запускает проверки, build/packaging/CI/deploy и не выдаёт publication authority. Наличие этих веток не меняет canonical `main` и не является release evidence.
 
 ## Security boundary
 
@@ -90,8 +91,9 @@ Runtime endpoint намеренно отсутствует, если authoritati
 5. PostgreSQL/restart/reconnect qualification для новых durable boundaries.
 6. Финальный security/privacy audit: no-secret boundary, RBAC/scopes, stale/idempotency, Audit integrity и recovery semantics.
 7. Финальный commercial/legal disposition: лицензии зависимостей, redistribution/notices/source obligations и отсутствие неподтверждённой commercial-clean claim.
-8. Main qualification после integration и только затем официальный source/tag release.
-9. Отдельная Public Stable promotion с binary/source artifacts, SHA-256 sidecar/SHA256SUMS, qualification/release manifests и provenance.
+8. Сформировать bounded readiness snapshot для exact candidate SHA; агрегатор обязан оставить любой отсутствующий/pending/blocked gate блокером и не может заменить фактическую qualification.
+9. Main qualification после integration и только затем официальный source/tag release.
+10. Отдельная Public Stable promotion с binary/source artifacts, SHA-256 sidecar/SHA256SUMS, qualification/release manifests и provenance.
 
 ## Release stop conditions
 
