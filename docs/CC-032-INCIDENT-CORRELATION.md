@@ -16,11 +16,18 @@
 
 Resolved incident является историческим и не поглощает новый signal. Если один и тот же `signal_id` уже принадлежит incident, результат `already-linked` позволяет безопасно обработать повтор доставки без создания второй связи.
 
+## Bounded repository lookup
+
+`CorrelationService` не получает от вызывающей стороны произвольный список incident. После валидации observation он сам формирует bounded query только по активным `open/acknowledged` incident того же scope и по одному детерминированно выбранному exact affected-resource anchor. Максимальный размер запроса ограничен штатным `MaxListLimit`.
+
+Если storage сообщает `HasMore`, возвращает continuation cursor или выдаёт больше запрошенного bound, решение не строится: correlation завершается fail-closed как incomplete candidate set. Это запрещает ложный `new-candidate` или случайный match на основании только первой страницы.
+
 ## Fail-closed границы
 
 - более одного exact open/acknowledged match → `blocked / multiple_exact_open_incidents`;
 - один `signal_id`, обнаруженный более чем в одном incident того же scope → `blocked / signal_id_linked_to_multiple_incidents`;
 - invalid stored incident → ошибка dependency validation; такой объект нельзя тихо пропустить и затем ошибочно объявить `new-candidate`;
+- unavailable/truncated repository lookup → dependency failure, а не частичный correlation result;
 - вход и candidate set ограничены; неограниченный скан не является частью контракта;
 - fingerprint строится только из contract version, scope, signal kind/source и canonical affected-resource identities; summary/evidence payload в digest не входит.
 
@@ -47,6 +54,9 @@ Source tests фиксируют:
 6. запрет поглощать новый signal resolved incident;
 7. отсутствие match при другом resource set;
 8. fail-closed invalid stored incident/invalid observation;
-9. bounded candidate set.
+9. bounded candidate set;
+10. deterministic active-scope repository query;
+11. fail-closed truncated/unavailable repository lookup;
+12. validation-before-storage для malformed observation.
 
 Hosted qualification этим source-only проходом намеренно не запускается. Exact-head runner qualification должна выполняться отдельным runner-потоком после интеграции с текущим 0.32 incident stack.
