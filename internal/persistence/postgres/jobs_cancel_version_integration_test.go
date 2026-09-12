@@ -93,6 +93,12 @@ func TestPostgresVersionedCancellationRejectsStaleJobVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	persistedChange.JobID = created.ID
+	persistedChange.Snapshot.Version = 2
+	persistedChange.Snapshot.UpdatedAt = now.Add(time.Millisecond)
+	if err := state.UpdateChange(ctx, persistedChange); err != nil {
+		t.Fatalf("bind cancellation fixture to durable job: %v", err)
+	}
 
 	if _, err := repository.RequestCancelIfVersion(ctx, created.ID, created.Version+1, now.Add(time.Second)); !errors.Is(err, job.ErrVersionConflict) {
 		t.Fatalf("stale version error = %v, want ErrVersionConflict", err)
@@ -111,6 +117,12 @@ func TestPostgresVersionedCancellationRejectsStaleJobVersion(t *testing.T) {
 	}
 	if cancelled.Status != job.StatusCancelled || cancelled.Version != created.Version+1 {
 		t.Fatalf("unexpected cancellation result: %#v", cancelled)
+	}
+	persistedChange.Snapshot.State = change.StateCancelled
+	persistedChange.Snapshot.Version = 3
+	persistedChange.Snapshot.UpdatedAt = now.Add(2 * time.Second)
+	if err := state.UpdateChange(ctx, persistedChange); err != nil {
+		t.Fatalf("persist terminal cancellation fixture state: %v", err)
 	}
 
 	if _, err := repository.RequestCancelIfVersion(ctx, created.ID, created.Version, now.Add(3*time.Second)); !errors.Is(err, job.ErrVersionConflict) {
