@@ -7,6 +7,7 @@ cd "$repo_root"
 candidate_version="${CANDIDATE_VERSION:-0.31.0}"
 [[ "$candidate_version" == "0.31.0" ]] || { echo "unexpected candidate version: $candidate_version" >&2; exit 2; }
 [[ "$(tr -d '\r\n' < VERSION)" == "0.30.0" ]] || { echo "source VERSION must remain canonical stable 0.30.0 until promotion" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 is required to generate candidate SBOM" >&2; exit 2; }
 
 commit="${CANDIDATE_SHA:-$(git rev-parse HEAD)}"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate SHA must be exact 40-char commit" >&2; exit 2; }
@@ -32,9 +33,20 @@ cp config/control-center.env.example "$stage/$bundle/config/"
 cp deploy/systemd/control-center.service "$stage/$bundle/deploy/systemd/"
 find migrations -maxdepth 1 -type f \( -name '*.sql' -o -name 'README.md' \) -exec cp {} "$stage/$bundle/migrations/" \;
 cp scripts/migrate.sh "$stage/$bundle/scripts/"
-for doc in docs/RELEASE_0.31.0_RU.md docs/RELEASE_CANDIDATE_READINESS_0.31_RU.md docs/QUALIFICATION_0.31_UPGRADE_FROM_0.30_RU.md; do
+for doc in docs/RELEASE_0.31.0_RU.md docs/RELEASE_CANDIDATE_READINESS_0.31_RU.md docs/QUALIFICATION_0.31_UPGRADE_FROM_0.30_RU.md docs/QUALIFICATION_0.31_RELEASE_PROMOTION_GATE_RU.md; do
   [[ -f "$doc" ]] && cp "$doc" "$stage/$bundle/docs/"
 done
+
+# Third-party evidence is part of the distributable candidate, not an external
+# mutable lookup. The SBOM generator validates the exact go.mod module set and
+# the SHA-256 of every checked-in license text before producing CycloneDX.
+cp -a third_party "$stage/$bundle/third_party"
+cp THIRD_PARTY_NOTICES.md "$stage/$bundle/THIRD_PARTY_NOTICES.md"
+sbom="$dist_dir/control-center-$candidate_version.sbom.cdx.json"
+python3 scripts/generate-sbom-031.py third_party/manifest-0.31.json "$sbom" "$commit"
+cp "$sbom" "$stage/$bundle/docs/SBOM.cdx.json"
+cp THIRD_PARTY_NOTICES.md "$dist_dir/THIRD_PARTY_NOTICES.md"
+
 printf '%s\n' "$candidate_version" > "$stage/$bundle/VERSION"
 printf '%s\n' "$commit" > "$stage/$bundle/REVISION"
 printf '%s\n' "$build_time" > "$stage/$bundle/BUILD_TIME"
@@ -50,5 +62,5 @@ tar --sort=name --mtime="@$source_date_epoch" --owner=0 --group=0 --numeric-owne
 source_artifact="$dist_dir/control-center-$candidate_version-source.tar.gz"
 git archive --format=tar --prefix="control-center-$candidate_version-source/" "$commit" | gzip -n > "$source_artifact"
 
-printf 'CANDIDATE_VERSION=%s\nCANDIDATE_SHA=%s\nBUILD_TIME=%s\nBINARY_ARTIFACT=%s\nSOURCE_ARTIFACT=%s\n' \
-  "$candidate_version" "$commit" "$build_time" "$artifact" "$source_artifact"
+printf 'CANDIDATE_VERSION=%s\nCANDIDATE_SHA=%s\nBUILD_TIME=%s\nBINARY_ARTIFACT=%s\nSOURCE_ARTIFACT=%s\nSBOM=%s\nTHIRD_PARTY_NOTICES=%s\n' \
+  "$candidate_version" "$commit" "$build_time" "$artifact" "$source_artifact" "$sbom" "$dist_dir/THIRD_PARTY_NOTICES.md"

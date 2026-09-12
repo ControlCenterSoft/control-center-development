@@ -6,6 +6,8 @@ var requiredArtifactNames = [...]string{
 	"control-center-0.31.0-linux-amd64.tar.gz",
 	"control-center-0.31.0-linux-amd64.tar.gz.sha256",
 	"control-center-0.31.0-source.tar.gz",
+	"control-center-0.31.0.sbom.cdx.json",
+	"THIRD_PARTY_NOTICES.md",
 	"control-center-0.31.0.provenance.json",
 	"control-center-0.31.0.qualification.json",
 	"control-center-0.31.0.release-manifest.json",
