@@ -12,9 +12,11 @@ Promotion gate работает fail-closed: отсутствующее, неи�
 
 ## Exact revision binding
 
-Для `candidate` и `stable` promotion evidence обязательно привязывается к точному commit revision. Значения вида `latest`, имя ветки или иной плавающий указатель не принимаются как release identity.
+Для `candidate` и `stable` promotion evidence обязательно привязывается к точным `Version` и immutable commit `Revision`. Значения вида `latest`, имя ветки или иной плавающий указатель не принимаются как release identity.
 
-Это не заменяет CI qualification exact SHA; gate только не позволяет представить неполное evidence как готовность к promotion.
+Привязка проверяется отдельно для qualification/tests, security review, rollback evidence, artifact evidence и commercial/legal evidence. Каждый из этих элементов несёт `ReleaseEvidenceBinding{Version, Revision}`. Evidence от другой версии или другого commit SHA нельзя повторно использовать для текущего candidate: такое смешение fail-closed блокируется как `tests_binding`, `security_binding`, `rollback_binding`, `artifact_binding` или `commercial_binding`.
+
+Это защищает от replay/cross-candidate evidence и не заменяет CI qualification exact SHA; gate только не позволяет представить неполное либо относящееся к другому candidate evidence как готовность к promotion.
 
 ## Artifact integrity
 
@@ -22,6 +24,7 @@ Promotion gate работает fail-closed: отсутствующее, неи�
 
 Для `candidate` обязательны:
 
+- exact `Version`/`Revision` binding;
 - SHA-256 exact binary artifact;
 - отдельный checksum sidecar;
 - qualification manifest;
@@ -33,20 +36,21 @@ Promotion gate работает fail-closed: отсутствующее, неи�
 - `SHA256SUMS`;
 - release manifest.
 
-Отсутствие любого обязательного элемента блокирует promotion.
+Отсутствие любого обязательного элемента или mismatch binding блокирует promotion.
 
 ## Rollback
 
-`candidate` и `stable` требуют `RollbackPrepared=true`. Это соответствует release boundary 0.31: clean-install/upgrade/rollback должны быть доказаны до RC, а не после публикации.
+`candidate` и `stable` требуют `RollbackPrepared=true` и exact `Version`/`Revision` binding rollback evidence. Это соответствует release boundary 0.31: clean-install/upgrade/rollback должны быть доказаны до RC, а не после публикации.
 
 `RollbackPrepared` не означает, что rollback «в принципе возможен». В итоговом release evidence он должен опираться на проверенный для exact candidate путь восстановления с сохранением пользовательских данных, настроек и установленного пользователем пароля `admin`.
 
 ## Commercial/legal disposition
 
-Для `candidate` и `stable` требуется bounded `CommercialEvidence`. Он хранит только статус, SHA-256 digest внешнего review evidence и булевы результаты обязательных проверок; legal text, customer data, credentials и иные чувствительные материалы в этот контракт не переносятся.
+Для `candidate` и `stable` требуется bounded `CommercialEvidence`, привязанный к exact `Version`/`Revision`. Он хранит только статус, SHA-256 digest внешнего review evidence и булевы результаты обязательных проверок; legal text, customer data, credentials и иные чувствительные материалы в этот контракт не переносятся.
 
 Обязательные пункты:
 
+- exact `Version`/`Revision` binding;
 - итоговый disposition = `approved`;
 - валидный `sha256:<64 lowercase hex>` digest review evidence;
 - dependency/license review;
@@ -57,7 +61,7 @@ Promotion gate работает fail-closed: отсутствующее, неи�
 - применимые EULA/Terms/support/legal requirements dispositioned;
 - публичные release/security/HA/SLA claims reviewed и не выходят за подтверждённое test evidence.
 
-Просто установить `Disposition=approved` недостаточно: остальные evidence-пункты проверяются независимо.
+Просто установить `Disposition=approved` недостаточно: остальные evidence-пункты и binding проверяются независимо.
 
 ## Security boundary
 
@@ -77,7 +81,7 @@ Promotion gate работает fail-closed: отсутствующее, неи�
 
 ## Runner-free проверка этого slice
 
-При подготовке ветки выполнены только локальные side-effect-free проверки выбранного `internal/release` slice:
+При подготовке ветки и после hardening exact evidence binding выполнены только локальные side-effect-free проверки выбранного `internal/release` slice:
 
 - `gofmt` — без diff;
 - `go test` для изолированного release-gate package — PASS;
