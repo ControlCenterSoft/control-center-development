@@ -88,7 +88,6 @@ func TestIncidentHTTPRejectsClientActorField(t *testing.T) {
 	service := &serviceStub{}
 	handler := New(service, fixedActor("user:operator"))
 	body := []byte(`{"precondition":{"object_id":"incident:1","resource_version":"rv-1"},"actor_id":"user:admin"}`)
-	body = bytes.ReplaceAll(body, []byte(`\"`), []byte(`"`))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/incident:1/acknowledge", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -106,7 +105,6 @@ func TestIncidentHTTPRejectsDuplicateNestedPreconditionField(t *testing.T) {
 	service := &serviceStub{}
 	handler := New(service, fixedActor("user:operator"))
 	body := []byte(`{"precondition":{"object_id":"incident:1","object_id":"incident:2","resource_version":"rv-1"}}`)
-	body = bytes.ReplaceAll(body, []byte(`\"`), []byte(`"`))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/incident:1/acknowledge", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -125,7 +123,6 @@ func TestIncidentHTTPUsesServerClockAndAuthenticatedActor(t *testing.T) {
 	now := time.Date(2026, 9, 12, 15, 22, 0, 0, time.UTC)
 	handler := New(service, fixedActor("user:operator"), WithClock(func() time.Time { return now }))
 	body := []byte(`{"precondition":{"object_id":"incident:1","resource_version":"rv-1"},"note":"accepted"}`)
-	body = bytes.ReplaceAll(body, []byte(`\"`), []byte(`"`))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/incident:1/acknowledge", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json; charset=utf-8")
 	response := httptest.NewRecorder()
@@ -149,7 +146,6 @@ func TestIncidentHTTPMapsStepUpToPreconditionRequired(t *testing.T) {
 	service := &serviceStub{acknowledgeErr: incidents.ErrOperatorStepUpRequired}
 	handler := New(service, fixedActor("user:operator"))
 	body := []byte(`{"precondition":{"object_id":"incident:1","resource_version":"rv-1"}}`)
-	body = bytes.ReplaceAll(body, []byte(`\"`), []byte(`"`))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/incident:1/acknowledge", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
