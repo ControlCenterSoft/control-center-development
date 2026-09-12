@@ -232,10 +232,10 @@ func TestCreateManualRetryWithRevalidationRejectsSourceVersionAdvance(t *testing
 	advanced.Version++
 	advanced.UpdatedAt = now.Add(6 * time.Second)
 	staleReviewed, err := BuildJobRetryAdmissionEvidence(JobRetryAdmissionInput{
-		Job:                    advanced,
-		ExpectedJobVersion:     advanced.Version,
-		RevisionID:             evidenceSource.revisionID,
-		RevisionDigest:         evidenceSource.revisionDigest,
+		Job:                advanced,
+		ExpectedJobVersion: advanced.Version,
+		RevisionID:         evidenceSource.revisionID,
+		RevisionDigest:     evidenceSource.revisionDigest,
 		Policy: JobRetryPolicyEvidence{
 			PolicyID:          evidenceSource.policy.PolicyID,
 			PolicyDigest:      evidenceSource.policy.PolicyDigest,
