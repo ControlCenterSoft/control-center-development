@@ -41,7 +41,7 @@
     },
     "backup_count": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 0
     },
     "verified_backup_count": {
       "type": "integer",
@@ -92,7 +92,10 @@
         "required": ["verification_outcome"]
       },
       "then": {
-        "required": ["verification_observed_at"]
+        "required": ["verification_observed_at"],
+        "properties": {
+          "backup_count": {"minimum": 1}
+        }
       },
       "else": {
         "not": {
@@ -113,7 +116,8 @@
         },
         "properties": {
           "recovery_point_state": {"const": "READY"},
-          "verification_outcome": {"const": "PASSED"}
+          "verification_outcome": {"const": "PASSED"},
+          "backup_count": {"minimum": 1}
         }
       },
       "else": {
