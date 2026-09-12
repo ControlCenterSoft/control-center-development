@@ -40,22 +40,22 @@ type ApprovalEvidenceRecord struct {
 // and accepted approval records for one exact immutable Change revision.
 // Presence of this evidence never authorizes execution or changes Change state.
 type ApprovalEvidence struct {
-	ContractVersion   string                   `json:"contract_version"`
-	ChangeID          string                   `json:"change_id"`
-	RevisionID        string                   `json:"revision_id"`
-	RevisionDigest    string                   `json:"revision_digest"`
-	PolicyID          string                   `json:"policy_id"`
-	Risk              policy.Risk              `json:"risk"`
-	State             ApprovalEvidenceState    `json:"state"`
-	RequiredCount     int                      `json:"required_count"`
-	RecordedCount     int                      `json:"recorded_count"`
-	EligibleCount     int                      `json:"eligible_count"`
-	Satisfied         bool                     `json:"satisfied"`
-	DistinctActors    bool                     `json:"distinct_actors"`
-	ProhibitRequester bool                     `json:"prohibit_requester"`
-	RequiredPermission string                  `json:"required_permission,omitempty"`
-	ObservedAt        time.Time                `json:"observed_at"`
-	EligibleApprovals []ApprovalEvidenceRecord `json:"eligible_approvals"`
+	ContractVersion    string                   `json:"contract_version"`
+	ChangeID           string                   `json:"change_id"`
+	RevisionID         string                   `json:"revision_id"`
+	RevisionDigest     string                   `json:"revision_digest"`
+	PolicyID           string                   `json:"policy_id"`
+	Risk               policy.Risk              `json:"risk"`
+	State              ApprovalEvidenceState    `json:"state"`
+	RequiredCount      int                      `json:"required_count"`
+	RecordedCount      int                      `json:"recorded_count"`
+	EligibleCount      int                      `json:"eligible_count"`
+	Satisfied          bool                     `json:"satisfied"`
+	DistinctActors     bool                     `json:"distinct_actors"`
+	ProhibitRequester  bool                     `json:"prohibit_requester"`
+	RequiredPermission string                   `json:"required_permission,omitempty"`
+	ObservedAt         time.Time                `json:"observed_at"`
+	EligibleApprovals  []ApprovalEvidenceRecord `json:"eligible_approvals"`
 }
 
 type ApprovalEvidenceInput struct {
@@ -95,7 +95,15 @@ func BuildApprovalEvidence(input ApprovalEvidenceInput) (ApprovalEvidence, error
 	if err := snapshot.Decision.Validate(); err != nil || snapshot.Risk != snapshot.Decision.Risk {
 		return ApprovalEvidence{}, fmt.Errorf("%w: invalid policy decision", ErrInvalidApprovalEvidence)
 	}
+	if err := validateApprovalIdentity("policy id", snapshot.Decision.PolicyID); err != nil {
+		return ApprovalEvidence{}, err
+	}
 	requirement := snapshot.Decision.Requirement
+	if requirement.Permission != "" {
+		if err := validateApprovalIdentity("required permission", requirement.Permission); err != nil {
+			return ApprovalEvidence{}, err
+		}
+	}
 	if requirement.Minimum > MaxApprovalEvidenceRecords {
 		return ApprovalEvidence{}, fmt.Errorf("%w: approval requirement exceeds bounded review surface", ErrInvalidApprovalEvidence)
 	}
