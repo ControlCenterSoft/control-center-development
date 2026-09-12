@@ -16,6 +16,7 @@
     "source_status",
     "source_attempt",
     "source_max_attempts",
+    "source_already_retried",
     "policy_id",
     "policy_digest",
     "retry_history_digest",
@@ -83,6 +84,9 @@
       "type": "integer",
       "minimum": 1
     },
+    "source_already_retried": {
+      "type": "boolean"
+    },
     "policy_id": {
       "type": "string",
       "minLength": 1,
@@ -127,6 +131,7 @@
         "type": "string",
         "enum": [
           "source_not_failed",
+          "source_already_retried",
           "policy_denies_retry",
           "manual_retry_budget_exhausted",
           "fresh_approval_required"
