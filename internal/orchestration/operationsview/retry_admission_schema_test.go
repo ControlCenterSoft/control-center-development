@@ -47,11 +47,11 @@ func TestJobRetryAdmissionSchemaMatchesImplementationBounds(t *testing.T) {
 		t.Fatalf("contract version drift: schema=%q code=%q", schema.Properties.ContractVersion.Const, JobRetryAdmissionContractVersion)
 	}
 	for name, bound := range map[string]int{
-		"job_id": schema.Properties.JobID.MaxLength,
-		"change_id": schema.Properties.ChangeID.MaxLength,
+		"job_id":      schema.Properties.JobID.MaxLength,
+		"change_id":   schema.Properties.ChangeID.MaxLength,
 		"action_name": schema.Properties.ActionName.MaxLength,
 		"revision_id": schema.Properties.RevisionID.MaxLength,
-		"policy_id": schema.Properties.PolicyID.MaxLength,
+		"policy_id":   schema.Properties.PolicyID.MaxLength,
 	} {
 		if bound != MaxJobRetryAdmissionIdentifierLength {
 			t.Fatalf("%s maxLength drift: schema=%d code=%d", name, bound, MaxJobRetryAdmissionIdentifierLength)
