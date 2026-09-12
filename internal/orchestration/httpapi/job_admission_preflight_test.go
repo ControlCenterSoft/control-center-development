@@ -117,6 +117,29 @@ func TestEvaluateJobAdmissionRejectsUnavailableImmutableRevision(t *testing.T) {
 	}
 }
 
+func TestEvaluateJobAdmissionRejectsUnavailableClockWithoutMutation(t *testing.T) {
+	now := time.Date(2026, 9, 12, 5, 0, 0, 0, time.UTC)
+	revision, record := approvedAdmissionRecord(t, now)
+	server := &Server{
+		revisions:       map[string]orchestrationconfig.Revision{revision.ID(): revision},
+		currentRevision: revision.ID(),
+	}
+
+	decision, err := server.evaluateJobAdmission(record)
+	if !errors.Is(err, errJobAdmissionBlocked) {
+		t.Fatalf("missing admission clock must fail closed, err=%v decision=%#v", err, decision)
+	}
+	if decision.Eligible || decision.ExecutionAuthorized {
+		t.Fatalf("missing admission clock must not become eligible/authorized: %#v", decision)
+	}
+	if state := record.machine.Snapshot().State; state != change.StateApproved {
+		t.Fatalf("failed clock preflight mutated Change state: %q", state)
+	}
+	if record.jobID != "" {
+		t.Fatalf("failed clock preflight created Job binding %q", record.jobID)
+	}
+}
+
 func approvedAdmissionRecord(t *testing.T, now time.Time) (orchestrationconfig.Revision, *changeRecord) {
 	t.Helper()
 	revision, err := orchestrationconfig.NewRevision("rev-reviewed", 1, now.Add(-2*time.Minute), []byte(`{"generation":1}`))
