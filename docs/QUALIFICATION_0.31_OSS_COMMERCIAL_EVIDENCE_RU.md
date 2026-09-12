@@ -17,6 +17,10 @@
 
 Текущий Go dependency graph содержит только MIT и BSD-3-Clause компоненты, относящиеся к ALLOW-классу инженерной OSS policy. Это не является самостоятельным юридическим заключением.
 
+## Qualification boundary
+
+После любого изменения кода, форматирования или набора сохраняемых candidate artifacts требуется ровно один hosted Public CI на текущем exact PR head. Результаты предыдущего head не переиспользуются как qualification нового candidate identity; duplicate workflow, synthetic load и бессмысленные rerun запрещены.
+
 ## Что этот slice намеренно НЕ закрывает
 
 `commercial_legal_clearance` остаётся закрытым. Техническая генерация SBOM/notices не заменяет:
