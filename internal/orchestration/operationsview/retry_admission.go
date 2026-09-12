@@ -29,10 +29,11 @@ const (
 )
 
 const (
-	JobRetryBlockerSourceNotFailed       = "source_not_failed"
-	JobRetryBlockerPolicyDenied          = "policy_denies_retry"
-	JobRetryBlockerManualBudgetExhausted = "manual_retry_budget_exhausted"
-	JobRetryBlockerFreshApprovalRequired = "fresh_approval_required"
+	JobRetryBlockerSourceNotFailed        = "source_not_failed"
+	JobRetryBlockerSourceAlreadyRetried   = "source_already_retried"
+	JobRetryBlockerPolicyDenied           = "policy_denies_retry"
+	JobRetryBlockerManualBudgetExhausted  = "manual_retry_budget_exhausted"
+	JobRetryBlockerFreshApprovalRequired  = "fresh_approval_required"
 )
 
 // JobRetryPolicyEvidence is an immutable policy snapshot supplied by the
@@ -50,9 +51,9 @@ type JobRetryPolicyEvidence struct {
 }
 
 // JobRetryAdmissionInput binds an operator retry decision to the exact durable
-// Job version, immutable Change revision and exact policy evidence that were
-// reviewed. ExpectedJobVersion is deliberately separate from Job.Version so a
-// stale operator view fails closed.
+// Job version, immutable Change revision and exact policy/history evidence that
+// were reviewed. ExpectedJobVersion is deliberately separate from Job.Version
+// so a stale operator view fails closed.
 type JobRetryAdmissionInput struct {
 	Job                    job.Job
 	ExpectedJobVersion     uint64
@@ -61,13 +62,15 @@ type JobRetryAdmissionInput struct {
 	Policy                 JobRetryPolicyEvidence
 	RetryHistoryDigest     string
 	RetryHistoryObservedAt time.Time
+	SourceAlreadyRetried   bool
 	ObservedAt             time.Time
 }
 
 // JobRetryAdmissionEvidence is a bounded, privacy-safe retry preflight. It is
 // non-authorizing: Eligible means only that the reviewed evidence does not
 // contain a known blocker. A mutation endpoint must re-read and revalidate the
-// exact Job version and policy before creating any new retry lineage.
+// exact Job version, lineage/history and policy before creating any new retry
+// lineage.
 type JobRetryAdmissionEvidence struct {
 	ContractVersion        string                 `json:"contract_version"`
 	AdmissionID            string                 `json:"admission_id"`
@@ -80,6 +83,7 @@ type JobRetryAdmissionEvidence struct {
 	SourceStatus           job.Status             `json:"source_status"`
 	SourceAttempt          int                    `json:"source_attempt"`
 	SourceMaxAttempts      int                    `json:"source_max_attempts"`
+	SourceAlreadyRetried   bool                   `json:"source_already_retried"`
 	PolicyID               string                 `json:"policy_id"`
 	PolicyDigest           string                 `json:"policy_digest"`
 	RetryHistoryDigest     string                 `json:"retry_history_digest"`
@@ -151,9 +155,12 @@ func BuildJobRetryAdmissionEvidence(input JobRetryAdmissionInput) (JobRetryAdmis
 		return JobRetryAdmissionEvidence{}, fmt.Errorf("%w: source evidence is newer than admission observation", ErrInvalidJobRetryAdmission)
 	}
 
-	blockers := make([]string, 0, 4)
+	blockers := make([]string, 0, 5)
 	if source.Status != job.StatusFailed {
 		blockers = append(blockers, JobRetryBlockerSourceNotFailed)
+	}
+	if input.SourceAlreadyRetried {
+		blockers = append(blockers, JobRetryBlockerSourceAlreadyRetried)
 	}
 	if !input.Policy.AllowsManualRetry {
 		blockers = append(blockers, JobRetryBlockerPolicyDenied)
@@ -184,6 +191,7 @@ func BuildJobRetryAdmissionEvidence(input JobRetryAdmissionInput) (JobRetryAdmis
 		SourceStatus:           source.Status,
 		SourceAttempt:          source.Attempt,
 		SourceMaxAttempts:      source.MaxAttempts,
+		SourceAlreadyRetried:   input.SourceAlreadyRetried,
 		PolicyID:               input.Policy.PolicyID,
 		PolicyDigest:           input.Policy.PolicyDigest,
 		RetryHistoryDigest:     input.RetryHistoryDigest,
