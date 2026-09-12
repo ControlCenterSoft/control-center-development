@@ -48,6 +48,8 @@ func TestExportCSVProtectsSpreadsheetFormulaInjection(t *testing.T) {
 		{"value": "  +1+1"},
 		{"value": "-10"},
 		{"value": "@SUM(A1:A2)"},
+		{"value": "\tcmd"},
+		{"value": "  \rpayload"},
 		{"value": 42},
 		{"value": -10},
 	}
@@ -65,6 +67,8 @@ func TestExportCSVProtectsSpreadsheetFormulaInjection(t *testing.T) {
 		"'  +1+1",
 		"'-10",
 		"'@SUM(A1:A2)",
+		"'\tcmd",
+		"'  \rpayload",
 		"42",
 		"-10",
 	}
