@@ -11,15 +11,15 @@ const CommercialDispositionApproved = "approved"
 // not carry legal text, customer data, credentials, dependency source code, or
 // other material that should live in dedicated evidence stores/artifacts.
 type CommercialEvidence struct {
-	Disposition              string
-	EvidenceDigest           string
-	DependenciesReviewed     bool
-	RedistributionReviewed   bool
-	NoticesPrepared          bool
+	Disposition               string
+	EvidenceDigest            string
+	DependenciesReviewed      bool
+	RedistributionReviewed    bool
+	NoticesPrepared           bool
 	SourceObligationsResolved bool
-	SBOMPrepared             bool
-	LegalTermsDispositioned  bool
-	ReleaseClaimsReviewed    bool
+	SBOMPrepared              bool
+	LegalTermsDispositioned   bool
+	ReleaseClaimsReviewed     bool
 }
 
 // EvaluateCommercialGate returns deterministic blockers for commercial/legal
