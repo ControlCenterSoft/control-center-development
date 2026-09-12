@@ -65,7 +65,7 @@ func TestManualRetryRequestFingerprintBindsSemanticLineageIdentity(t *testing.T)
 		"idempotency":    func(v *job.ManualRetryRequest) { v.RetryIdempotencyKey = "retry-other-key" },
 		"revision":       func(v *job.ManualRetryRequest) { v.RevisionDigest = manualRetryDigestB },
 		"policy":         func(v *job.ManualRetryRequest) { v.PolicyDigest = manualRetryDigestA },
-		"history":        func(v *job.ManualRetryRequest) {
+		"history": func(v *job.ManualRetryRequest) {
 			v.RetryHistoryDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
 		},
 	}
