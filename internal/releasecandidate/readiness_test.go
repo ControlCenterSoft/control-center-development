@@ -21,7 +21,7 @@ func completeSnapshot() Snapshot {
 		Schema:               SchemaV1,
 		StableVersion:        StableVersion,
 		StableTag:            StableTag,
-		StableArtifactDigest: "sha256:" + strings.Repeat("a", 64),
+		StableArtifactDigest: StableArtifactDigest,
 		CandidateVersion:     CandidateVersion,
 		CandidateSHA:         candidateSHA,
 		Gates:                gates,
@@ -116,5 +116,14 @@ func TestEvaluateRejectsUnexpectedStableIdentity(t *testing.T) {
 
 	if _, err := Evaluate(snapshot); err == nil {
 		t.Fatal("Evaluate() error = nil, want stable identity error")
+	}
+}
+
+func TestEvaluateRejectsDifferentStableArtifact(t *testing.T) {
+	snapshot := completeSnapshot()
+	snapshot.StableArtifactDigest = "sha256:" + strings.Repeat("d", 64)
+
+	if _, err := Evaluate(snapshot); err == nil {
+		t.Fatal("Evaluate() error = nil, want stable artifact binding error")
 	}
 }
