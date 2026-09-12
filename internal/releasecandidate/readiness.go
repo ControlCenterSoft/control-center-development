@@ -28,7 +28,7 @@ const (
 	GateReleaseMetadata    GateID = "release_metadata"
 )
 
-var RequiredGates = []GateID{
+var requiredGates = [...]GateID{
 	GateManualRetryLineage,
 	GateOperationalE2E,
 	GatePackaging,
@@ -39,6 +39,12 @@ var RequiredGates = []GateID{
 	GateSecurityPrivacy,
 	GateCommercialLegal,
 	GateReleaseMetadata,
+}
+
+// RequiredGates returns a defensive copy so callers cannot weaken the release
+// policy by mutating package-level state.
+func RequiredGates() []GateID {
+	return append([]GateID(nil), requiredGates[:]...)
 }
 
 type GateStatus string
@@ -96,8 +102,8 @@ func Evaluate(snapshot Snapshot) (Result, error) {
 		return Result{}, fmt.Errorf("invalid candidate sha")
 	}
 
-	required := make(map[GateID]struct{}, len(RequiredGates))
-	for _, gate := range RequiredGates {
+	required := make(map[GateID]struct{}, len(requiredGates))
+	for _, gate := range requiredGates {
 		required[gate] = struct{}{}
 	}
 
@@ -128,7 +134,7 @@ func Evaluate(snapshot Snapshot) (Result, error) {
 	}
 
 	result := Result{}
-	for _, gate := range RequiredGates {
+	for _, gate := range requiredGates {
 		evidence, ok := seen[gate]
 		if !ok || evidence.Status != GatePass {
 			result.Blockers = append(result.Blockers, gate)
