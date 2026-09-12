@@ -24,6 +24,24 @@
 
 Любое расхождение считается противоречивым evidence и отклоняется fail-closed. Также отклоняются future-dated component observations, не-terminal Job result, невалидные digest/identifiers и recovery evidence, пытающееся нести execution authority.
 
+## Привязка к Changes / Jobs operator view
+
+Подготовленный read-only adapter `ApplyVerifiedOperationsWorkflowEvidence` добавляет агрегированное evidence в существующий Changes / Jobs read-model только после повторной сверки с текущим operator snapshot.
+
+Перед публикацией summary он обязан подтвердить:
+
+- `change_id` существует в текущем snapshot;
+- `revision_id` совпадает с текущей immutable revision Change;
+- `revision_digest` совпадает с authoritative digest revision store;
+- approval satisfaction не расходится с текущей approval summary;
+- `job_id`, exact durable `job_version` и terminal outcome совпадают с текущим Job projection;
+- наличие output evidence, число health/Audit evidence и `worst_health` совпадают с текущим Job result summary;
+- aggregate evidence прошло строгую `ValidateOperationsWorkflowEvidence` проверку и не является future-dated.
+
+Если источник aggregate evidence недоступен, UI получает явное `workflow_evidence.availability=unavailable`. Stale/mismatched/duplicate evidence отклоняется полностью; частично обогащённый view не возвращается.
+
+Operator summary содержит только bounded state: availability, `complete|blocked`, exact Job id/version, terminal outcome, ограниченный список blocker reasons и время наблюдения. Raw output/errors, credentials, lease/provider details туда не переносятся.
+
 ## Что означает `complete`
 
 `state=complete` означает только, что сквозная цепочка evidence внутренне согласована и содержит обязательные safety evidence. Это **не синоним успешного выполнения**.
@@ -71,4 +89,4 @@
 
 Этот slice относится только к Control Center **0.31.0** и не меняет `VERSION`, SQL schema, ранее опубликованные migrations, runtime dependency graph или коммерческие redistribution obligations.
 
-Он не делает 0.31 Release Candidate/Public Stable сам по себе. После runner-free подготовки обязательны exact-head qualification в разрешённом runner-потоке, интеграция с фактическим operational UI/API path, install/packaging qualification и финальные ИБ/коммерческие/release gates.
+Runner-free подготовка теперь включает typed aggregate contract, strict validator и fail-closed привязку aggregate evidence к текущему Changes / Jobs operator view. Это всё ещё не делает 0.31 Release Candidate/Public Stable: обязательны exact-head qualification в разрешённом runner-потоке, интеграция подготовленного кода в canonical main, полный operational E2E, install/packaging qualification и финальные ИБ/коммерческие/release gates.

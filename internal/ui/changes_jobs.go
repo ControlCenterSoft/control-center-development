@@ -48,21 +48,22 @@ type ApprovalSummary struct {
 }
 
 type ChangeOperationalView struct {
-	ID                string               `json:"id"`
-	Action            string               `json:"action"`
-	Requester         string               `json:"requester"`
-	RevisionID        string               `json:"revision_id"`
-	Risk              policy.Risk          `json:"risk"`
-	State             change.State         `json:"state"`
-	PolicyEffect      policy.Effect        `json:"policy_effect"`
-	Approvals         ApprovalSummary      `json:"approvals"`
-	Version           uint64               `json:"version"`
-	UpdatedAt         time.Time            `json:"updated_at"`
-	SemanticDiff      EvidenceAvailability `json:"semantic_diff"`
-	BlastRadius       EvidenceAvailability `json:"blast_radius"`
-	MaintenanceWindow EvidenceAvailability `json:"maintenance_window"`
-	RecoveryEvidence  EvidenceAvailability `json:"recovery_evidence"`
-	Jobs              []JobOperationalView `json:"jobs"`
+	ID                string                  `json:"id"`
+	Action            string                  `json:"action"`
+	Requester         string                  `json:"requester"`
+	RevisionID        string                  `json:"revision_id"`
+	Risk              policy.Risk             `json:"risk"`
+	State             change.State            `json:"state"`
+	PolicyEffect      policy.Effect            `json:"policy_effect"`
+	Approvals         ApprovalSummary         `json:"approvals"`
+	Version           uint64                  `json:"version"`
+	UpdatedAt         time.Time               `json:"updated_at"`
+	SemanticDiff      EvidenceAvailability    `json:"semantic_diff"`
+	BlastRadius       EvidenceAvailability    `json:"blast_radius"`
+	MaintenanceWindow EvidenceAvailability    `json:"maintenance_window"`
+	RecoveryEvidence  EvidenceAvailability    `json:"recovery_evidence"`
+	WorkflowEvidence  WorkflowEvidenceSummary `json:"workflow_evidence"`
+	Jobs              []JobOperationalView    `json:"jobs"`
 }
 
 type JobOutputSummary struct {
@@ -195,6 +196,7 @@ func projectChange(snapshot change.Snapshot) (ChangeOperationalView, error) {
 		BlastRadius:       EvidenceUnavailable,
 		MaintenanceWindow: EvidenceUnavailable,
 		RecoveryEvidence:  EvidenceUnavailable,
+		WorkflowEvidence:  unavailableWorkflowEvidenceSummary(),
 		Jobs:              []JobOperationalView{},
 	}, nil
 }
