@@ -65,7 +65,10 @@ func TestBuildJobResultEvidenceRejectsMismatchedOrNonTerminalState(t *testing.T)
 		name   string
 		mutate func(*JobResultEvidenceInput)
 	}{
-		{name: "job still running", mutate: func(in *JobResultEvidenceInput) { in.Job.Status = job.StatusRunning; in.Change.State = change.StateExecuting }},
+		{name: "job still running", mutate: func(in *JobResultEvidenceInput) {
+			in.Job.Status = job.StatusRunning
+			in.Change.State = change.StateExecuting
+		}},
 		{name: "terminal mismatch", mutate: func(in *JobResultEvidenceInput) { in.Change.State = change.StateFailed }},
 		{name: "wrong change binding", mutate: func(in *JobResultEvidenceInput) { in.Job.ChangeID = "chg-other" }},
 		{name: "future output", mutate: func(in *JobResultEvidenceInput) { in.Job.Output.Health[0].CheckedAt = now.Add(time.Minute) }},
@@ -105,7 +108,7 @@ func validJobResultEvidenceInput(now time.Time) JobResultEvidenceInput {
 			ID: "chg-1", Action: "node.update", Requester: "operator", RevisionID: "rev-1",
 			Risk: policy.RiskMedium, State: change.StateSucceeded,
 			Decision: policy.Decision{Effect: policy.EffectAllow, Risk: policy.RiskMedium, Reason: "allowed", PolicyID: "policy-1"},
-			Version: 6, UpdatedAt: completed,
+			Version:  6, UpdatedAt: completed,
 		},
 		Job: job.Job{
 			ID: "job-1", ChangeID: "chg-1", ActionName: "node.update", Status: job.StatusSucceeded,
