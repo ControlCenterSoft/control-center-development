@@ -13,10 +13,7 @@ import (
 	"control-center/internal/incidents"
 )
 
-var (
-	ErrIncidentNotFound = errors.New("incident not found")
-	ErrIncidentConflict = errors.New("incident persistence conflict")
-)
+var ErrIncidentConflict = errors.New("incident persistence conflict")
 
 // IncidentReadRepository persists the bounded 0.32 incident read model. The
 // complete validated document is stored as JSONB while query-critical fields
@@ -238,7 +235,7 @@ func scanIncidentMirror(row incidentScanner) (incidents.Incident, error) {
 		&updatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return incidents.Incident{}, ErrIncidentNotFound
+			return incidents.Incident{}, incidents.ErrNotFound
 		}
 		return incidents.Incident{}, err
 	}
@@ -290,7 +287,7 @@ func replaceIncidentResources(ctx context.Context, tx *sql.Tx, incident incident
 		if _, err := tx.ExecContext(ctx, `
 INSERT INTO cc_incident_affected_resources (incident_id,resource_kind,resource_id,scope_id)
 VALUES ($1,$2,$3,$4)`, incident.ObjectID, resource.Kind, resource.ID, resource.ScopeID); err != nil {
-		return err
+			return err
 		}
 	}
 	return nil
@@ -363,3 +360,5 @@ func buildIncidentListSQL(query incidents.ListQuery) (string, []any) {
 	builder.WriteString(bind(query.Limit + 1))
 	return builder.String(), args
 }
+
+var _ incidents.Reader = (*IncidentReadRepository)(nil)
