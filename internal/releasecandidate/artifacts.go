@@ -3,14 +3,14 @@ package releasecandidate
 import "fmt"
 
 var requiredArtifactNames = [...]string{
-	"control-center-0.31.0-linux-amd64.tar.gz",
-	"control-center-0.31.0-linux-amd64.tar.gz.sha256",
-	"control-center-0.31.0-source.tar.gz",
-	"control-center-0.31.0.sbom.cdx.json",
+	"control-center-0.32.0-linux-amd64.tar.gz",
+	"control-center-0.32.0-linux-amd64.tar.gz.sha256",
+	"control-center-0.32.0-source.tar.gz",
+	"control-center-0.32.0.sbom.cdx.json",
 	"THIRD_PARTY_NOTICES.md",
-	"control-center-0.31.0.provenance.json",
-	"control-center-0.31.0.qualification.json",
-	"control-center-0.31.0.release-manifest.json",
+	"control-center-0.32.0.provenance.json",
+	"control-center-0.32.0.qualification.json",
+	"control-center-0.32.0.release-manifest.json",
 	"SHA256SUMS",
 }
 
@@ -35,7 +35,7 @@ type ArtifactManifest struct {
 const ArtifactManifestSchemaV1 = "control-center.release-candidate-artifacts.v1"
 
 // ValidateArtifactManifest verifies only the bounded identity and expected file
-// set for a future 0.31 candidate bundle. It does not create, download, sign,
+// set for a future 0.32 candidate bundle. It does not create, download, sign,
 // publish or qualify any artifact.
 func ValidateArtifactManifest(manifest ArtifactManifest) error {
 	if manifest.Schema != ArtifactManifestSchemaV1 {

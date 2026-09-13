@@ -202,3 +202,18 @@ func TestEvaluateRejectsDifferentStableArtifact(t *testing.T) {
 		t.Fatal("Evaluate() error = nil, want stable artifact binding error")
 	}
 }
+
+func TestReleaseCandidateIdentityTargetsCurrentTrain(t *testing.T) {
+	if StableVersion != "0.31.1" || StableTag != "v0.31.1" {
+		t.Fatalf("stable identity = %q (%q), want current Public Stable 0.31.1", StableVersion, StableTag)
+	}
+	if StableArtifactDigest != "sha256:b9d6467c7c95a6e7e8597398c1b6e7327d319058d248e9cd0416c5baf9699c97" {
+		t.Fatalf("stable artifact digest = %q, want exact 0.31.1 Linux artifact", StableArtifactDigest)
+	}
+	if CandidateVersion != "0.32.0" {
+		t.Fatalf("candidate version = %q, want nearest train 0.32.0", CandidateVersion)
+	}
+	if GateUpgradeFromStable != GateID("upgrade_from_stable_0_31_1") {
+		t.Fatalf("upgrade gate = %q, want exact current-Stable boundary", GateUpgradeFromStable)
+	}
+}
