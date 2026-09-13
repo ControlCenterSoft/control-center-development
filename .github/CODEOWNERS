@@ -1,0 +1,11 @@
+# Default ownership for all repository changes.
+* @ControlCenterSoft
+
+# Security-sensitive surfaces.
+/.github/workflows/ @ControlCenterSoft
+/.github/dependabot.yml @ControlCenterSoft
+/deploy/ @ControlCenterSoft
+/scripts/ @ControlCenterSoft
+/migrations/ @ControlCenterSoft
+/internal/ @ControlCenterSoft
+/cmd/ @ControlCenterSoft

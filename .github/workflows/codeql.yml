@@ -1,0 +1,40 @@
+name: Control Center CodeQL
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: control-center-codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    name: CodeQL Go security analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@faaca9a8f6edddba5725ffe5adefdab6669a2eca
+        with:
+          languages: go
+          queries: security-extended
+
+      - name: Analyze Go security boundary
+        uses: github/codeql-action/analyze@faaca9a8f6edddba5725ffe5adefdab6669a2eca
+        with:
+          category: /language:go
