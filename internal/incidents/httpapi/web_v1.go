@@ -85,7 +85,7 @@ var incidentDetailTemplate = template.Must(template.New("incident-detail").Funcs
 <section class="card"><h2>Signals</h2><ul>{{range .Incident.Signals}}<li><strong>{{.Kind}}</strong> · {{.Source}} · {{incidentTime .ObservedAt}}<br>{{.Summary}}</li>{{end}}</ul></section>
 <section class="card"><h2>Evidence refs</h2>{{if .Incident.Evidence}}<ul>{{range .Incident.Evidence}}<li>{{.Kind}} / {{.ID}} · {{incidentTime .Collected}} · redaction={{.Redaction}}</li>{{end}}</ul>{{else}}<p class="muted">Нет incident-level evidence references.</p>{{end}}</section>
 <section class="card"><h2>Timeline</h2><ul>{{range .Incident.Timeline}}<li><strong>{{.Kind}}</strong> · {{incidentTime .At}}{{if .ActorID}} · actor={{.ActorID}}{{end}}{{if .Summary}}<br>{{.Summary}}{{end}}</li>{{end}}</ul></section></div>
-<p class="muted">Этот экран read-only и не предоставляет acknowledge/resolve/mutation authority.</p></main></body></html>`))
+<p class="muted">Этот экран доступен только для чтения и не предоставляет элементов управления изменением состояния.</p></main></body></html>`))
 
 func (s *server) handleWebList(w http.ResponseWriter, r *http.Request) {
 	actor, ok := s.resolveActor(w, r)
