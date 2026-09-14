@@ -20,7 +20,7 @@ concurrency:
 jobs:
   publish:
     if: github.event.workflow_run.conclusion == 'success'
-    name: Tag and publish
+    name: Evaluate and publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,7 +30,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
-      - name: Validate release inputs
+      - name: Evaluate release authorization
         id: release
         shell: bash
         run: |
@@ -39,11 +39,36 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           notes="docs/RELEASE_${version}_RU.md"
           test -f "$notes"
+
+          publishable=false
+          if grep -Eq '^Status: official release\.?$' "$notes"; then
+            publishable=true
+          fi
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "notes=$notes" >> "$GITHUB_OUTPUT"
+          echo "publishable=$publishable" >> "$GITHUB_OUTPUT"
+
+          if [[ "$publishable" == true ]]; then
+            echo "RELEASE_AUTHORIZATION=OFFICIAL version=${version}" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "RELEASE_AUTHORIZATION=DEVELOPMENT_NO_PUBLISH version=${version}" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report development release state
+        if: steps.release.outputs.publishable != 'true'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          echo "RELEASE_STATE=DEVELOPMENT_NO_PUBLISH version=${RELEASE_VERSION} sha=${RELEASE_SHA}"
+          echo "No tag, GitHub Release, or Stable promotion is authorized for this development revision."
 
       - name: Detect already-published immutable release
+        if: steps.release.outputs.publishable == 'true'
         id: existing
         shell: bash
         env:
@@ -58,7 +83,7 @@ jobs:
           fi
 
       - name: Verify already-published release remains immutable
-        if: steps.existing.outputs.published == 'true'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -79,19 +104,28 @@ jobs:
           PY
 
       - name: Require a version-specific automatic publication gate
-        if: steps.existing.outputs.published != 'true'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true'
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          if [[ "$RELEASE_VERSION" != '0.31.0' ]]; then
-            echo "Automatic publication gate is not yet defined for Control Center ${RELEASE_VERSION}; refusing publication" >&2
-            exit 1
-          fi
+          case "$RELEASE_VERSION" in
+            0.31.0)
+              echo 'RELEASE_GATE=legacy-0.31'
+              ;;
+            0.32.0)
+              echo 'Control Center 0.32.0 is marked official but the dedicated 0.32 exact-SHA package/qualification gate is not yet wired; refusing publication.' >&2
+              exit 1
+              ;;
+            *)
+              echo "Automatic publication gate is not defined for Control Center ${RELEASE_VERSION}; refusing publication" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Download exact 0.31 release evidence
-        if: steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.31.0'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.31.0'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,14 +142,14 @@ jobs:
           test -f dist/public-stable-evidence/control-center-0.31.0.readiness.json
 
       - name: Set up Go for 0.31 Stable gate
-        if: steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.31.0'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.31.0'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Require exact technical Public Stable readiness
-        if: steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.31.0'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.31.0'
         shell: bash
         run: |
           set -euo pipefail
@@ -149,7 +183,7 @@ jobs:
           go run "$validator_dir/main.go" dist/public-stable-evidence/control-center-0.31.0.readiness.json
 
       - name: Publish exact qualified release
-        if: steps.existing.outputs.published != 'true'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -178,3 +212,14 @@ jobs:
             --title "Control Center ${RELEASE_VERSION}" \
             --notes-file "$RELEASE_NOTES" \
             --verify-tag
+
+          echo "RELEASE_STATE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Report existing official release state
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published == 'true'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "RELEASE_STATE=ALREADY_PUBLISHED_IMMUTABLE version=${RELEASE_VERSION}" | tee -a "$GITHUB_STEP_SUMMARY"
