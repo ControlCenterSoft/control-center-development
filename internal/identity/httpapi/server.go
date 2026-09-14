@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -400,7 +401,14 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter) {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	decoder := json.NewDecoder(r.Body)
+	document, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	if err := rejectDuplicateJSONFields(document); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -409,6 +417,66 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 		return errors.New("multiple JSON values")
 	}
 	return nil
+}
+
+func rejectDuplicateJSONFields(document []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	var walkValue func() error
+	walkValue = func() error {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		delimiter, ok := token.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch delimiter {
+		case '{':
+			seen := make(map[string]struct{})
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return errors.New("invalid JSON object key")
+				}
+				if _, exists := seen[key]; exists {
+					return fmt.Errorf("duplicate JSON field %q", key)
+				}
+				seen[key] = struct{}{}
+				if err := walkValue(); err != nil {
+					return err
+				}
+			}
+			end, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			if end != json.Delim('}') {
+				return errors.New("invalid JSON object")
+			}
+		case '[':
+			for decoder.More() {
+				if err := walkValue(); err != nil {
+					return err
+				}
+			}
+			end, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			if end != json.Delim(']') {
+				return errors.New("invalid JSON array")
+			}
+		default:
+			return errors.New("invalid JSON delimiter")
+		}
+		return nil
+	}
+	return walkValue()
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
