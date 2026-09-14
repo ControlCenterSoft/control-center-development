@@ -106,7 +106,7 @@ func TestEvaluateSecurityPrivacyEvidenceRejectsMalformedAuditDigest(t *testing.T
 
 func TestEvaluateSecurityPrivacyEvidenceRejectsWrongCandidate(t *testing.T) {
 	evidence := approvedSecurityPrivacyEvidence()
-	evidence.CandidateVersion = "0.32.0"
+	evidence.CandidateVersion = "0.33.0"
 	evidence.SnapshotDigest = SecurityPrivacySnapshotDigest(evidence)
 	if _, _, err := EvaluateSecurityPrivacyEvidence(evidence); err == nil || !strings.Contains(err.Error(), "candidate version") {
 		t.Fatalf("expected candidate version error, got %v", err)
