@@ -35,6 +35,40 @@ func TestPXEPlanHandlerRejectsWindowsArm64(t *testing.T) {
 	}
 }
 
+func TestPXEPlanHandlerRejectsDuplicateProfileFields(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "os family",
+			body: `{"name":"ambiguous","osFamily":"linux","osFamily":"windows","architecture":"amd64"}`,
+		},
+		{
+			name: "architecture",
+			body: `{"name":"ambiguous","osFamily":"linux","architecture":"arm64","architecture":"amd64"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/pxe/plan", strings.NewReader(test.body))
+			rec := httptest.NewRecorder()
+			New().ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			var body errorBody
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Error.Code != "INVALID_REQUEST" {
+				t.Fatalf("error code=%q body=%s", body.Error.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestPXEPlanHandlerRejectsGET(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/pxe/plan", nil)
 	rec := httptest.NewRecorder()
