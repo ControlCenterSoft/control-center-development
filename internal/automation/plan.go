@@ -68,6 +68,7 @@ func BuildPlan(request Request) (Plan, error) {
 	if strings.TrimSpace(request.Arguments["name"]) == "" {
 		return Plan{}, errors.New("name argument is required")
 	}
+
 	inputs := make(map[string]string, len(request.Arguments))
 	ordered := make([]string, 0, len(request.Arguments))
 	for key := range request.Arguments {
@@ -75,7 +76,50 @@ func BuildPlan(request Request) (Plan, error) {
 	}
 	sort.Strings(ordered)
 	for _, key := range ordered {
-		inputs[key] = strings.TrimSpace(request.Arguments[key])
+		value := strings.TrimSpace(request.Arguments[key])
+		if key == "state" {
+			value = strings.ToLower(value)
+		}
+		inputs[key] = value
 	}
+	if err := validateTypedInputs(request.Operation, inputs); err != nil {
+		return Plan{}, err
+	}
+
 	return Plan{TargetID: request.Target.ID, Adapter: adapter, Action: request.Operation, Inputs: inputs}, nil
+}
+
+func validateTypedInputs(operation Operation, inputs map[string]string) error {
+	switch operation {
+	case InspectService:
+		return nil
+	case EnsureService:
+		state := inputs["state"]
+		if state == "" {
+			return errors.New("state argument is required for service.ensure")
+		}
+		if state != "started" && state != "stopped" {
+			return fmt.Errorf("unsupported service state %q", state)
+		}
+		return nil
+	case EnsurePackage:
+		state := inputs["state"]
+		if state == "" {
+			return errors.New("state argument is required for package.ensure")
+		}
+		if state != "present" && state != "absent" && state != "latest" {
+			return fmt.Errorf("unsupported package state %q", state)
+		}
+		if version, provided := inputs["version"]; provided {
+			if version == "" {
+				return errors.New("version argument must not be empty when provided")
+			}
+			if state != "present" {
+				return fmt.Errorf("version argument is only valid with package state %q", "present")
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported operation %q", operation)
+	}
 }
