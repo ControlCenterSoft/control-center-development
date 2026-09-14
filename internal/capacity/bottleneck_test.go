@@ -82,6 +82,32 @@ func TestBottleneckReportRequestsEvidenceForLowConfidence(t *testing.T) {
 	}
 }
 
+func TestBottleneckReportKeepsUnsafeLowConfidenceFleetOnEvidence(t *testing.T) {
+	request := BottleneckRequest{
+		ScopeID:                "site-a",
+		RequiredRole:           corecontracts.RoleWorkerNode,
+		WorkloadUnit:           WorkloadDevices,
+		WarningReservePercent:  20,
+		CriticalReservePercent: 5,
+	}
+	node := projection("node-a", 100, 120, 50)
+	node.Confidence = Confidence{Level: ConfidenceLow, Score: .4}
+
+	report, err := BuildBottleneckReport(request, []NodeProjection{node})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.FleetAssessment.Safe || report.FleetAssessment.Action != ActionCollectEvidence {
+		t.Fatalf("expected unsafe low-confidence fleet assessment to require evidence: %#v", report.FleetAssessment)
+	}
+	if report.Action != ActionCollectEvidence || report.UnknownCount != 1 || report.CriticalCount != 0 {
+		t.Fatalf("unsafe low-confidence report crossed evidence gate: %#v", report)
+	}
+	if len(report.Findings) != 1 || report.Findings[0].Severity != BottleneckUnknown || report.Findings[0].Reason != "insufficient-confidence" {
+		t.Fatalf("unexpected unsafe low-confidence finding: %#v", report.Findings)
+	}
+}
+
 func TestBottleneckReportRejectsInvalidThresholdOrder(t *testing.T) {
 	_, err := BuildBottleneckReport(BottleneckRequest{
 		ScopeID:                "site-a",
