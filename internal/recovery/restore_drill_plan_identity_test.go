@@ -20,6 +20,19 @@ func TestBuildRestoreDrillPlanIDBindsRecoveryInputs(t *testing.T) {
 		mutate func(*RestoreMetadata)
 	}{
 		{
+			name: "restore identity",
+			mutate: func(value *RestoreMetadata) {
+				value.ObjectID = "restore-drill-002"
+			},
+		},
+		{
+			name: "scope boundary",
+			mutate: func(value *RestoreMetadata) {
+				value.ScopeID = "scope-secondary"
+				value.Target.ScopeID = "scope-secondary"
+			},
+		},
+		{
 			name: "recovery point",
 			mutate: func(value *RestoreMetadata) {
 				value.RecoveryPointID = "rp-20260908-002"
