@@ -29,7 +29,7 @@ func readRelease032(t *testing.T, root, name string) string {
 
 func TestRelease032QualificationContract(t *testing.T) {
 	root := release032Root(t)
-	if got := strings.TrimSpace(readRelease032(t, root, "VERSION")); got != "0.32.0" {
+	if got := strings.TrimSpace(readRelease032(t, root, "VERSION")); got != "0.32.1" {
 		t.Fatalf("VERSION=%q", got)
 	}
 
@@ -42,7 +42,7 @@ func TestRelease032QualificationContract(t *testing.T) {
 		"github.event.workflow_run.head_branch == 'main'",
 		"QUALIFICATION_STALE_MAIN",
 		"bash scripts/qualify-candidate-032.sh",
-		"control-center-0.32.0-release-evidence-${{ env.CANDIDATE_SHA }}",
+		"control-center-0.32.1-release-evidence-${{ env.CANDIDATE_SHA }}",
 		"CC_032_EXACT_SHA_GATE=PASS",
 	} {
 		if !strings.Contains(gate, marker) {
@@ -53,9 +53,9 @@ func TestRelease032QualificationContract(t *testing.T) {
 	publisher := readRelease032(t, root, ".github/workflows/publish-release.yml")
 	for _, marker := range []string{
 		"- Qualify Control Center 0.32 exact SHA",
-		"0.32.0)",
-		"RELEASE_STALLED: Control Center 0.32.0 requires the dedicated exact-SHA qualification workflow",
-		"control-center-0.32.0-release-evidence-${RELEASE_SHA}",
+		"0.32.1)",
+		"RELEASE_STALLED: Control Center 0.32.1 requires the dedicated exact-SHA qualification workflow",
+		"control-center-0.32.1-release-evidence-${RELEASE_SHA}",
 		"PUBLIC_CI_RUN_NOT_EXACT_PASS",
 		"Stable promotion remains a separate required step",
 	} {
@@ -121,7 +121,7 @@ func TestRelease032ScriptsAndSBOM(t *testing.T) {
 	if err := json.Unmarshal(raw, &bom); err != nil {
 		t.Fatal(err)
 	}
-	if bom.Metadata.Component.Version != "0.32.0" || len(bom.Components) != 9 {
+	if bom.Metadata.Component.Version != "0.32.1" || len(bom.Components) != 9 {
 		t.Fatalf("unexpected SBOM identity/version: version=%q components=%d", bom.Metadata.Component.Version, len(bom.Components))
 	}
 	foundSHA := false

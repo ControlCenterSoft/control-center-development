@@ -7,10 +7,10 @@ import (
 
 const (
 	SchemaV1             = "control-center.release-candidate-readiness.v1"
-	StableVersion        = "0.30.0"
-	StableTag            = "v0.30.0"
-	StableArtifactDigest = "sha256:02d15e8ff13bbcb52b6d0c9293ab8804500991fbb41c8b575e88306a8a5ce0f2"
-	CandidateVersion     = "0.31.0"
+	StableVersion        = "0.31.1"
+	StableTag            = "v0.31.1"
+	StableArtifactDigest = "sha256:b9d6467c7c95a6e7e8597398c1b6e7327d319058d248e9cd0416c5baf9699c97"
+	CandidateVersion     = "0.32.1"
 )
 
 type GateID string
@@ -20,7 +20,7 @@ const (
 	GateOperationalE2E     GateID = "operational_workflow_e2e"
 	GatePackaging          GateID = "candidate_artifact_packaging"
 	GateCleanInstall       GateID = "clean_install"
-	GateUpgradeFromStable  GateID = "upgrade_from_stable_0_30"
+	GateUpgradeFromStable  GateID = "upgrade_from_stable_0_31_1"
 	GateRollbackRecovery   GateID = "rollback_forward_recovery"
 	GatePostgresRestart    GateID = "postgres_restart_reconnect"
 	GateSecurityPrivacy    GateID = "security_privacy"

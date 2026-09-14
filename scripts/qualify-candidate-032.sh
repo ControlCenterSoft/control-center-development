@@ -8,14 +8,14 @@ for command in curl createdb dropdb pg_dump pg_restore psql sha256sum tar python
   command -v "$command" >/dev/null 2>&1 || { echo "required command missing: $command" >&2; exit 2; }
 done
 
-candidate_version="0.32.0"
+candidate_version="0.32.1"
 stable_version="0.31.1"
 stable_sha256="b9d6467c7c95a6e7e8597398c1b6e7327d319058d248e9cd0416c5baf9699c97"
 candidate_sha="${CANDIDATE_SHA:-$(git rev-parse HEAD)}"
 public_ci_run_id="${PUBLIC_CI_RUN_ID:-}"
 [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid exact candidate SHA" >&2; exit 2; }
 [[ "$(git rev-parse HEAD)" == "$candidate_sha" ]] || { echo "qualification checkout is not exact candidate SHA" >&2; exit 2; }
-[[ "$(tr -d '\r\n' < VERSION)" == "$candidate_version" ]] || { echo "VERSION is not 0.32.0" >&2; exit 2; }
+[[ "$(tr -d '\r\n' < VERSION)" == "$candidate_version" ]] || { echo "VERSION is not 0.32.1" >&2; exit 2; }
 [[ "$public_ci_run_id" =~ ^[0-9]+$ ]] || { echo "PUBLIC_CI_RUN_ID must bind exact upstream Public CI evidence" >&2; exit 2; }
 
 export PGHOST="${PGHOST:-127.0.0.1}"
@@ -51,7 +51,7 @@ for name in \
   cmp -s "$work/build-a/$name" "$work/build-b/$name" || { echo "non-reproducible release artifact: $name" >&2; exit 1; }
 done
 
-out="$repo_root/dist/candidate-0.32.0"
+out="$repo_root/dist/candidate-0.32.1"
 rm -rf "$out"
 mkdir -p "$out"
 cp -a "$work/build-a/." "$out/"
@@ -85,7 +85,7 @@ path,sha=sys.argv[1:]
 with open(path,encoding="utf-8") as f: bom=json.load(f)
 assert bom.get("bomFormat")=="CycloneDX" and bom.get("specVersion")=="1.7"
 root=bom.get("metadata",{}).get("component",{})
-assert root.get("name")=="control-center" and root.get("version")=="0.32.0"
+assert root.get("name")=="control-center" and root.get("version")=="0.32.1"
 props={p.get("name"):p.get("value") for p in root.get("properties",[])}
 assert props.get("control-center:candidate-sha")==sha
 components=bom.get("components",[])
@@ -153,7 +153,7 @@ path,sha,run_id,binary_digest,source_digest,sbom_digest,notices_digest,stable_di
 data={
   "schema":"control-center.candidate-qualification.v2",
   "status":"PASS",
-  "candidate_version":"0.32.0",
+  "candidate_version":"0.32.1",
   "candidate_sha":sha,
   "public_ci":{"run_id":int(run_id),"status":"PASS","candidate_sha":sha},
   "stable_base":{"version":"0.31.1","artifact_digest":"sha256:"+stable_digest},
@@ -179,14 +179,14 @@ import json,sys
 path,sha,run_id,binary_digest,source_digest,sbom_digest,notices_digest=sys.argv[1:]
 data={
   "schema":"control-center.candidate-provenance.v2",
-  "candidate_version":"0.32.0",
+  "candidate_version":"0.32.1",
   "candidate_sha":sha,
   "source_repository":"ControlCenterSoft/control-center-development",
   "public_ci_run_id":int(run_id),
   "subjects":[
-    {"name":"control-center-0.32.0-linux-amd64.tar.gz","digest":binary_digest},
-    {"name":"control-center-0.32.0-source.tar.gz","digest":source_digest},
-    {"name":"control-center-0.32.0.sbom.cdx.json","digest":sbom_digest},
+    {"name":"control-center-0.32.1-linux-amd64.tar.gz","digest":binary_digest},
+    {"name":"control-center-0.32.1-source.tar.gz","digest":source_digest},
+    {"name":"control-center-0.32.1.sbom.cdx.json","digest":sbom_digest},
     {"name":"THIRD_PARTY_NOTICES.md","digest":notices_digest}
   ],
   "publication_authority":False
@@ -203,18 +203,18 @@ path,sha,binary_digest,sidecar_digest,source_digest,sbom_digest,notices_digest,q
 data={
   "schema":"control-center.candidate-release-manifest.v2",
   "status":"qualified-not-yet-published",
-  "version":"0.32.0",
+  "version":"0.32.1",
   "revision":sha,
   "stable_base":"0.31.1",
   "publication_authority":False,
   "artifacts":{
-    "control-center-0.32.0-linux-amd64.tar.gz":binary_digest,
-    "control-center-0.32.0-linux-amd64.tar.gz.sha256":sidecar_digest,
-    "control-center-0.32.0-source.tar.gz":source_digest,
-    "control-center-0.32.0.sbom.cdx.json":sbom_digest,
+    "control-center-0.32.1-linux-amd64.tar.gz":binary_digest,
+    "control-center-0.32.1-linux-amd64.tar.gz.sha256":sidecar_digest,
+    "control-center-0.32.1-source.tar.gz":source_digest,
+    "control-center-0.32.1.sbom.cdx.json":sbom_digest,
     "THIRD_PARTY_NOTICES.md":notices_digest,
-    "control-center-0.32.0.qualification.json":qualification_digest,
-    "control-center-0.32.0.provenance.json":provenance_digest
+    "control-center-0.32.1.qualification.json":qualification_digest,
+    "control-center-0.32.1.provenance.json":provenance_digest
   }
 }
 with open(path,"w",encoding="utf-8") as f:

@@ -62,8 +62,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA" || { echo EXACT_HEAD_MISMATCH >&2; exit 66; }
           main_record="$(git ls-remote --exit-code origin refs/heads/main)" || { echo MAIN_IDENTITY_CHECK_FAILED >&2; exit 66; }
           [[ "$main_record" == "$CANDIDATE_SHA"$'\trefs/heads/main' ]] || { echo QUALIFICATION_STALE_MAIN >&2; exit 66; }
-          test "$(tr -d '[:space:]' < VERSION)" = "0.32.0" || { echo QUALIFICATION_VERSION_MISMATCH >&2; exit 66; }
-          test -f docs/RELEASE_0.32.0_RU.md || { echo RELEASE_NOTES_MISSING >&2; exit 66; }
+          test "$(tr -d '[:space:]' < VERSION)" = "0.32.1" || { echo QUALIFICATION_VERSION_MISMATCH >&2; exit 66; }
+          test -f docs/RELEASE_0.32.1_RU.md || { echo RELEASE_NOTES_MISSING >&2; exit 66; }
           test -z "$(git status --porcelain=v1 --untracked-files=all)" || { echo SOURCE_TREE_DIRTY >&2; exit 66; }
 
       - name: Set up Go
@@ -85,17 +85,17 @@ jobs:
           python3 - "$CANDIDATE_SHA" "$PUBLIC_CI_RUN_ID" <<'PY'
           import json, pathlib, re, sys
           sha, run_id = sys.argv[1:]
-          root = pathlib.Path('dist/candidate-0.32.0')
-          q = json.loads((root/'control-center-0.32.0.qualification.json').read_text(encoding='utf-8'))
-          m = json.loads((root/'control-center-0.32.0.release-manifest.json').read_text(encoding='utf-8'))
-          p = json.loads((root/'control-center-0.32.0.provenance.json').read_text(encoding='utf-8'))
+          root = pathlib.Path('dist/candidate-0.32.1')
+          q = json.loads((root/'control-center-0.32.1.qualification.json').read_text(encoding='utf-8'))
+          m = json.loads((root/'control-center-0.32.1.release-manifest.json').read_text(encoding='utf-8'))
+          p = json.loads((root/'control-center-0.32.1.provenance.json').read_text(encoding='utf-8'))
           assert q['schema'] == 'control-center.candidate-qualification.v2'
-          assert q['status'] == 'PASS' and q['candidate_sha'] == sha and q['candidate_version'] == '0.32.0'
+          assert q['status'] == 'PASS' and q['candidate_sha'] == sha and q['candidate_version'] == '0.32.1'
           assert q['public_ci'] == {'run_id': int(run_id), 'status': 'PASS', 'candidate_sha': sha}
           assert q['stable_base']['version'] == '0.31.1'
           assert all(value == 'PASS' for value in q['gates'].values())
           assert q['publication_authority'] is False
-          assert m['status'] == 'qualified-not-yet-published' and m['revision'] == sha and m['version'] == '0.32.0'
+          assert m['status'] == 'qualified-not-yet-published' and m['revision'] == sha and m['version'] == '0.32.1'
           assert m['publication_authority'] is False
           assert p['candidate_sha'] == sha and p['public_ci_run_id'] == int(run_id) and p['publication_authority'] is False
           for digest in list(m['artifacts'].values()):
@@ -107,8 +107,8 @@ jobs:
       - name: Preserve exact-SHA qualification bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: control-center-0.32.0-release-evidence-${{ env.CANDIDATE_SHA }}
-          path: dist/candidate-0.32.0/
+          name: control-center-0.32.1-release-evidence-${{ env.CANDIDATE_SHA }}
+          path: dist/candidate-0.32.1/
           if-no-files-found: error
           retention-days: 30
 

@@ -117,9 +117,9 @@ jobs:
               [[ "$TRIGGER_WORKFLOW" == "Public CI" ]] || { echo '0.31 publication requires its historical Public CI trigger' >&2; exit 53; }
               echo 'RELEASE_GATE=legacy-0.31'
               ;;
-            0.32.0)
+            0.32.1)
               [[ "$TRIGGER_WORKFLOW" == "Qualify Control Center 0.32 exact SHA" ]] || {
-                echo 'RELEASE_STALLED: Control Center 0.32.0 requires the dedicated exact-SHA qualification workflow; Public CI alone is not publication authority.' >&2
+                echo 'RELEASE_STALLED: Control Center 0.32.1 requires the dedicated exact-SHA qualification workflow; Public CI alone is not publication authority.' >&2
                 exit 53
               }
               echo 'RELEASE_GATE=exact-sha-0.32'
@@ -189,7 +189,7 @@ jobs:
           go run "$validator_dir/main.go" dist/public-stable-evidence/control-center-0.31.0.readiness.json
 
       - name: Download and verify exact 0.32 qualification evidence
-        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.32.0'
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.32.1'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -201,17 +201,17 @@ jobs:
           mkdir -p dist/public-stable-evidence
           gh run download "$TRIGGER_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name "control-center-0.32.0-release-evidence-${RELEASE_SHA}" \
+            --name "control-center-0.32.1-release-evidence-${RELEASE_SHA}" \
             --dir dist/public-stable-evidence
           for name in \
-            control-center-0.32.0-linux-amd64.tar.gz \
-            control-center-0.32.0-linux-amd64.tar.gz.sha256 \
-            control-center-0.32.0-source.tar.gz \
-            control-center-0.32.0.sbom.cdx.json \
+            control-center-0.32.1-linux-amd64.tar.gz \
+            control-center-0.32.1-linux-amd64.tar.gz.sha256 \
+            control-center-0.32.1-source.tar.gz \
+            control-center-0.32.1.sbom.cdx.json \
             THIRD_PARTY_NOTICES.md \
-            control-center-0.32.0.qualification.json \
-            control-center-0.32.0.provenance.json \
-            control-center-0.32.0.release-manifest.json \
+            control-center-0.32.1.qualification.json \
+            control-center-0.32.1.provenance.json \
+            control-center-0.32.1.release-manifest.json \
             SHA256SUMS; do
             test -s "dist/public-stable-evidence/$name" || { echo "qualification asset missing: $name" >&2; exit 66; }
           done
@@ -220,17 +220,17 @@ jobs:
           import json, pathlib, sys
           sha=sys.argv[1]
           root=pathlib.Path('dist/public-stable-evidence')
-          q=json.loads((root/'control-center-0.32.0.qualification.json').read_text(encoding='utf-8'))
-          m=json.loads((root/'control-center-0.32.0.release-manifest.json').read_text(encoding='utf-8'))
-          p=json.loads((root/'control-center-0.32.0.provenance.json').read_text(encoding='utf-8'))
+          q=json.loads((root/'control-center-0.32.1.qualification.json').read_text(encoding='utf-8'))
+          m=json.loads((root/'control-center-0.32.1.release-manifest.json').read_text(encoding='utf-8'))
+          p=json.loads((root/'control-center-0.32.1.provenance.json').read_text(encoding='utf-8'))
           if q.get('schema')!='control-center.candidate-qualification.v2' or q.get('status')!='PASS': raise SystemExit('QUALIFICATION_NOT_PASS')
-          if q.get('candidate_version')!='0.32.0' or q.get('candidate_sha')!=sha: raise SystemExit('QUALIFICATION_IDENTITY_MISMATCH')
+          if q.get('candidate_version')!='0.32.1' or q.get('candidate_sha')!=sha: raise SystemExit('QUALIFICATION_IDENTITY_MISMATCH')
           if q.get('stable_base',{}).get('version')!='0.31.1': raise SystemExit('QUALIFICATION_STABLE_BASE_MISMATCH')
           if q.get('publication_authority') is not False: raise SystemExit('QUALIFICATION_AUTHORITY_INVALID')
           if any(value!='PASS' for value in q.get('gates',{}).values()): raise SystemExit('QUALIFICATION_GATE_NOT_PASS')
-          if m.get('version')!='0.32.0' or m.get('revision')!=sha or m.get('status')!='qualified-not-yet-published': raise SystemExit('RELEASE_MANIFEST_IDENTITY_MISMATCH')
+          if m.get('version')!='0.32.1' or m.get('revision')!=sha or m.get('status')!='qualified-not-yet-published': raise SystemExit('RELEASE_MANIFEST_IDENTITY_MISMATCH')
           if m.get('publication_authority') is not False: raise SystemExit('RELEASE_MANIFEST_AUTHORITY_INVALID')
-          if p.get('candidate_version')!='0.32.0' or p.get('candidate_sha')!=sha: raise SystemExit('PROVENANCE_IDENTITY_MISMATCH')
+          if p.get('candidate_version')!='0.32.1' or p.get('candidate_sha')!=sha: raise SystemExit('PROVENANCE_IDENTITY_MISMATCH')
           if p.get('publication_authority') is not False: raise SystemExit('PROVENANCE_AUTHORITY_INVALID')
           run_id=q.get('public_ci',{}).get('run_id')
           if not isinstance(run_id,int) or run_id < 1: raise SystemExit('PUBLIC_CI_EVIDENCE_MISSING')
@@ -279,7 +279,7 @@ jobs:
             --notes-file "$RELEASE_NOTES" \
             --verify-tag
 
-          if [[ "$RELEASE_VERSION" == "0.32.0" ]]; then
+          if [[ "$RELEASE_VERSION" == "0.32.1" ]]; then
             gh release upload "$RELEASE_TAG" dist/public-stable-evidence/* --repo "$GITHUB_REPOSITORY"
             echo "QUALIFIED_SOURCE_RELEASE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "Stable promotion remains a separate required step; this development-repository release is not Public Stable." | tee -a "$GITHUB_STEP_SUMMARY"
