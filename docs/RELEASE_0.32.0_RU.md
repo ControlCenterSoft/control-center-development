@@ -1,10 +1,10 @@
 # Control Center 0.32.0 — Operational Intelligence / Incident Inbox
 
-Status: development
+Status: official release
 
 Authoritative Public Stable baseline: **Control Center v0.31.1**.
 
-0.32.0 — текущая линия разработки после Public Stable v0.31.1. Этот документ фиксирует release identity и границу состава версии, но сам по себе не разрешает публикацию тега, GitHub Release или перенос в Public Stable.
+0.32.0 — следующая официально авторизованная линия после Public Stable v0.31.1. Этот документ разрешает выпуск только для точного итогового SHA, который после данного изменения заново прошёл все обязательные проверки и 0.32-specific exact-SHA qualification. Доказательства от более раннего SHA не являются разрешением на публикацию.
 
 ## Цель версии
 
@@ -12,11 +12,11 @@ Authoritative Public Stable baseline: **Control Center v0.31.1**.
 
 ## Release identity
 
-- development identity: `0.32.0`;
+- release identity: `0.32.0`;
 - Public Stable baseline: `v0.31.1`;
-- следующий официальный тег допускается только для точного qualified SHA;
-- `VERSION` определяет линию исходного кода, но **не является разрешением на публикацию**;
-- публикация разрешается только отдельным version-specific release gate после exact-SHA qualification.
+- официальный тег допускается только для точного qualified SHA;
+- `VERSION` определяет линию исходного кода, но **не является самостоятельным разрешением на публикацию**;
+- публикация разрешается только version-specific release gate после exact-SHA qualification того же SHA, который содержит этот статус.
 
 ## Обязательное наследование v0.31.1
 
@@ -24,20 +24,20 @@ Authoritative Public Stable baseline: **Control Center v0.31.1**.
 
 ## Текущий статус
 
-Версия находится в разработке. Официальный release и Public Stable **не разрешены** до выполнения 0.32-specific qualification.
+Release authorization для 0.32.0 объявлен, но сама публикация остаётся fail-closed. Итоговый exact SHA после слияния этого изменения обязан заново получить PASS всех обязательных Public CI jobs и отдельного 0.32 exact-SHA qualification gate. Только этот новый PASS может создать неизменяемый source release/tag и открыть последующий перенос в Public Stable.
 
-Минимальные блокирующие условия перед переводом этого документа в `Status: official release`:
+Обязательные условия выпуска:
 
-- все обязательные Public CI jobs для точного итогового SHA должны быть PASS;
-- должен существовать отдельный 0.32 candidate/package gate, не переиспользующий immutable evidence 0.31;
-- clean install, upgrade именно с Public Stable v0.31.1, restart/reconnect и rollback/forward recovery должны быть доказаны;
-- PostgreSQL qualification, race tests, security/privacy и public-repository safety должны быть PASS;
-- release artifacts, checksums, SBOM/provenance/manifest и их exact-SHA binding должны быть проверены;
-- не должно быть false Success, stale/mismatched approval/Job/result/recovery evidence или обхода RBAC/Change/Approval/Job boundaries;
-- release notes и version identity должны описывать один и тот же exact release candidate.
+- все обязательные Public CI jobs для точного итогового SHA — PASS;
+- отдельный 0.32 candidate/package gate — PASS и не переиспользует immutable evidence 0.31;
+- clean install, upgrade именно с Public Stable v0.31.1, restart/reconnect и rollback/forward recovery доказаны;
+- PostgreSQL qualification, race tests, security/privacy и public-repository safety — PASS;
+- release artifacts, checksums, SBOM/provenance/manifest связаны с тем же exact SHA и проверены;
+- отсутствуют false Success, stale/mismatched approval/Job/result/recovery evidence и обход RBAC/Change/Approval/Job boundaries;
+- release notes, `VERSION`, source tag, qualification evidence и release artifacts описывают один exact release candidate.
 
 ## Правило публикации
 
-Пока статус этого документа не равен точному `Status: official release`, release publisher обязан завершаться как явный development/no-publish результат: без создания или перемещения тега, без создания GitHub Release и без promotion в Stable.
+`Status: official release` является только release authorization. Он не заменяет техническую квалификацию и не разрешает публикацию при отсутствии exact-SHA PASS.
 
-Даже после перевода статуса в `official release` публикация 0.32.0 должна fail-closed, если отдельный 0.32 release gate ещё не реализован или его exact-SHA evidence не подтверждён.
+Publisher обязан fail-closed, если запускается от одного Public CI без завершённого 0.32 qualification gate, если evidence относится к другому SHA, если Stable baseline отличается от v0.31.1 или если обнаружен любой release drift. После source release следующий этап — отдельный PR-based promotion в `control-center-stable`; Public Stable считается выпущенным только после успешной проверки уже перенесённого Stable revision.
