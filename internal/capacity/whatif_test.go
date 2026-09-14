@@ -57,6 +57,33 @@ func TestWhatIfSetIsDeterministicAndPrefersFailureReserve(t *testing.T) {
 	}
 }
 
+func TestWhatIfSetDoesNotPromoteLowConfidenceScenario(t *testing.T) {
+	request := AssessmentRequest{
+		ScopeID:          "site-a",
+		RequiredRole:     corecontracts.RoleWorkerNode,
+		WorkloadUnit:     WorkloadDevices,
+		ExpectedWorkload: 10,
+	}
+	node := projection("node-a", 100, 10, 50)
+	node.Confidence = Confidence{Level: ConfidenceLow, Score: .4}
+
+	set, err := BuildWhatIfSet(request, []NodeProjection{node}, []WhatIfScenario{
+		{ScenarioID: "growth", ExpectedWorkload: 20},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Scenarios) != 1 || !set.Scenarios[0].Assessment.Safe {
+		t.Fatalf("expected numerically safe scenario to remain visible: %#v", set)
+	}
+	if set.Scenarios[0].Assessment.Action != ActionCollectEvidence {
+		t.Fatalf("expected low-confidence scenario to require evidence: %#v", set.Scenarios[0].Assessment)
+	}
+	if set.BestSafeScenarioID != "" {
+		t.Fatalf("low-confidence scenario must not be promoted as best safe, got %q", set.BestSafeScenarioID)
+	}
+}
+
 func TestWhatIfSetRejectsDuplicateScenarioIDs(t *testing.T) {
 	request := AssessmentRequest{ScopeID: "site-a", RequiredRole: corecontracts.RoleWorkerNode, WorkloadUnit: WorkloadDevices, ExpectedWorkload: 10}
 	_, err := BuildWhatIfSet(request, []NodeProjection{projection("node-a", 100, 10, 50)}, []WhatIfScenario{
