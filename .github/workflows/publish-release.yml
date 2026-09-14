@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - Public CI
+      - Qualify Control Center 0.32 exact SHA
     types:
       - completed
     branches:
@@ -108,19 +109,24 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
         run: |
           set -euo pipefail
           case "$RELEASE_VERSION" in
             0.31.0)
+              [[ "$TRIGGER_WORKFLOW" == "Public CI" ]] || { echo '0.31 publication requires its historical Public CI trigger' >&2; exit 53; }
               echo 'RELEASE_GATE=legacy-0.31'
               ;;
             0.32.0)
-              echo 'Control Center 0.32.0 is marked official but the dedicated 0.32 exact-SHA package/qualification gate is not yet wired; refusing publication.' >&2
-              exit 1
+              [[ "$TRIGGER_WORKFLOW" == "Qualify Control Center 0.32 exact SHA" ]] || {
+                echo 'RELEASE_STALLED: Control Center 0.32.0 requires the dedicated exact-SHA qualification workflow; Public CI alone is not publication authority.' >&2
+                exit 53
+              }
+              echo 'RELEASE_GATE=exact-sha-0.32'
               ;;
             *)
               echo "Automatic publication gate is not defined for Control Center ${RELEASE_VERSION}; refusing publication" >&2
-              exit 1
+              exit 53
               ;;
           esac
 
@@ -182,7 +188,67 @@ jobs:
           GO
           go run "$validator_dir/main.go" dist/public-stable-evidence/control-center-0.31.0.readiness.json
 
-      - name: Publish exact qualified release
+      - name: Download and verify exact 0.32 qualification evidence
+        if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true' && steps.release.outputs.version == '0.32.0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p dist/public-stable-evidence
+          gh run download "$TRIGGER_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "control-center-0.32.0-release-evidence-${RELEASE_SHA}" \
+            --dir dist/public-stable-evidence
+          for name in \
+            control-center-0.32.0-linux-amd64.tar.gz \
+            control-center-0.32.0-linux-amd64.tar.gz.sha256 \
+            control-center-0.32.0-source.tar.gz \
+            control-center-0.32.0.sbom.cdx.json \
+            THIRD_PARTY_NOTICES.md \
+            control-center-0.32.0.qualification.json \
+            control-center-0.32.0.provenance.json \
+            control-center-0.32.0.release-manifest.json \
+            SHA256SUMS; do
+            test -s "dist/public-stable-evidence/$name" || { echo "qualification asset missing: $name" >&2; exit 66; }
+          done
+          (cd dist/public-stable-evidence && sha256sum -c SHA256SUMS)
+          public_ci_run_id="$(python3 - "$RELEASE_SHA" <<'PY'
+          import json, pathlib, sys
+          sha=sys.argv[1]
+          root=pathlib.Path('dist/public-stable-evidence')
+          q=json.loads((root/'control-center-0.32.0.qualification.json').read_text(encoding='utf-8'))
+          m=json.loads((root/'control-center-0.32.0.release-manifest.json').read_text(encoding='utf-8'))
+          p=json.loads((root/'control-center-0.32.0.provenance.json').read_text(encoding='utf-8'))
+          if q.get('schema')!='control-center.candidate-qualification.v2' or q.get('status')!='PASS': raise SystemExit('QUALIFICATION_NOT_PASS')
+          if q.get('candidate_version')!='0.32.0' or q.get('candidate_sha')!=sha: raise SystemExit('QUALIFICATION_IDENTITY_MISMATCH')
+          if q.get('stable_base',{}).get('version')!='0.31.1': raise SystemExit('QUALIFICATION_STABLE_BASE_MISMATCH')
+          if q.get('publication_authority') is not False: raise SystemExit('QUALIFICATION_AUTHORITY_INVALID')
+          if any(value!='PASS' for value in q.get('gates',{}).values()): raise SystemExit('QUALIFICATION_GATE_NOT_PASS')
+          if m.get('version')!='0.32.0' or m.get('revision')!=sha or m.get('status')!='qualified-not-yet-published': raise SystemExit('RELEASE_MANIFEST_IDENTITY_MISMATCH')
+          if m.get('publication_authority') is not False: raise SystemExit('RELEASE_MANIFEST_AUTHORITY_INVALID')
+          if p.get('candidate_version')!='0.32.0' or p.get('candidate_sha')!=sha: raise SystemExit('PROVENANCE_IDENTITY_MISMATCH')
+          if p.get('publication_authority') is not False: raise SystemExit('PROVENANCE_AUTHORITY_INVALID')
+          run_id=q.get('public_ci',{}).get('run_id')
+          if not isinstance(run_id,int) or run_id < 1: raise SystemExit('PUBLIC_CI_EVIDENCE_MISSING')
+          if q.get('public_ci',{}).get('candidate_sha')!=sha or q.get('public_ci',{}).get('status')!='PASS': raise SystemExit('PUBLIC_CI_EVIDENCE_IDENTITY_MISMATCH')
+          print(run_id)
+          PY
+          )"
+          public_ci_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${public_ci_run_id}")"
+          python3 - "$RELEASE_SHA" "$public_ci_json" <<'PY'
+          import json,sys
+          sha,raw=sys.argv[1:]
+          run=json.loads(raw)
+          if run.get('name')!='Public CI' or run.get('head_sha')!=sha or run.get('conclusion')!='success':
+              raise SystemExit('PUBLIC_CI_RUN_NOT_EXACT_PASS')
+          print(f"CC_032_EXACT_SHA_PUBLIC_CI=PASS run_id={run['id']} sha={sha}")
+          PY
+
+      - name: Publish exact qualified source release
         if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published != 'true'
         shell: bash
         env:
@@ -192,7 +258,7 @@ jobs:
           RELEASE_NOTES: ${{ steps.release.outputs.notes }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           tag_sha=""
           if existing_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha' 2>/dev/null)"; then
             tag_sha="$existing_tag_sha"
@@ -213,7 +279,13 @@ jobs:
             --notes-file "$RELEASE_NOTES" \
             --verify-tag
 
-          echo "RELEASE_STATE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$RELEASE_VERSION" == "0.32.0" ]]; then
+            gh release upload "$RELEASE_TAG" dist/public-stable-evidence/* --repo "$GITHUB_REPOSITORY"
+            echo "QUALIFIED_SOURCE_RELEASE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Stable promotion remains a separate required step; this development-repository release is not Public Stable." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "RELEASE_STATE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Report existing official release state
         if: steps.release.outputs.publishable == 'true' && steps.existing.outputs.published == 'true'
