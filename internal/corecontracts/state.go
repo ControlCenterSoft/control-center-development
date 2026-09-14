@@ -169,9 +169,66 @@ func validateJSONObject(field string, value json.RawMessage) error {
 	if trimmed[0] != '{' {
 		return fmt.Errorf("%s must be a JSON object", field)
 	}
+	if err := rejectDuplicateJSONKeys(trimmed); err != nil {
+		return fmt.Errorf("%s must use unique JSON object keys: %v", field, err)
+	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(trimmed, &object); err != nil || object == nil {
 		return fmt.Errorf("%s must be a non-null JSON object", field)
+	}
+	return nil
+}
+
+func rejectDuplicateJSONKeys(value []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	return scanUniqueJSONValue(decoder)
+}
+
+func scanUniqueJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delimiter, composite := token.(json.Delim)
+	if !composite {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		seen := make(map[string]struct{})
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return fmt.Errorf("object key is not a string")
+			}
+			if _, duplicate := seen[key]; duplicate {
+				return fmt.Errorf("duplicate JSON key %q", key)
+			}
+			seen[key] = struct{}{}
+			if err := scanUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim('}') {
+			return fmt.Errorf("invalid JSON object")
+		}
+	case '[':
+		for decoder.More() {
+			if err := scanUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		closing, err := decoder.Token()
+		if err != nil || closing != json.Delim(']') {
+			return fmt.Errorf("invalid JSON array")
+		}
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
 	}
 	return nil
 }
