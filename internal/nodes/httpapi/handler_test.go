@@ -35,6 +35,21 @@ func TestEnrollmentPlanHandlerRejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestEnrollmentPlanHandlerRejectsDuplicateJSONField(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/nodes/enrollment/plan", strings.NewReader(`{"nodeId":"node-1","nodeId":"node-2","displayName":"Node 1","osFamily":"linux","architecture":"amd64"}`))
+	rec := httptest.NewRecorder()
+	New().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestValidateUniqueJSONFieldsRejectsNestedDuplicate(t *testing.T) {
+	if err := validateUniqueJSONFields([]byte(`{"outer":{"value":1,"value":2}}`)); err == nil {
+		t.Fatal("nested duplicate JSON field accepted")
+	}
+}
+
 func TestEnrollmentPlanHandlerRejectsGET(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/nodes/enrollment/plan", nil)
 	rec := httptest.NewRecorder()
