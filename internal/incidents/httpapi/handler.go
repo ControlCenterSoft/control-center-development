@@ -348,6 +348,11 @@ func parseListQuery(r *http.Request) (incidents.ListQuery, error) {
 			return incidents.ListQuery{}, fmt.Errorf("unsupported query parameter %q", key)
 		}
 	}
+	for _, key := range []string{"limit", "scope_id", "resource_kind", "resource_id", "started_from", "started_before", "before_started_at", "before_object_id"} {
+		if len(values[key]) > 1 {
+			return incidents.ListQuery{}, fmt.Errorf("query parameter %q must appear at most once", key)
+		}
+	}
 	query := incidents.ListQuery{}
 	if value := values.Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
