@@ -136,3 +136,19 @@ func TestUnknownQueryIsRejected(t *testing.T) {
 		t.Fatalf("status = %d, want 400", recorder.Code)
 	}
 }
+func TestRepeatedResourceQueryIsRejected(t *testing.T) {
+	handler := testHandler(t)
+	for _, path := range []string{
+		"/api/v1/resources?organization_id=org-1&organization_id=org-2",
+		"/api/v1/resources?kind=node&kind=service",
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("GET %s status = %d, want 400; body=%s", path, recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), `"code":"INVALID_QUERY"`) {
+			t.Fatalf("GET %s body = %s, want INVALID_QUERY", path, recorder.Body.String())
+		}
+	}
+}
