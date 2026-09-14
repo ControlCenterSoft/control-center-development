@@ -90,3 +90,32 @@ func TestPlacementAdviceRequestsEvidenceForLowConfidenceCandidates(t *testing.T)
 		t.Fatalf("low-confidence candidate was not held: %#v", advice)
 	}
 }
+
+func TestPlacementAdviceDoesNotRecommendWhenFleetEvidenceIsLowConfidence(t *testing.T) {
+	request := PlacementRequest{
+		ScopeID:                   "site-a",
+		RequiredRole:              corecontracts.RoleWorkerNode,
+		WorkloadUnit:              WorkloadDevices,
+		IncrementalWorkload:       10,
+		MinimumNodeReservePercent: 10,
+	}
+	nodes := []NodeProjection{
+		projection("node-a", 100, 10, 50),
+		projection("node-b", 100, 10, 50),
+	}
+	nodes[1].Confidence = Confidence{Level: ConfidenceLow, Score: .4}
+
+	advice, err := BuildPlacementAdvice(request, nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !advice.FleetAssessment.Safe || advice.FleetAssessment.Action != ActionCollectEvidence {
+		t.Fatalf("expected numerically safe fleet to require evidence: %#v", advice.FleetAssessment)
+	}
+	if len(advice.Candidates) != 2 || !advice.Candidates[0].Eligible || advice.Candidates[0].NodeID != "node-a" {
+		t.Fatalf("expected high-confidence candidate to remain visible and ranked first: %#v", advice.Candidates)
+	}
+	if advice.RecommendedNodeID != "" || advice.Action != ActionCollectEvidence {
+		t.Fatalf("low-confidence fleet evidence must block placement recommendation: %#v", advice)
+	}
+}
