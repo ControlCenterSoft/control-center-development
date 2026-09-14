@@ -84,6 +84,21 @@ func TestIncidentHTTPRejectsUnknownListQueryBeforeService(t *testing.T) {
 	}
 }
 
+func TestIncidentHTTPRejectsDuplicateSingletonListQueryBeforeService(t *testing.T) {
+	service := &serviceStub{}
+	handler := New(service, fixedActor("user:operator"))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/incidents?scope_id=site:primary&scope_id=site:secondary", nil)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	if service.listCalls != 0 {
+		t.Fatalf("ambiguous query reached service %d times", service.listCalls)
+	}
+}
+
 func TestIncidentHTTPRejectsClientActorField(t *testing.T) {
 	service := &serviceStub{}
 	handler := New(service, fixedActor("user:operator"))
