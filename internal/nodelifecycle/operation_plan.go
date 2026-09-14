@@ -92,7 +92,7 @@ func BuildOperationPlan(current NodeLifecycle, request OperationPlanRequest) (Op
 		steps = []OperationPlanStep{
 			{Order: 1, Action: "scheduler.disable", RequiredEvidence: []EvidenceCheck{CheckMaintenancePreflightPassed}},
 			{Order: 2, Action: "lifecycle.enter-draining", RequiredEvidence: []EvidenceCheck{CheckMaintenancePreflightPassed, CheckSchedulingDisabled}},
-			{Order: 3, Action: "placements.evacuate"},
+			{Order: 3, Action: "placements.evacuate", RequiredEvidence: []EvidenceCheck{CheckSchedulingDisabled, CheckStatefulWorkloadsSafe}},
 			{Order: 4, Action: "lifecycle.enter-maintenance", RequiredEvidence: drainChecks()},
 		}
 	case OperationReplace:
@@ -111,7 +111,7 @@ func BuildOperationPlan(current NodeLifecycle, request OperationPlanRequest) (Op
 			{Order: 1, Action: "replacement.verify-ready", RequiredEvidence: []EvidenceCheck{CheckOperationApproved}},
 			{Order: 2, Action: "state.synchronize", RequiredEvidence: []EvidenceCheck{CheckReplacementNodeReady}},
 			{Order: 3, Action: "lifecycle.enter-replacing", RequiredEvidence: []EvidenceCheck{CheckOperationApproved, CheckReplacementNodeReady, CheckStateSynchronized}},
-			{Order: 4, Action: "placements.switchover", RequiredEvidence: []EvidenceCheck{CheckStateSynchronized}},
+			{Order: 4, Action: "placements.switchover", RequiredEvidence: []EvidenceCheck{CheckReplacementNodeReady, CheckStateSynchronized, CheckStatefulWorkloadsSafe}},
 			{Order: 5, Action: "replacement.verify-health", RequiredEvidence: []EvidenceCheck{CheckSwitchoverVerified}},
 			{Order: 6, Action: "lifecycle.retire-replaced-node", RequiredEvidence: []EvidenceCheck{CheckReplacementNodeReady, CheckStateSynchronized, CheckSwitchoverVerified, CheckReplacementHealthVerified}},
 		}

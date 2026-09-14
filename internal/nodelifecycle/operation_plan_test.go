@@ -30,6 +30,11 @@ func TestBuildDrainOperationPlanIsSafeAndDeterministic(t *testing.T) {
 	if plan.LifecycleMutation || plan.PlacementMutation || plan.HostMutation {
 		t.Fatalf("planner has effects: %#v", plan)
 	}
+	if got := plan.Steps[2].RequiredEvidence; !reflect.DeepEqual(got, []EvidenceCheck{
+		CheckSchedulingDisabled, CheckStatefulWorkloadsSafe,
+	}) {
+		t.Fatalf("placement evacuation evidence = %#v", got)
+	}
 	if !reflect.DeepEqual(request.Placements, original) {
 		t.Fatal("planner mutated caller placements")
 	}
@@ -60,6 +65,11 @@ func TestBuildReplaceOperationPlanRequiresCompletedDrainAndSafeStatefulMove(t *t
 	}
 	if plan.ReplacementNodeID != "node-2" || len(plan.Steps) != 6 {
 		t.Fatalf("unexpected replace plan: %#v", plan)
+	}
+	if got := plan.Steps[3].RequiredEvidence; !reflect.DeepEqual(got, []EvidenceCheck{
+		CheckReplacementNodeReady, CheckStateSynchronized, CheckStatefulWorkloadsSafe,
+	}) {
+		t.Fatalf("placement switchover evidence = %#v", got)
 	}
 	if got := plan.Steps[len(plan.Steps)-1].RequiredEvidence; !reflect.DeepEqual(got, []EvidenceCheck{
 		CheckReplacementNodeReady, CheckStateSynchronized, CheckSwitchoverVerified, CheckReplacementHealthVerified,
