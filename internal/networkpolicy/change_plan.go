@@ -302,16 +302,21 @@ func canonicalProbes(input []ConnectivityProbe, interfaces map[string]InterfaceI
 
 func validateProbeCoverage(interfaces []InterfaceIntent, probes []ConnectivityProbe) error {
 	covered := make(map[string]bool, len(interfaces))
+	controlPlaneCovered := make(map[string]bool, len(interfaces))
 	managementPath := false
 	for _, probe := range probes {
 		covered[probe.InterfaceID] = true
 		if probe.Kind == ProbeControlPlane && (probe.Zone == ZoneManagement || probe.Zone == ZoneLAN) {
+			controlPlaneCovered[probe.InterfaceID] = true
 			managementPath = true
 		}
 	}
 	for _, networkInterface := range interfaces {
 		if networkInterface.Changed && !covered[networkInterface.InterfaceID] {
 			return fmt.Errorf("%w: changed interface %q has no connectivity probe", ErrInvalidChangePlan, networkInterface.InterfaceID)
+		}
+		if networkInterface.Changed && networkInterface.Zone == ZoneManagement && !controlPlaneCovered[networkInterface.InterfaceID] {
+			return fmt.Errorf("%w: changed management interface %q requires a control_plane probe", ErrInvalidChangePlan, networkInterface.InterfaceID)
 		}
 	}
 	if !managementPath {
