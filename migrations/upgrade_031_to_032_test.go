@@ -85,16 +85,64 @@ VALUES ('stable-031-job',7,'failed','failed',1,$1)`, at.Add(-30*time.Second)); e
 	assertCurrentSchema(t, ctx, database.db)
 	assertStable031State(t, ctx, database, adminID, true)
 
+	insert032IncidentFixture(t, ctx, database, at)
+	assert032IncidentRows(t, ctx, database, 1, 1)
+
+	// Re-applying the additive 0.32 migration must be idempotent and must not
+	// silently discard already-persisted 0.32 read-model state.
 	applyMigrations(t, ctx, database.db, []string{"0013_incident_read_models.up.sql"})
 	assertStable031State(t, ctx, database, adminID, true)
+	assert032IncidentRows(t, ctx, database, 1, 1)
 
+	// Rollback must remove only the 0.32 read models while preserving the
+	// administrator-selected password and all Stable 0.31 durable Job state.
 	applyMigrations(t, ctx, database.db, []string{"0013_incident_read_models.down.sql"})
 	assertStable031State(t, ctx, database, adminID, false)
 
+	// Forward recovery after rollback must recreate empty 0.32 read models;
+	// rolled-back Incident state must not reappear from stale persistence.
 	applyMigrations(t, ctx, database.db, []string{"0013_incident_read_models.up.sql"})
+	assertCurrentSchema(t, ctx, database.db)
+	assertStable031State(t, ctx, database, adminID, true)
+	assert032IncidentRows(t, ctx, database, 0, 0)
+
 	database.restart(t, ctx)
 	assertCurrentSchema(t, ctx, database.db)
 	assertStable031State(t, ctx, database, adminID, true)
+	assert032IncidentRows(t, ctx, database, 0, 0)
+}
+
+func insert032IncidentFixture(t *testing.T, ctx context.Context, database *disposablePostgres, at time.Time) {
+	t.Helper()
+	if _, err := database.db.ExecContext(ctx, `INSERT INTO cc_incident_read_models
+(object_id,scope_id,owner_scope,generation,resource_version,severity,status,title,started_at,last_observed_at,document,created_at,updated_at)
+VALUES ('incident-upgrade-032','global','global',1,'incident-rv-032','warning','open','Upgrade rollback fixture',$1,$2,'{"source":"upgrade-qualification"}',$1,$2)`,
+		at.Add(time.Second), at.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.db.ExecContext(ctx, `INSERT INTO cc_incident_affected_resources
+(incident_id,resource_kind,resource_id,scope_id)
+VALUES ('incident-upgrade-032','node','node-stable-031','global')`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assert032IncidentRows(t *testing.T, ctx context.Context, database *disposablePostgres, wantIncidents, wantAffected int) {
+	t.Helper()
+	var incidents int
+	if err := database.db.QueryRowContext(ctx, `SELECT count(*) FROM cc_incident_read_models`).Scan(&incidents); err != nil {
+		t.Fatal(err)
+	}
+	if incidents != wantIncidents {
+		t.Fatalf("0.32 incident row count=%d want=%d", incidents, wantIncidents)
+	}
+	var affected int
+	if err := database.db.QueryRowContext(ctx, `SELECT count(*) FROM cc_incident_affected_resources`).Scan(&affected); err != nil {
+		t.Fatal(err)
+	}
+	if affected != wantAffected {
+		t.Fatalf("0.32 affected-resource row count=%d want=%d", affected, wantAffected)
+	}
 }
 
 func assertStable031State(t *testing.T, ctx context.Context, database *disposablePostgres, adminID string, want032 bool) {
