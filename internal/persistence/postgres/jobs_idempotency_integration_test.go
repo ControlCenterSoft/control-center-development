@@ -97,8 +97,17 @@ func TestPostgresJobCreateIdempotencyBindsRetryBudget(t *testing.T) {
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
-		if _, err := repository.RequestCancel(cleanupCtx, created.ID, time.Now().UTC()); err != nil {
-			t.Errorf("cancel idempotency test job: %v", err)
+		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM cc_jobs WHERE id=$1`, created.ID); err != nil {
+			t.Errorf("delete idempotency test job: %v", err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM cc_idempotency_keys WHERE scope='change' AND key=$1`, persistedChange.IdempotencyKey); err != nil {
+			t.Errorf("delete idempotency test change key: %v", err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM cc_changes WHERE id=$1`, changeID); err != nil {
+			t.Errorf("delete idempotency test change: %v", err)
+		}
+		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM cc_policy_decisions WHERE id=$1`, "decision-"+changeID); err != nil {
+			t.Errorf("delete idempotency test policy decision: %v", err)
 		}
 	})
 
