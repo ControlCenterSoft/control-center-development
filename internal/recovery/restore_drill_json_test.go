@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,30 +13,39 @@ func TestRestoreDrillTransitionRequestJSONRejectsDuplicateFields(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
+		want string
 	}{
 		{
 			name: "duplicate transition state",
 			raw:  `{"to":"RUNNING","to":"FAILED","precondition":{"object_id":"restore-001","resource_version":"rv:1"},"occurred_at":"2026-09-15T00:00:00Z"}`,
+			want: `duplicate field "to"`,
 		},
 		{
 			name: "duplicate nested precondition resource version",
 			raw:  `{"to":"RUNNING","precondition":{"object_id":"restore-001","resource_version":"rv:1","resource_version":"rv:2"},"occurred_at":"2026-09-15T00:00:00Z"}`,
+			want: `duplicate field "resource_version"`,
 		},
 		{
 			name: "duplicate evidence identity",
 			raw:  `{"to":"SUCCEEDED","precondition":{"object_id":"restore-001","resource_version":"rv:1"},"occurred_at":"2026-09-15T00:00:00Z","verification_evidence":[{"id":"evidence-1","id":"evidence-2"}]}`,
+			want: `duplicate field "id"`,
 		},
 		{
 			name: "multiple top-level documents",
 			raw:  `{"to":"RUNNING"} {"to":"FAILED"}`,
+			want: "multiple JSON values are not allowed",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var request RestoreDrillTransitionRequest
-			if err := json.Unmarshal([]byte(test.raw), &request); !errors.Is(err, ErrInvalidRestoreDrillTransition) {
+			err := json.Unmarshal([]byte(test.raw), &request)
+			if !errors.Is(err, ErrInvalidRestoreDrillTransition) {
 				t.Fatalf("error = %v, want ErrInvalidRestoreDrillTransition", err)
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want detail %q", err, test.want)
 			}
 		})
 	}
