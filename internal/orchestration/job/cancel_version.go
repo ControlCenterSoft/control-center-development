@@ -17,6 +17,9 @@ func (r *MemoryRepository) RequestCancelIfVersion(ctx context.Context, id string
 	if expectedVersion == 0 {
 		return Job{}, errors.New("expected job version is required")
 	}
+	if now.IsZero() {
+		return Job{}, errors.New("cancellation time is required")
+	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
