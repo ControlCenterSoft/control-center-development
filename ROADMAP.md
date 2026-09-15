@@ -1,14 +1,24 @@
 # Control Center — продуктовая дорожная карта и критерии готовности
 
-Статус: **CURRENT / SOURCE OF TRUTH FOR DEVELOPMENT SEQUENCE**
+Статус: **CURRENT / SOURCE OF TRUTH FOR DEVELOPMENT SEQUENCE**  
+Синхронизация: **CC-RM-1.26**  
+Дата: **15.09.2026**
+
+**ROADMAP ИЗМЕНЁН — CC-RM-1.26.** Версии Market не перенумерованы. Устранён конфликт между ранней 0.43-разработкой, правилом `Public Stable +2` и зависимостью provider-модулей от Market foundation.
 
 ## 1. Текущий релизный статус
 
-Текущий опубликованный Public Stable — **0.31.1**. Это corrective patch без расширения feature scope: он исправляет package/install boundary опубликованного 0.31.0 и восстанавливает обязательное наличие исполняемого `scripts/migrate.sh` в Linux AMD64 package. Подтверждены clean install и поддерживаемые переходы `0.30.0 → 0.31.1` и `0.31.0 → 0.31.1`. Immutable tag/release/assets 0.31.0 не переписываются и остаются исторической release identity.
+Текущий опубликованный Public Stable — **0.31.1**. Corrective patch исправляет package/install boundary 0.31.0 без расширения feature scope. Immutable release identities 0.31.0/0.31.1 не переписываются.
 
-Линия **0.32.0** — текущая ближайшая COMMITTED development line: Health / Incidents / Audit / Reports. Наличие merged code или contracts не означает Public Stable до прохождения собственного release cycle.
+Ближайшая линия — **0.32.0 Health / Incidents / Audit / Reports**. Вторая разрешённая линия — **0.33.0 Identity / RBAC / Session / Security Settings UI**.
 
-Архитектура **0.43.0** заморожена, но runtime-разработка находится в **CODE HOLD до Public Stable ≥ 0.41.x**. Ранее созданные 0.43 commits/PR/issues сохраняются как историческая трассировка ранней foundation-работы и не дают разрешения расширять код вне текущего окна Stable+2.
+### Динамическое окно разработки
+
+Product code и feature-scope могут продвигаться не более чем на **два последовательных feature-релиза после текущего Public Stable**.
+
+При Stable 0.31.1 разрешённое окно — **0.32–0.33**. 0.34+ до продвижения Stable допускают roadmap/design/preparation, но не новый product runtime code, runner qualification или release promotion.
+
+Ближайший релиз N+1 всегда приоритетнее N+2.
 
 ## 2. Неизменяемые правила
 
@@ -26,21 +36,24 @@
 - HA без failure/recovery qualification не считается поддержанным;
 - released SQL migrations immutable byte-for-byte;
 - stateful workload перемещается только через provider-specific migration/recovery semantics;
-- feature/runtime-код может продвигаться не более чем на два последовательных feature-релиза после фактически опубликованного Public Stable; дальние requirements/architecture/contracts/test plans разрешены, но не повышают capability до IMPLEMENTED/VERIFIED.
+- чистая установка создаёт `admin/admin`, первый вход требует обязательной смены пароля, update не сбрасывает пользовательский пароль.
 
-При Public Stable **0.31.1** текущее кодовое окно — **0.32.0–0.33.0**.
+## 3. WIP, CODE_ONLY и RUNNER_ONLY
 
-## 3. Аутентификация после чистой установки
+Перед началом работы проверяются active/queued jobs/runs, PR, ветки, issues и exact SHA. Уже выполняемая или завершённая работа не дублируется и не отменяется.
 
-Чистая установка создаёт локального пользователя `admin` с первоначальным паролем `admin`. Первый вход обязательно требует смены пароля; до смены обычная работа запрещена. Обновление сохраняет установленный пользователем пароль и никогда не сбрасывает его обратно к `admin/admin`.
+- `CODE_ONLY` готовит изменения и exact-SHA handoff, но не запускает runner qualification/release.
+- `RUNNER_ONLY` принимает зарегистрированный exact SHA и выполняет только применимые проверки/integration/release stages.
+- неизменённый SHA повторно не проверяется без подтверждённой flaky/infrastructure причины;
+- недоступность или необновлённость действующего тестового сервера не блокирует разработку и выпуск; обязательные system/install/upgrade/rollback/recovery/security/HA проверки выполняются в воспроизводимом изолированном контуре.
 
-## 4. Ближайшая линия 0.32–0.42
+## 4. Release train 0.32–0.42
 
 - **0.32.0 — COMMITTED.** Health / Incidents / Audit / Reports.
-- **0.33.0 — PLANNED.** Identity / RBAC / Session / Security Settings UI.
+- **0.33.0 — COMMITTED.** Identity / RBAC / Session / Security Settings UI.
 - **0.34.0 — PLANNED.** Managed Network Planning UI.
 - **0.35.0 — PLANNED.** Managed Network Apply / Verify / Rollback.
-- **0.36.0 — PLANNED.** Node/Agent Enrollment, Trust и Support Gateway / Support Bundle Server.
+- **0.36.0 — PLANNED.** Node/Agent Enrollment, Trust, Support Gateway / Support Bundle Server.
 - **0.37.0 — PLANNED.** Maintenance / Drain / Replacement / Decommission.
 - **0.38.0 — PLANNED.** Role Placement + Capacity integration.
 - **0.39.0 — PLANNED.** Recovery Points / Backup Repository foundation.
@@ -48,60 +61,37 @@
 - **0.41.0 — PLANNED.** Controller Membership / Quorum / DCS.
 - **0.42.0 — PLANNED.** HA / Controlled Switchover / Failover.
 
-Recovery foundation предшествует HA. Planning UI предшествует risk-bearing network execution. Node enrollment предшествует lifecycle automation.
+Planning UI предшествует risk-bearing network execution. Node enrollment предшествует lifecycle automation. Recovery foundation предшествует HA.
 
-## 5. Milestone 0.43 — Architecture Freeze / Market Platform activation
+## 5. Market foundation 0.43 — Architecture Freeze
 
-**0.43.0 — PLANNED / ARCHITECTURE FROZEN / CODE HOLD до Public Stable ≥ 0.41.x; НЕ RC / НЕ Public Stable. Managed Provider Framework + Infrastructure Solutions Foundation + Intent / Synthesis / Expansion + Market Platform v2.**
+**0.43.0 — PLANNED / ARCHITECTURE FROZEN / CODE HOLD по release horizon.**
 
-Фундаментальная архитектура 0.43 заморожена в:
+Scope: Managed Provider Framework + Infrastructure Solutions Foundation + Intent/Synthesis/Expansion + Market Platform v2.
+
+Frozen scope:
 
 - [`docs/CC-043-ARCHITECTURE-FREEZE-RU.md`](docs/CC-043-ARCHITECTURE-FREEZE-RU.md)
 - [`docs/CC-043-IMPLEMENTATION-PLAN-RU.md`](docs/CC-043-IMPLEMENTATION-PLAN-RU.md)
+- [`docs/MARKET_ACTIVATION_POLICY_RU.md`](docs/MARKET_ACTIVATION_POLICY_RU.md)
 
-До открытия кодового окна разрешён **Preparation Track**: requirements, ADR/design, manifest/schema/API/permission contracts, compatibility/support matrices, threat/failure model, test specifications, migration/rollback design и документация. Новый runtime-код 0.43, runner qualification такого кода, release artifacts и пользовательские claims будущих capabilities до открытия окна не выполняются.
+Architecture Freeze определяет **что** строить, но не разрешает реализацию вне release horizon.
 
-После публикации Public Stable **0.41.x** milestone 0.43 автоматически входит в окно Stable+2 и становится CODE_ELIGIBLE. Ранее созданная ранняя foundation-реализация должна быть перепроверена относительно актуального `main` и exact SHA; PASS между SHA не переносится.
+### Activation gates 0.43
 
-После Architecture Freeze новые foundation-domains не добавляются в scope 1.0 без явного roadmap change. После открытия admission gate реализация 0.43 должна двигаться через contracts → persistence → API → Provider Runtime → Solution Orchestrator → Product Web UI → reference qualification.
+- **Stable < 0.41:** `MARKET_PREPARATION_ONLY`; runtime code/runners/promotion запрещены.
+- **Stable >= 0.41 и < 0.42:** разрешён ограниченный `CODE_ONLY` provider-neutral foundation 0.43 как N+2, максимум **20% квоты CC**; 0.42 имеет абсолютный приоритет; release-qualification/promotion runners 0.43 не запускаются.
+- **Stable >= 0.42:** 0.43 становится N+1; разрешены полный implementation scope, отдельные runners и release qualification до 0.43 Public Stable.
 
-Frozen foundation включает:
+Ранее созданные 0.43 runtime branches/PR/issues — **FROZEN_REFERENCE**. Они не удаляются, но не расширяются/merge/qualify до открытия gate. После открытия gate изменения переносятся выборочно на актуальную release base и заново проверяются по exact SHA. Bulk merge старого задела запрещён.
 
-- Infrastructure Intent / Requirements;
-- Solution Catalog / Blueprint Library;
-- Solution Synthesis / Architecture Validator / Expansion Planner;
-- Managed Provider Framework / Provider Contract v1;
-- Bare Metal Provisioning;
-- Managed Network Fabric;
-- Storage Infrastructure;
-- IPAM / Addressing / Naming;
-- PKI / Certificate / Trust;
-- Secrets / Credentials / Service Identity;
-- Time / NTP / Clock Trust;
-- Artifact / Repository / Content Supply Chain;
-- Physical Infrastructure / Rack / Power / Failure Domains;
-- Third-Party Licensing / Entitlement / Supportability;
-- Infrastructure BOM / Procurement Readiness;
-- Commissioning / Acceptance / Handover;
-- Operational Policy / SLO / Maintenance & Change Windows;
-- Configuration Baseline / Drift / Compliance;
-- Vulnerability / Exposure / Patch Posture;
-- Asset Lifecycle / Warranty / EOL / Spares;
-- External Dependency / WAN / Internet dependencies;
-- Data Governance / Retention / Privacy;
-- Integrations / ITSM / CMDB / Notifications / Webhooks;
-- Cross-Domain Risk & Readiness;
-- Reference Architecture Qualification.
+## 6. Market modules 0.44–0.55
 
-Greenfield и Brownfield являются равноправными сценариями. Expansion поддерживает как expand-existing, так и create-new-instance/create-new-cluster в пределах certified provider capabilities.
-
-## 6. Market milestones 0.44–0.55 и admission gates
-
-- **0.44** Directory Services providers: Samba AD / FreeIPA. CODE_ELIGIBLE при Public Stable ≥ **0.42.x**.
-- **0.45** DNS / DHCP. CODE_ELIGIBLE при Public Stable ≥ **0.43.x**.
-- **0.46** PXE Deployment Windows / Linux. CODE_ELIGIBLE при Public Stable ≥ **0.44.x**.
-- **0.47** Software Automation Windows / Linux. CODE_ELIGIBLE при Public Stable ≥ **0.45.x**.
-- **0.48** IT Asset Inventory. CODE_ELIGIBLE при Public Stable ≥ **0.46.x**.
+- **0.44** Domain Services: Samba AD / FreeIPA; Microsoft AD — external connector only.
+- **0.45** DNS / DHCP.
+- **0.46** PXE Deployment Windows / Linux.
+- **0.47** Software Automation Windows / Linux.
+- **0.48** IT Asset Inventory.
 - **0.49** Software Inventory & Compliance.
 - **0.50** File Services.
 - **0.51** Monitoring provider.
@@ -110,11 +100,18 @@ Greenfield и Brownfield являются равноправными сцена�
 - **0.54** 1C:Enterprise Server.
 - **0.55** Secure Web Gateway / Corporate Proxy.
 
-Для 0.49–0.55 действует общий автоматический gate: milestone `M` получает CODE_ELIGIBLE только когда `M ≤ Public Stable + 2`. До этого разрешён только Preparation Track.
+### Dependency gate
 
-CODE HOLD, вызванный этим правилом, является плановым admission state, а не техническим blocker и не требует stop-factor уведомления. Конкретный provider не может объявлять capability, отсутствующую в его qualified Provider Contract.
+Для Market действует правило строже простого Stable+2:
 
-Порядок 0.44–0.48 сохраняется: специальные Market-документы уже допускают существующий DNS/NTP для Domain Services, точный target list вместо fleet Inventory для Automation и необязательную post-install интеграцию PXE с будущими Automation/Inventory. Поэтому перенумерация не даёт достаточной инженерной выгоды и создаёт лишний release/documentation churn.
+- 0.44 Domain Services product code — **только после 0.43 Public Stable**;
+- 0.45 product code — после 0.44 Public Stable;
+- далее provider-specific milestone M начинает product code после Public Stable непосредственного foundation/predecessor milestone и только при нахождении M внутри общего окна Stable+2;
+- N+2 может иметь Preparation Track, но не provider-specific runtime implementation.
+
+Комплект Domain Services `15A` и DS-M0…DS-M9 может готовиться заранее как design/acceptance/test/support preparation. Наличие design docs не является release/runtime authority.
+
+Ожидание activation gate — **плановое состояние, не stop factor**. Задача выполняет разрешённый Preparation Track либо `NO_ACTION/PREPARED`, не создавая blocker-уведомление.
 
 ## 7. Capacity / policy-driven operations 0.56–0.59
 
@@ -130,8 +127,6 @@ CODE HOLD, вызванный этим правилом, является пла
 - **0.60** Mobile v1 read-focused.
 - **0.61** bounded mobile actions with server-side revalidation.
 
-Mobile не создаёт обходных административных API.
-
 ## 9. Hardening / 1.0
 
 - **0.62** Accessibility / Localization / Security / Performance hardening.
@@ -141,32 +136,34 @@ Mobile не создаёт обходных административных API
 - **0.66** Integrated Production Readiness.
 - **0.90** Feature Freeze.
 - **0.95** Release Candidate.
-- **1.0.0** Public Stable target for the known scope.
+- **1.0.0** Public Stable target for known scope.
 
-## 10. Definition of Done capability
+## 10. Definition of Done
 
-Capability готова только при наличии:
+Capability готова только при наличии применимых:
 
 1. object/data/API contract;
 2. RBAC permissions/scopes;
-3. Desired/Actual semantics для mutations;
+3. Desired/Actual semantics;
 4. failure/recovery model;
-5. validation, stale-state protection и idempotency;
-6. health/observability/Audit semantics;
+5. stale/idempotency protection;
+6. health/observability/Audit;
 7. positive/failure/security tests;
 8. upgrade/migration path;
 9. backup/restore semantics для stateful data;
 10. user/operations documentation;
-11. фактического соответствия реализации заявленному поведению.
+11. фактического соответствия заявленному поведению.
 
-Для risk-bearing operation дополнительно обязательны exact target, preview/diff, blast radius, preflight, approval policy, durable Job, post-condition verification и recovery path.
+Risk-bearing operation дополнительно требует exact target, preview/diff, blast radius, preflight, approval policy, durable Job, post-condition verification и recovery path.
 
 ## 11. Release rule
 
-Каждый начатый release train обязан завершаться официальным Public Stable release. COMMITTED/RC/SOURCE RELEASE — промежуточные состояния. Feature/runtime-разработка не открывается дальше Stable+2; продвижение Stable автоматически сдвигает окно на следующий feature milestone. Если фактический Public Stable не подтверждён, дальний milestone остаётся CODE HOLD.
+Каждый начатый release train завершается официальным Public Stable. COMMITTED/RC/SOURCE RELEASE — промежуточные состояния. Security, upgrade, rollback, recovery, data-preservation и false-success gates не обходятся.
 
-Коммерческие/юридические материалы могут идти параллельно и не должны удерживать технически готовый Public Stable, если неподтверждённые commercial capabilities выключены и не заявляются. Security, upgrade, rollback, recovery, data-preservation и false-success gates обходить нельзя.
+Готовый проверенный релиз публикуется в соответствующий stable repository независимо от состояния постоянного тестового сервера; установка тестового контура — отдельная эксплуатационная очередь.
 
-## 12. Product boundary
+## 12. Product/documentation boundary
 
-Control Center — самостоятельный infrastructure control plane. Публичная продуктовая документация не раскрывает внутреннюю методологию разработки и сборки, служебную инфраструктуру, внутренние адреса, секреты, рабочие репозитории/ветки или иные внутренние данные, не требующиеся пользователю и администратору продукта.
+Control Center — самостоятельный infrastructure control plane. Публичная продуктовая документация не раскрывает внутреннюю методологию разработки/CI, служебную инфраструктуру, внутренние адреса, секреты, рабочие репозитории/ветки или другие внутренние данные, не требующиеся пользователю продукта.
+
+Полный канонический roadmap и журнал изменений ведутся в Google Drive; этот файл является синхронизированным repository-side development view.
