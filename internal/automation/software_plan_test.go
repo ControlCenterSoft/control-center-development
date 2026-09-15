@@ -21,6 +21,19 @@ func TestNormalizeSoftwarePlanWindows(t *testing.T) {
 	}
 }
 
+func TestNormalizeSoftwarePlanWindowsSupportsDSC(t *testing.T) {
+	plan, err := NormalizeSoftwarePlan(SoftwarePlan{
+		Platform: PlatformWindows,
+		Packages: []PackageSpec{{Name: "Baseline", Source: " DSC "}},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeSoftwarePlan() error = %v", err)
+	}
+	if len(plan.Packages) != 1 || plan.Packages[0].Source != "dsc" {
+		t.Fatalf("packages = %#v", plan.Packages)
+	}
+}
+
 func TestNormalizeSoftwarePlanLinux(t *testing.T) {
 	_, err := NormalizeSoftwarePlan(SoftwarePlan{
 		Platform: PlatformLinux,
@@ -35,6 +48,16 @@ func TestNormalizeSoftwarePlanRejectsWrongSource(t *testing.T) {
 	_, err := NormalizeSoftwarePlan(SoftwarePlan{
 		Platform: PlatformLinux,
 		Packages: []PackageSpec{{Name: "tool", Source: "winget"}},
+	})
+	if !errors.Is(err, ErrInvalidSoftwarePlan) {
+		t.Fatalf("error = %v, want ErrInvalidSoftwarePlan", err)
+	}
+}
+
+func TestNormalizeSoftwarePlanRejectsDSCOnLinux(t *testing.T) {
+	_, err := NormalizeSoftwarePlan(SoftwarePlan{
+		Platform: PlatformLinux,
+		Packages: []PackageSpec{{Name: "baseline", Source: "dsc"}},
 	})
 	if !errors.Is(err, ErrInvalidSoftwarePlan) {
 		t.Fatalf("error = %v, want ErrInvalidSoftwarePlan", err)
