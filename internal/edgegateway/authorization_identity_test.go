@@ -34,6 +34,20 @@ func TestAuthorizationPlanIDBindsAuthorizationEvidence(t *testing.T) {
 				request.Approval.PolicyID = "edge-policy-v2"
 			},
 		},
+		{
+			name: "wan zone identity",
+			mutate: func(_ *AuthorizationRequest, inventory *Inventory) {
+				inventory.Zones[0].ID = "zone-wan-b"
+				inventory.Interfaces[0].NetworkZoneID = "zone-wan-b"
+			},
+		},
+		{
+			name: "lan zone identity",
+			mutate: func(_ *AuthorizationRequest, inventory *Inventory) {
+				inventory.Zones[1].ID = "zone-lan-b"
+				inventory.Interfaces[1].NetworkZoneID = "zone-lan-b"
+			},
+		},
 	}
 
 	for _, test := range tests {
