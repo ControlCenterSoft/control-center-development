@@ -30,26 +30,26 @@ type CapacityOverviewInput struct {
 }
 
 type CapacityOverview struct {
-	ContractVersion   string                        `json:"contract_version"`
-	State             CapacityOverviewState         `json:"state"`
-	AssessmentID      string                        `json:"assessment_id,omitempty"`
-	ScopeID           string                        `json:"scope_id,omitempty"`
-	RequiredRole      corecontracts.NodeRole        `json:"required_role,omitempty"`
-	WorkloadUnit      capacity.WorkloadUnit         `json:"workload_unit,omitempty"`
-	HealthyNodes      int                           `json:"healthy_nodes,omitempty"`
-	FailureReserve    int                           `json:"failure_reserve_nodes,omitempty"`
-	CurrentWorkload   float64                       `json:"current_workload,omitempty"`
-	ExpectedWorkload  float64                       `json:"expected_workload,omitempty"`
-	SafeCapacity      float64                       `json:"safe_capacity,omitempty"`
-	TechnicalLimit    float64                       `json:"technical_limit,omitempty"`
-	SafeReserve       float64                       `json:"safe_reserve,omitempty"`
-	Confidence        capacity.Confidence           `json:"confidence,omitempty"`
-	BottleneckNodeID  string                        `json:"bottleneck_node_id,omitempty"`
-	BottleneckMetric  agent.CapacityMetric          `json:"bottleneck_metric,omitempty"`
-	BottleneckTarget  string                        `json:"bottleneck_target_id,omitempty"`
-	Action            capacity.RecommendationAction `json:"action,omitempty"`
-	AdvisoryOnly      bool                          `json:"advisory_only"`
-	ProductionMutation bool                         `json:"production_mutation"`
+	ContractVersion    string                        `json:"contract_version"`
+	State              CapacityOverviewState         `json:"state"`
+	AssessmentID       string                        `json:"assessment_id,omitempty"`
+	ScopeID            string                        `json:"scope_id,omitempty"`
+	RequiredRole       corecontracts.NodeRole        `json:"required_role,omitempty"`
+	WorkloadUnit       capacity.WorkloadUnit         `json:"workload_unit,omitempty"`
+	HealthyNodes       int                           `json:"healthy_nodes,omitempty"`
+	FailureReserve     int                           `json:"failure_reserve_nodes,omitempty"`
+	CurrentWorkload    float64                       `json:"current_workload,omitempty"`
+	ExpectedWorkload   float64                       `json:"expected_workload,omitempty"`
+	SafeCapacity       float64                       `json:"safe_capacity,omitempty"`
+	TechnicalLimit     float64                       `json:"technical_limit,omitempty"`
+	SafeReserve        float64                       `json:"safe_reserve,omitempty"`
+	Confidence         capacity.Confidence           `json:"confidence,omitempty"`
+	BottleneckNodeID   string                        `json:"bottleneck_node_id,omitempty"`
+	BottleneckMetric   agent.CapacityMetric          `json:"bottleneck_metric,omitempty"`
+	BottleneckTarget   string                        `json:"bottleneck_target_id,omitempty"`
+	Action             capacity.RecommendationAction `json:"action,omitempty"`
+	AdvisoryOnly       bool                          `json:"advisory_only"`
+	ProductionMutation bool                          `json:"production_mutation"`
 }
 
 // BuildCapacityOverview projects an already-computed Capacity assessment into
