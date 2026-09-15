@@ -5,7 +5,7 @@ import pathlib
 import re
 import sys
 
-VERSION = "0.32.0"
+SUPPORTED_VERSIONS = {"0.32.0", "0.32.1"}
 
 
 def fail(message: str) -> None:
@@ -62,6 +62,9 @@ def main() -> None:
     if len(sys.argv) != 4:
         fail("usage: generate-sbom-032.py MANIFEST OUTPUT CANDIDATE_SHA")
     repo = pathlib.Path(__file__).resolve().parent.parent
+    version = (repo / "VERSION").read_text(encoding="utf-8").strip()
+    if version not in SUPPORTED_VERSIONS:
+        fail(f"unsupported 0.32 release identity: {version}")
     manifest_path = pathlib.Path(sys.argv[1])
     if not manifest_path.is_absolute():
         manifest_path = repo / manifest_path
@@ -75,20 +78,20 @@ def main() -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema") != "control-center.third-party-manifest.v1":
         fail("unsupported third-party manifest schema")
-    if manifest.get("product_version") != VERSION:
-        fail(f"third-party manifest is not bound to Control Center {VERSION}")
+    if manifest.get("product_version") != version:
+        fail(f"third-party manifest is not bound to Control Center {version}")
 
     go_modules, toolchain_version = parse_go_mod(repo / "go.mod")
     declared_modules = {}
     components = []
     for item in manifest.get("components", []):
         module = item.get("module", "")
-        version = item.get("version", "")
-        if not module or not version:
+        component_version = item.get("version", "")
+        if not module or not component_version:
             fail("third-party manifest contains incomplete component identity")
         if module in declared_modules:
             fail(f"duplicate third-party component: {module}")
-        declared_modules[module] = version
+        declared_modules[module] = component_version
         license_file = repo / item.get("license_file", "")
         if not license_file.is_file():
             fail(f"license evidence missing for {module}: {license_file}")
@@ -96,19 +99,19 @@ def main() -> None:
         if actual_license_sha != item.get("license_sha256"):
             fail(f"license evidence digest mismatch for {module}")
         if module == "go-runtime":
-            if version != toolchain_version:
-                fail(f"Go runtime mismatch: manifest={version} go.mod={toolchain_version}")
+            if component_version != toolchain_version:
+                fail(f"Go runtime mismatch: manifest={component_version} go.mod={toolchain_version}")
             component_type = "framework"
         else:
-            if go_modules.get(module) != version:
-                fail(f"go.mod mismatch for {module}: manifest={version} go.mod={go_modules.get(module)}")
+            if go_modules.get(module) != component_version:
+                fail(f"go.mod mismatch for {module}: manifest={component_version} go.mod={go_modules.get(module)}")
             component_type = "library"
-        bom_ref = f"{module}@{version}"
+        bom_ref = f"{module}@{component_version}"
         components.append({
             "type": component_type,
             "bom-ref": bom_ref,
             "name": module,
-            "version": version,
+            "version": component_version,
             "purl": item.get("purl"),
             "licenses": [{"license": {"id": item.get("license_spdx")}}],
             "externalReferences": [{"type": "vcs", "url": item.get("source")}],
@@ -123,14 +126,14 @@ def main() -> None:
     if manifest_modules != expected_modules:
         fail(f"third-party manifest/go.mod set mismatch: missing={sorted(expected_modules-manifest_modules)} extra={sorted(manifest_modules-expected_modules)}")
 
-    root_ref = f"pkg:generic/control-center@{VERSION}?revision={candidate_sha}"
+    root_ref = f"pkg:generic/control-center@{version}?revision={candidate_sha}"
     components.sort(key=lambda c: c["bom-ref"])
     bom = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.7",
         "version": 1,
         "metadata": {"component": {
-            "type": "application", "bom-ref": root_ref, "name": "control-center", "version": VERSION,
+            "type": "application", "bom-ref": root_ref, "name": "control-center", "version": version,
             "properties": [{"name": "control-center:candidate-sha", "value": candidate_sha}],
         }},
         "components": components,
