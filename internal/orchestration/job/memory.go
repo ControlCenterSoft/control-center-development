@@ -88,7 +88,7 @@ func (r *MemoryRepository) List(ctx context.Context, filter Filter) ([]Job, erro
 		result = append(result, clone(candidate))
 	}
 	sort.Slice(result, func(i, j int) bool {
-		if result[i].CreatedAt.Equal(b.CreatedAt) {
+		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
 			return result[i].ID < result[j].ID
 		}
 		return result[i].CreatedAt.Before(result[j].CreatedAt)
