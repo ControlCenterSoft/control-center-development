@@ -43,7 +43,7 @@ func (r *JobRepository) Create(ctx context.Context, request job.CreateRequest) (
 	if err != nil {
 		return job.Job{}, false, err
 	}
-	if storedFingerprint != fingerprint {
+	if storedFingerprint != fingerprint || existing.MaxAttempts != request.MaxAttempts {
 		return job.Job{}, false, job.ErrIdempotencyConflict
 	}
 	return existing, false, nil
