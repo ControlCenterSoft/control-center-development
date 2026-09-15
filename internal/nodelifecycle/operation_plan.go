@@ -122,12 +122,14 @@ func BuildOperationPlan(current NodeLifecycle, request OperationPlanRequest) (Op
 	fingerprintInput := struct {
 		Kind              OperationKind       `json:"kind"`
 		NodeID            string              `json:"node_id"`
+		ScopeID           string              `json:"scope_id"`
+		OwnerScope        string              `json:"owner_scope"`
 		ResourceVersion   string              `json:"resource_version"`
 		ReplacementNodeID string              `json:"replacement_node_id,omitempty"`
 		Placements        []WorkloadPlacement `json:"placements,omitempty"`
 	}{
-		Kind: request.Kind, NodeID: current.ObjectID, ResourceVersion: current.ResourceVersion,
-		ReplacementNodeID: request.ReplacementNodeID, Placements: placements,
+		Kind: request.Kind, NodeID: current.ObjectID, ScopeID: current.ScopeID, OwnerScope: current.OwnerScope,
+		ResourceVersion: current.ResourceVersion, ReplacementNodeID: request.ReplacementNodeID, Placements: placements,
 	}
 	encoded, err := json.Marshal(fingerprintInput)
 	if err != nil {

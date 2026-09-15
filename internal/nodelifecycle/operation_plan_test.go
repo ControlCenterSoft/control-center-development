@@ -50,6 +50,36 @@ func TestBuildDrainOperationPlanIsSafeAndDeterministic(t *testing.T) {
 	}
 }
 
+func TestBuildOperationPlanPlanIDBindsLifecycleScopeOwnership(t *testing.T) {
+	current := lifecycleInState(StateReady)
+	request := OperationPlanRequest{Kind: OperationDrain}
+	plan, err := BuildOperationPlan(current, request)
+	if err != nil {
+		t.Fatalf("BuildOperationPlan() error = %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*NodeLifecycle)
+	}{
+		{name: "scope id", mutate: func(l *NodeLifecycle) { l.ScopeID = "site-b-resources" }},
+		{name: "owner scope", mutate: func(l *NodeLifecycle) { l.OwnerScope = "site-b" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := current
+			test.mutate(&candidate)
+			other, err := BuildOperationPlan(candidate, request)
+			if err != nil {
+				t.Fatalf("BuildOperationPlan() error = %v", err)
+			}
+			if other.PlanID == plan.PlanID {
+				t.Fatalf("plan id %q did not change with lifecycle %s", plan.PlanID, test.name)
+			}
+		})
+	}
+}
+
 func TestBuildReplaceOperationPlanRequiresCompletedDrainAndSafeStatefulMove(t *testing.T) {
 	current := lifecycleInState(StateMaintenance)
 	request := OperationPlanRequest{
