@@ -94,6 +94,13 @@ func TestPostgresJobCreateIdempotencyBindsRetryBudget(t *testing.T) {
 	if err != nil || !wasCreated {
 		t.Fatalf("initial create = %#v created=%v err=%v", created, wasCreated, err)
 	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		if _, err := repository.RequestCancel(cleanupCtx, created.ID, time.Now().UTC()); err != nil {
+			t.Errorf("cancel idempotency test job: %v", err)
+		}
+	})
 
 	exactReplay := request
 	exactReplay.ID = "job-idempotency-budget-exact-replay-" + suffix
