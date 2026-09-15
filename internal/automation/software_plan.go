@@ -27,6 +27,7 @@ type SoftwarePlan struct {
 }
 
 func NormalizeSoftwarePlan(plan SoftwarePlan) (SoftwarePlan, error) {
+	plan.Platform = Platform(strings.ToLower(strings.TrimSpace(string(plan.Platform))))
 	if plan.Platform != PlatformWindows && plan.Platform != PlatformLinux {
 		return SoftwarePlan{}, ErrInvalidSoftwarePlan
 	}
