@@ -8,7 +8,7 @@
 
 Линия **0.32.0** — текущая ближайшая COMMITTED development line: Health / Incidents / Audit / Reports. Наличие merged code или contracts не означает Public Stable до прохождения собственного release cycle.
 
-Параллельно начата ранняя foundation-реализация **0.43.0** в пределах уже замороженного архитектурного scope. Это не меняет очередность ближайшего release train 0.32 и не предоставляет 0.43 RC/Public Stable authority.
+Архитектура **0.43.0** заморожена, но runtime-разработка находится в **CODE HOLD до Public Stable ≥ 0.41.x**. Ранее созданные 0.43 commits/PR/issues сохраняются как историческая трассировка ранней foundation-работы и не дают разрешения расширять код вне текущего окна Stable+2.
 
 ## 2. Неизменяемые правила
 
@@ -25,7 +25,10 @@
 - backup без verified restore не считается доказанной защитой;
 - HA без failure/recovery qualification не считается поддержанным;
 - released SQL migrations immutable byte-for-byte;
-- stateful workload перемещается только через provider-specific migration/recovery semantics.
+- stateful workload перемещается только через provider-specific migration/recovery semantics;
+- feature/runtime-код может продвигаться не более чем на два последовательных feature-релиза после фактически опубликованного Public Stable; дальние requirements/architecture/contracts/test plans разрешены, но не повышают capability до IMPLEMENTED/VERIFIED.
+
+При Public Stable **0.31.1** текущее кодовое окно — **0.32.0–0.33.0**.
 
 ## 3. Аутентификация после чистой установки
 
@@ -47,16 +50,20 @@
 
 Recovery foundation предшествует HA. Planning UI предшествует risk-bearing network execution. Node enrollment предшествует lifecycle automation.
 
-## 5. Milestone 0.43 — Architecture Freeze
+## 5. Milestone 0.43 — Architecture Freeze / Market Platform activation
 
-**0.43.0 — COMMITTED, ранняя параллельная foundation-реализация; НЕ RC / НЕ Public Stable. Managed Provider Framework + Infrastructure Solutions Foundation + Intent / Synthesis / Expansion + Market Platform v2.**
+**0.43.0 — PLANNED / ARCHITECTURE FROZEN / CODE HOLD до Public Stable ≥ 0.41.x; НЕ RC / НЕ Public Stable. Managed Provider Framework + Infrastructure Solutions Foundation + Intent / Synthesis / Expansion + Market Platform v2.**
 
 Фундаментальная архитектура 0.43 заморожена в:
 
 - [`docs/CC-043-ARCHITECTURE-FREEZE-RU.md`](docs/CC-043-ARCHITECTURE-FREEZE-RU.md)
 - [`docs/CC-043-IMPLEMENTATION-PLAN-RU.md`](docs/CC-043-IMPLEMENTATION-PLAN-RU.md)
 
-После Architecture Freeze новые foundation-domains не добавляются в scope 1.0 без явного roadmap change. Реализация 0.43 должна двигаться через contracts → persistence → API → Provider Runtime → Solution Orchestrator → Product Web UI → reference qualification.
+До открытия кодового окна разрешён **Preparation Track**: requirements, ADR/design, manifest/schema/API/permission contracts, compatibility/support matrices, threat/failure model, test specifications, migration/rollback design и документация. Новый runtime-код 0.43, runner qualification такого кода, release artifacts и пользовательские claims будущих capabilities до открытия окна не выполняются.
+
+После публикации Public Stable **0.41.x** milestone 0.43 автоматически входит в окно Stable+2 и становится CODE_ELIGIBLE. Ранее созданная ранняя foundation-реализация должна быть перепроверена относительно актуального `main` и exact SHA; PASS между SHA не переносится.
+
+После Architecture Freeze новые foundation-domains не добавляются в scope 1.0 без явного roadmap change. После открытия admission gate реализация 0.43 должна двигаться через contracts → persistence → API → Provider Runtime → Solution Orchestrator → Product Web UI → reference qualification.
 
 Frozen foundation включает:
 
@@ -88,13 +95,13 @@ Frozen foundation включает:
 
 Greenfield и Brownfield являются равноправными сценариями. Expansion поддерживает как expand-existing, так и create-new-instance/create-new-cluster в пределах certified provider capabilities.
 
-## 6. Market milestones 0.44–0.55
+## 6. Market milestones 0.44–0.55 и admission gates
 
-- **0.44** Directory Services providers: Samba AD / FreeIPA.
-- **0.45** DNS / DHCP.
-- **0.46** PXE Deployment Windows / Linux.
-- **0.47** Software Automation Windows / Linux.
-- **0.48** IT Asset Inventory.
+- **0.44** Directory Services providers: Samba AD / FreeIPA. CODE_ELIGIBLE при Public Stable ≥ **0.42.x**.
+- **0.45** DNS / DHCP. CODE_ELIGIBLE при Public Stable ≥ **0.43.x**.
+- **0.46** PXE Deployment Windows / Linux. CODE_ELIGIBLE при Public Stable ≥ **0.44.x**.
+- **0.47** Software Automation Windows / Linux. CODE_ELIGIBLE при Public Stable ≥ **0.45.x**.
+- **0.48** IT Asset Inventory. CODE_ELIGIBLE при Public Stable ≥ **0.46.x**.
 - **0.49** Software Inventory & Compliance.
 - **0.50** File Services.
 - **0.51** Monitoring provider.
@@ -103,7 +110,11 @@ Greenfield и Brownfield являются равноправными сцена�
 - **0.54** 1C:Enterprise Server.
 - **0.55** Secure Web Gateway / Corporate Proxy.
 
-Конкретный provider не может объявлять capability, отсутствующую в его qualified Provider Contract.
+Для 0.49–0.55 действует общий автоматический gate: milestone `M` получает CODE_ELIGIBLE только когда `M ≤ Public Stable + 2`. До этого разрешён только Preparation Track.
+
+CODE HOLD, вызванный этим правилом, является плановым admission state, а не техническим blocker и не требует stop-factor уведомления. Конкретный provider не может объявлять capability, отсутствующую в его qualified Provider Contract.
+
+Порядок 0.44–0.48 сохраняется: специальные Market-документы уже допускают существующий DNS/NTP для Domain Services, точный target list вместо fleet Inventory для Automation и необязательную post-install интеграцию PXE с будущими Automation/Inventory. Поэтому перенумерация не даёт достаточной инженерной выгоды и создаёт лишний release/documentation churn.
 
 ## 7. Capacity / policy-driven operations 0.56–0.59
 
@@ -152,7 +163,9 @@ Capability готова только при наличии:
 
 ## 11. Release rule
 
-Каждый начатый release train обязан завершаться официальным Public Stable release. COMMITTED/RC/SOURCE RELEASE — промежуточные состояния. Коммерческие/юридические материалы могут идти параллельно и не должны удерживать технически готовый Public Stable, если неподтверждённые commercial capabilities выключены и не заявляются. Security, upgrade, rollback, recovery, data-preservation и false-success gates обходить нельзя.
+Каждый начатый release train обязан завершаться официальным Public Stable release. COMMITTED/RC/SOURCE RELEASE — промежуточные состояния. Feature/runtime-разработка не открывается дальше Stable+2; продвижение Stable автоматически сдвигает окно на следующий feature milestone. Если фактический Public Stable не подтверждён, дальний milestone остаётся CODE HOLD.
+
+Коммерческие/юридические материалы могут идти параллельно и не должны удерживать технически готовый Public Stable, если неподтверждённые commercial capabilities выключены и не заявляются. Security, upgrade, rollback, recovery, data-preservation и false-success gates обходить нельзя.
 
 ## 12. Product boundary
 
