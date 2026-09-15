@@ -158,6 +158,9 @@ func validatePlacements(placements []WorkloadPlacement) error {
 		seen[placement.WorkloadID] = struct{}{}
 		switch placement.Kind {
 		case WorkloadStateless:
+			if placement.MigrationAdapter != "" {
+				return invalidOperation("stateless workload %q cannot declare a migration adapter", placement.WorkloadID)
+			}
 			if placement.HealthyReplicasOutside < 0 {
 				return invalidOperation("workload %q has a negative replica count", placement.WorkloadID)
 			}
