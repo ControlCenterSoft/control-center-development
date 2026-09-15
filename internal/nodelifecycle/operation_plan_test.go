@@ -24,6 +24,9 @@ func TestBuildDrainOperationPlanIsSafeAndDeterministic(t *testing.T) {
 	if plan.ContractVersion != OperationPlanContractV1 || plan.PlanID == "" || len(plan.Steps) != 4 {
 		t.Fatalf("unexpected drain plan: %#v", plan)
 	}
+	if plan.BasedOnGeneration != current.Generation || plan.BasedOnResourceVersion != current.ResourceVersion {
+		t.Fatalf("plan precondition evidence does not match lifecycle: %#v", plan)
+	}
 	if !plan.PlanOnly || !plan.RequiresApprovedChange || !plan.RequiresDurableJob || !plan.RequiresAudit {
 		t.Fatalf("missing safety gates: %#v", plan)
 	}
@@ -77,6 +80,31 @@ func TestBuildOperationPlanPlanIDBindsLifecycleScopeOwnership(t *testing.T) {
 				t.Fatalf("plan id %q did not change with lifecycle %s", plan.PlanID, test.name)
 			}
 		})
+	}
+}
+
+func TestBuildOperationPlanPlanIDBindsLifecycleGeneration(t *testing.T) {
+	current := lifecycleInState(StateReady)
+	request := OperationPlanRequest{Kind: OperationDrain}
+	base, err := BuildOperationPlan(current, request)
+	if err != nil {
+		t.Fatalf("BuildOperationPlan() error = %v", err)
+	}
+
+	changed := current
+	changed.Generation++
+	other, err := BuildOperationPlan(changed, request)
+	if err != nil {
+		t.Fatalf("BuildOperationPlan() error = %v", err)
+	}
+	if other.PlanID == base.PlanID {
+		t.Fatalf("plan id %q did not change with lifecycle generation", base.PlanID)
+	}
+	if other.BasedOnGeneration != changed.Generation {
+		t.Fatalf("based_on_generation = %d, want %d", other.BasedOnGeneration, changed.Generation)
+	}
+	if other.BasedOnResourceVersion != changed.ResourceVersion {
+		t.Fatalf("based_on_resource_version = %q, want %q", other.BasedOnResourceVersion, changed.ResourceVersion)
 	}
 }
 
