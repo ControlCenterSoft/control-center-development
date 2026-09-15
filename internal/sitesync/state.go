@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -44,11 +45,18 @@ type Record struct {
 }
 
 func (r Record) Validate() error {
-	if strings.TrimSpace(r.SiteID) == "" || strings.TrimSpace(r.ResourceID) == "" {
-		return fmt.Errorf("%w: empty identity", ErrInvalidRecord)
+	for field, value := range map[string]string{
+		"site_id":          r.SiteID,
+		"resource_id":      r.ResourceID,
+		"resource_version": r.ResourceVersion,
+		"payload_hash":     r.PayloadHash,
+	} {
+		if err := validateCanonicalToken(field, value); err != nil {
+			return err
+		}
 	}
-	if r.Generation == 0 || strings.TrimSpace(r.ResourceVersion) == "" || strings.TrimSpace(r.PayloadHash) == "" {
-		return fmt.Errorf("%w: incomplete revision", ErrInvalidRecord)
+	if r.Generation == 0 {
+		return fmt.Errorf("%w: generation is required", ErrInvalidRecord)
 	}
 	switch r.Kind {
 	case DesiredState:
@@ -109,4 +117,16 @@ func Reconcile(current, incoming Record) (Record, bool, error) {
 		)
 	}
 	return incoming, true, nil
+}
+
+func validateCanonicalToken(field, value string) error {
+	if value == "" || strings.TrimSpace(value) != value {
+		return fmt.Errorf("%w: %s is required and must not have surrounding whitespace", ErrInvalidRecord, field)
+	}
+	for _, r := range value {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return fmt.Errorf("%w: %s contains whitespace or control characters", ErrInvalidRecord, field)
+		}
+	}
+	return nil
 }

@@ -53,6 +53,28 @@ func TestValidateRejectsWrongAuthority(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsAmbiguousRevisionIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Record)
+	}{
+		{name: "site surrounding whitespace", mutate: func(r *Record) { r.SiteID = " site-eu-1" }},
+		{name: "resource internal whitespace", mutate: func(r *Record) { r.ResourceID = "network policy/default" }},
+		{name: "resource version tab", mutate: func(r *Record) { r.ResourceVersion = "rv-1\tshadow" }},
+		{name: "payload hash control", mutate: func(r *Record) { r.PayloadHash = "hash-1\nshadow" }},
+		{name: "missing generation", mutate: func(r *Record) { r.Generation = 0 }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			record := desired(1, "rv-1", "hash-1")
+			test.mutate(&record)
+			if err := record.Validate(); !errors.Is(err, ErrInvalidRecord) {
+				t.Fatalf("Validate() error = %v, want ErrInvalidRecord", err)
+			}
+		})
+	}
+}
+
 func TestReconcileAppliesNewerGeneration(t *testing.T) {
 	current := desired(1, "rv-1", "hash-1")
 	incoming := desired(2, "rv-2", "hash-2")
