@@ -18,7 +18,7 @@ func TestActualStateReplacementRejectsDivergentSameObservationIdentity(t *testin
 	request := MutationRequest{
 		Operation: MutationReplace, ObjectType: ObjectActualState,
 		ObjectID: created.ObjectID, ScopeID: created.ScopeID, OwnerScope: created.OwnerScope,
-		Document: json.RawMessage(`{"kind":"service.config","target_object_id":"service-a","desired_object_id":"desired-a","observed_generation":2,"source_node_id":"node-a","observed_at":"2026-09-15T12:00:00Z","status":"converged","state":{"healthy":true}}`),
+		Document:     json.RawMessage(`{"kind":"service.config","target_object_id":"service-a","desired_object_id":"desired-a","observed_generation":2,"source_node_id":"node-a","observed_at":"2026-09-15T12:00:00Z","status":"converged","state":{"healthy":true}}`),
 		Precondition: objectPrecondition(created),
 	}
 
@@ -45,7 +45,7 @@ func TestActualStateReplacementAllowsEquivalentSameObservationIdentity(t *testin
 	replaced := applyObject(t, repository, MutationRequest{
 		Operation: MutationReplace, ObjectType: ObjectActualState,
 		ObjectID: created.ObjectID, ScopeID: created.ScopeID, OwnerScope: created.OwnerScope,
-		Document: json.RawMessage(`{"state":{"b":2,"a":1},"status":"converged","observed_at":"2026-09-15T12:05:00Z","source_node_id":"node-b","observed_generation":3,"desired_object_id":"desired-b","target_object_id":"service-b","kind":"service.config"}`),
+		Document:     json.RawMessage(`{"state":{"b":2,"a":1},"status":"converged","observed_at":"2026-09-15T12:05:00Z","source_node_id":"node-b","observed_generation":3,"desired_object_id":"desired-b","target_object_id":"service-b","kind":"service.config"}`),
 		Precondition: objectPrecondition(created),
 	})
 
