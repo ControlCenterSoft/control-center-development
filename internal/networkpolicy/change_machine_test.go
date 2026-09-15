@@ -116,6 +116,26 @@ func TestChangeMachineTimeoutsFailClosed(t *testing.T) {
 	})
 }
 
+func TestChangeMachineApplyWindowTimeoutRequiresRollbackWithoutApplyAcknowledgement(t *testing.T) {
+	machine, now := newTestChangeMachine(t)
+	applyEvent(t, machine, ChangeEvent{ID: "event-01", Type: EventSnapshotCaptured, SnapshotID: "recovery-01", At: now.Add(time.Second)})
+	applyEvent(t, machine, ChangeEvent{ID: "event-02", Type: EventPreflightPassed, At: now.Add(2 * time.Second)})
+
+	applyDeadline := machine.Snapshot().Deadline
+	snapshot := applyEvent(t, machine, ChangeEvent{ID: "event-03", Type: EventPhaseTimedOut, At: applyDeadline})
+	if snapshot.State != ChangeStateRollbackPending || snapshot.ReasonCode != "apply_window_timeout" {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	if !snapshot.Deadline.After(applyDeadline) {
+		t.Fatalf("rollback deadline = %s, want after apply deadline %s", snapshot.Deadline, applyDeadline)
+	}
+
+	snapshot = applyEvent(t, machine, ChangeEvent{ID: "event-04", Type: EventRollbackSucceeded, At: applyDeadline.Add(time.Second)})
+	if snapshot.State != ChangeStateRolledBack || snapshot.ReasonCode != "apply_window_timeout" || !snapshot.Deadline.IsZero() {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+}
+
 func TestChangeMachineRejectsLateOrForgedEvents(t *testing.T) {
 	machine, now := newTestChangeMachine(t)
 	if _, err := machine.Apply(ChangeEvent{ID: "early-timeout", Type: EventPhaseTimedOut, At: now.Add(time.Second)}, 1); !errors.Is(err, ErrInvalidChangeTransition) {
