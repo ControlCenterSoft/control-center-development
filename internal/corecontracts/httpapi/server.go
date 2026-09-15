@@ -45,7 +45,7 @@ func (s *Server) Handler() http.Handler { return s.handler }
 
 func (s *Server) listObjects(w http.ResponseWriter, r *http.Request) {
 	if !knownQuery(r, "object_type", "scope_id", "owner_scope") {
-		commonapi.WriteError(w, r, http.StatusBadRequest, "INVALID_QUERY", "unsupported query parameter")
+		commonapi.WriteError(w, r, http.StatusBadRequest, "INVALID_QUERY", "unsupported or repeated query parameter")
 		return
 	}
 	filter := corecontracts.ObjectFilter{
@@ -158,8 +158,8 @@ func knownQuery(r *http.Request, allowed ...string) bool {
 	for _, key := range allowed {
 		known[key] = struct{}{}
 	}
-	for key := range r.URL.Query() {
-		if _, ok := known[key]; !ok {
+	for key, values := range r.URL.Query() {
+		if _, ok := known[key]; !ok || len(values) != 1 {
 			return false
 		}
 	}

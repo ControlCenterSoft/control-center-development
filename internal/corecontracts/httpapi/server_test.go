@@ -112,6 +112,9 @@ func TestDistributedCoreReadAPIRejectsInvalidRequests(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/v1/core/objects", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/api/v1/core/objects?unexpected=true", http.StatusBadRequest},
+		{http.MethodGet, "/api/v1/core/objects?object_type=scope&object_type=site", http.StatusBadRequest},
+		{http.MethodGet, "/api/v1/core/objects?scope_id=global&scope_id=scope-site-a", http.StatusBadRequest},
+		{http.MethodGet, "/api/v1/core/objects?owner_scope=global&owner_scope=scope-site-a", http.StatusBadRequest},
 		{http.MethodGet, "/api/v1/core/objects?object_type=secret", http.StatusBadRequest},
 		{http.MethodGet, "/api/v1/core/objects?scope_id=bad%20scope", http.StatusBadRequest},
 		{http.MethodGet, "/api/v1/core/objects/bad%20id", http.StatusBadRequest},
