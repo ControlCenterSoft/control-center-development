@@ -73,8 +73,11 @@ func BuildCapacityHorizon(request CapacityHorizonRequest, forecast Forecast, ass
 	if forecast.Quality != ForecastQualityLow && forecast.Quality != ForecastQualityMedium && forecast.Quality != ForecastQualityHigh {
 		return CapacityHorizon{}, fmt.Errorf("%w: invalid forecast quality", ErrInvalidRecommendation)
 	}
-	if assessment.Confidence.Level != ConfidenceLow && assessment.Confidence.Level != ConfidenceMedium && assessment.Confidence.Level != ConfidenceHigh && assessment.Confidence.Level != ConfidenceCertified {
+	if !validHorizonConfidence(assessment.Confidence) {
 		return CapacityHorizon{}, fmt.Errorf("%w: invalid assessment confidence", ErrInvalidRecommendation)
+	}
+	if !validHorizonAssessmentAction(assessment.Action) {
+		return CapacityHorizon{}, fmt.Errorf("%w: invalid assessment action", ErrInvalidRecommendation)
 	}
 
 	reserve := assessment.SafeCapacity - forecast.CurrentWorkload
@@ -142,4 +145,31 @@ func BuildCapacityHorizon(request CapacityHorizonRequest, forecast Forecast, ass
 		AdvisoryOnly:        true,
 		ProductionMutation:  false,
 	}, nil
+}
+
+func validHorizonConfidence(confidence Confidence) bool {
+	if !finite(confidence.Score) || confidence.Score < 0 || confidence.Score > 1 {
+		return false
+	}
+	switch confidence.Level {
+	case ConfidenceLow:
+		return confidence.Score < 0.5
+	case ConfidenceMedium:
+		return confidence.Score >= 0.5 && confidence.Score < 0.75
+	case ConfidenceHigh:
+		return confidence.Score >= 0.75 && confidence.Score < 0.95
+	case ConfidenceCertified:
+		return confidence.Score >= 0.95
+	default:
+		return false
+	}
+}
+
+func validHorizonAssessmentAction(action RecommendationAction) bool {
+	switch action {
+	case ActionNone, ActionCollectEvidence, ActionAddRoleCapacity:
+		return true
+	default:
+		return false
+	}
 }
