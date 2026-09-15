@@ -59,6 +59,7 @@ type OperationPlan struct {
 	Kind                   OperationKind       `json:"kind"`
 	NodeID                 string              `json:"node_id"`
 	ReplacementNodeID      string              `json:"replacement_node_id,omitempty"`
+	BasedOnGeneration      uint64              `json:"based_on_generation"`
 	BasedOnResourceVersion string              `json:"based_on_resource_version"`
 	Steps                  []OperationPlanStep `json:"steps"`
 	RequiresApprovedChange bool                `json:"requires_approved_change"`
@@ -124,12 +125,14 @@ func BuildOperationPlan(current NodeLifecycle, request OperationPlanRequest) (Op
 		NodeID            string              `json:"node_id"`
 		ScopeID           string              `json:"scope_id"`
 		OwnerScope        string              `json:"owner_scope"`
+		Generation        uint64              `json:"generation"`
 		ResourceVersion   string              `json:"resource_version"`
 		ReplacementNodeID string              `json:"replacement_node_id,omitempty"`
 		Placements        []WorkloadPlacement `json:"placements,omitempty"`
 	}{
 		Kind: request.Kind, NodeID: current.ObjectID, ScopeID: current.ScopeID, OwnerScope: current.OwnerScope,
-		ResourceVersion: current.ResourceVersion, ReplacementNodeID: request.ReplacementNodeID, Placements: placements,
+		Generation: current.Generation, ResourceVersion: current.ResourceVersion,
+		ReplacementNodeID: request.ReplacementNodeID, Placements: placements,
 	}
 	encoded, err := json.Marshal(fingerprintInput)
 	if err != nil {
@@ -141,6 +144,7 @@ func BuildOperationPlan(current NodeLifecycle, request OperationPlanRequest) (Op
 		PlanID:          "nop-" + hex.EncodeToString(digest[:])[:24],
 		Kind:            request.Kind, NodeID: current.ObjectID,
 		ReplacementNodeID:      request.ReplacementNodeID,
+		BasedOnGeneration:      current.Generation,
 		BasedOnResourceVersion: current.ResourceVersion,
 		Steps:                  steps,
 		RequiresApprovedChange: true, RequiresDurableJob: true, RequiresAudit: true,
