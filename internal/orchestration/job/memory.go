@@ -153,8 +153,8 @@ func (r *MemoryRepository) RenewLease(ctx context.Context, id, token string, now
 	if err := ctx.Err(); err != nil {
 		return Job{}, err
 	}
-	if ttl <= 0 {
-		return Job{}, errors.New("lease ttl must be positive")
+	if now.IsZero() || ttl <= 0 {
+		return Job{}, errors.New("current time and positive lease ttl are required")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -171,6 +171,9 @@ func (r *MemoryRepository) RenewLease(ctx context.Context, id, token string, now
 func (r *MemoryRepository) Succeed(ctx context.Context, id, token string, output events.Output, now time.Time) (Job, error) {
 	if err := ctx.Err(); err != nil {
 		return Job{}, err
+	}
+	if now.IsZero() {
+		return Job{}, errors.New("completion time is required")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -197,6 +200,9 @@ func (r *MemoryRepository) Fail(ctx context.Context, id, token, message string, 
 	}
 	if message == "" {
 		return Job{}, errors.New("failure message is required")
+	}
+	if now.IsZero() {
+		return Job{}, errors.New("failure time is required")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -225,6 +231,9 @@ func (r *MemoryRepository) Fail(ctx context.Context, id, token, message string, 
 func (r *MemoryRepository) RequestCancel(ctx context.Context, id string, now time.Time) (Job, error) {
 	if err := ctx.Err(); err != nil {
 		return Job{}, err
+	}
+	if now.IsZero() {
+		return Job{}, errors.New("cancellation time is required")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
