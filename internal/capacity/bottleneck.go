@@ -148,6 +148,8 @@ func BuildBottleneckReport(request BottleneckRequest, nodes []NodeProjection) (B
 
 	action := ActionNone
 	switch {
+	case assessment.Action == ActionCollectEvidence:
+		action = ActionCollectEvidence
 	case !assessment.Safe || criticalCount > 0:
 		action = ActionAddRoleCapacity
 	case unknownCount > 0:
