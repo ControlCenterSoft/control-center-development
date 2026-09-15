@@ -31,6 +31,17 @@ func TestVersionedCancellationRejectsStaleOperatorState(t *testing.T) {
 		t.Fatalf("unexpected created job: %#v", created)
 	}
 
+	if _, err := repository.RequestCancelIfVersion(ctx, created.ID, created.Version, time.Time{}); err == nil {
+		t.Fatal("zero cancellation time must fail closed")
+	}
+	unchangedAfterZero, err := repository.Get(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchangedAfterZero.Status != created.Status || unchangedAfterZero.Version != created.Version || !unchangedAfterZero.UpdatedAt.Equal(created.UpdatedAt) {
+		t.Fatalf("zero-time cancellation mutated job: %#v", unchangedAfterZero)
+	}
+
 	if _, err := repository.RequestCancelIfVersion(ctx, created.ID, created.Version+1, now.Add(time.Second)); !errors.Is(err, job.ErrVersionConflict) {
 		t.Fatalf("stale version error = %v, want ErrVersionConflict", err)
 	}

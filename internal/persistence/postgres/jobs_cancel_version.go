@@ -15,6 +15,9 @@ func (r *JobRepository) RequestCancelIfVersion(ctx context.Context, id string, e
 	if expectedVersion == 0 {
 		return job.Job{}, errors.New("expected job version is required")
 	}
+	if now.IsZero() {
+		return job.Job{}, errors.New("cancellation time is required")
+	}
 	result, err := scanJob(r.db.QueryRowContext(ctx, `UPDATE cc_jobs SET status=CASE WHEN status IN ('cancelled','succeeded','failed') THEN status WHEN status='running' THEN 'cancel_requested' ELSE 'cancelled' END,lease_token=CASE WHEN status='running' THEN lease_token ELSE NULL END,lease_worker_id=CASE WHEN status='running' THEN lease_worker_id ELSE NULL END,lease_expires_at=CASE WHEN status='running' THEN lease_expires_at ELSE NULL END,updated_at=CASE WHEN status IN ('cancelled','succeeded','failed') THEN updated_at ELSE $2 END,version=CASE WHEN status IN ('cancelled','succeeded','failed') THEN version ELSE version+1 END WHERE id=$1 AND version=$3 RETURNING `+jobColumns, id, now.UTC(), expectedVersion))
 	if errors.Is(err, sql.ErrNoRows) {
 		var exists bool
