@@ -26,8 +26,10 @@ type WhatIfResult struct {
 }
 
 // WhatIfSet groups a baseline assessment with independently evaluated
-// scenarios. BestSafeScenarioID prefers stronger failure reserve first, then
-// the highest supported workload. The result remains advisory-only.
+// scenarios. BestSafeScenarioID only considers scenarios that are safe and do
+// not require follow-up evidence or capacity action; among those it prefers
+// stronger failure reserve first, then the highest supported workload. The
+// result remains advisory-only.
 type WhatIfSet struct {
 	SchemaVersion      string         `json:"schema_version"`
 	Baseline           Assessment     `json:"baseline"`
@@ -89,7 +91,7 @@ func BuildWhatIfSet(baselineRequest AssessmentRequest, nodes []NodeProjection, s
 			Assessment:            assessment,
 		})
 
-		if !assessment.Safe {
+		if !assessment.Safe || assessment.Action != ActionNone {
 			continue
 		}
 		better := scenario.FailureReserveNodes > bestReserveNodes ||
