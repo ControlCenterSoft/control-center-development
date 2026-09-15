@@ -22,11 +22,12 @@ const (
 	ZoneCluster    Zone = "CLUSTER"
 	ZoneStorage    Zone = "STORAGE"
 	ZoneBackup     Zone = "BACKUP"
+	ZoneTrusted    Zone = "TRUSTED"
 )
 
 func (z Zone) Valid() bool {
 	switch z {
-	case ZoneWAN, ZoneLAN, ZoneManagement, ZoneDMZ, ZoneCluster, ZoneStorage, ZoneBackup:
+	case ZoneWAN, ZoneLAN, ZoneManagement, ZoneDMZ, ZoneCluster, ZoneStorage, ZoneBackup, ZoneTrusted:
 		return true
 	default:
 		return false

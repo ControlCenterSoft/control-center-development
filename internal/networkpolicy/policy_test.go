@@ -54,6 +54,30 @@ func TestAuthorizeForwardingAllowsExplicitInternalInterZoneRouting(t *testing.T)
 	}
 }
 
+func TestTrustedZoneIsValid(t *testing.T) {
+	if !ZoneTrusted.Valid() {
+		t.Fatal("ZoneTrusted.Valid() = false, want true")
+	}
+}
+
+func TestAuthorizeForwardingFailsClosedForTrustedInterZoneRouting(t *testing.T) {
+	err := AuthorizeForwarding(ForwardingIntent{Source: ZoneTrusted, Destination: ZoneLAN})
+	if !errors.Is(err, ErrForwardingDisabled) {
+		t.Fatalf("AuthorizeForwarding() error = %v, want ErrForwardingDisabled", err)
+	}
+}
+
+func TestAuthorizeForwardingAllowsExplicitTrustedInterZoneRouting(t *testing.T) {
+	intent := ForwardingIntent{
+		Source:            ZoneTrusted,
+		Destination:       ZoneManagement,
+		ExplicitlyEnabled: true,
+	}
+	if err := AuthorizeForwarding(intent); err != nil {
+		t.Fatalf("AuthorizeForwarding() error = %v", err)
+	}
+}
+
 func TestAuthorizeForwardingRejectsUnknownZone(t *testing.T) {
 	err := AuthorizeForwarding(ForwardingIntent{Source: Zone("UNKNOWN"), Destination: ZoneLAN})
 	if !errors.Is(err, ErrInvalidZone) {
