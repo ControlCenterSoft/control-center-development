@@ -128,8 +128,8 @@ func (r *JobRepository) Claim(ctx context.Context, workerID string, now time.Tim
 }
 
 func (r *JobRepository) RenewLease(ctx context.Context, id, token string, now time.Time, ttl time.Duration) (job.Job, error) {
-	if ttl <= 0 {
-		return job.Job{}, errors.New("lease ttl must be positive")
+	if now.IsZero() || ttl <= 0 {
+		return job.Job{}, errors.New("current time and positive lease ttl are required")
 	}
 	result, err := scanJob(r.db.QueryRowContext(ctx, `UPDATE cc_jobs SET lease_expires_at=$4,updated_at=$3,version=version+1 WHERE id=$1 AND lease_token=$2 AND lease_expires_at>$3 AND status IN ('running','cancel_requested') RETURNING `+jobColumns, id, token, now.UTC(), now.UTC().Add(ttl)))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -139,6 +139,9 @@ func (r *JobRepository) RenewLease(ctx context.Context, id, token string, now ti
 }
 
 func (r *JobRepository) Succeed(ctx context.Context, id, token string, output events.Output, now time.Time) (job.Job, error) {
+	if now.IsZero() {
+		return job.Job{}, errors.New("completion time is required")
+	}
 	payload, err := json.Marshal(output)
 	if err != nil {
 		return job.Job{}, err
@@ -169,6 +172,9 @@ func (r *JobRepository) Succeed(ctx context.Context, id, token string, output ev
 func (r *JobRepository) Fail(ctx context.Context, id, token, message string, output events.Output, retry job.RetryPolicy, now time.Time) (job.Job, error) {
 	if message == "" {
 		return job.Job{}, errors.New("failure message is required")
+	}
+	if now.IsZero() {
+		return job.Job{}, errors.New("failure time is required")
 	}
 	payload, err := json.Marshal(output)
 	if err != nil {
@@ -208,6 +214,9 @@ func (r *JobRepository) Fail(ctx context.Context, id, token, message string, out
 }
 
 func (r *JobRepository) RequestCancel(ctx context.Context, id string, now time.Time) (job.Job, error) {
+	if now.IsZero() {
+		return job.Job{}, errors.New("cancellation time is required")
+	}
 	result, err := scanJob(r.db.QueryRowContext(ctx, `UPDATE cc_jobs SET status=CASE WHEN status IN ('cancelled','succeeded','failed') THEN status WHEN status='running' THEN 'cancel_requested' ELSE 'cancelled' END,lease_token=CASE WHEN status='running' THEN lease_token ELSE NULL END,lease_worker_id=CASE WHEN status='running' THEN lease_worker_id ELSE NULL END,lease_expires_at=CASE WHEN status='running' THEN lease_expires_at ELSE NULL END,updated_at=CASE WHEN status IN ('cancelled','succeeded','failed') THEN updated_at ELSE $2 END,version=CASE WHEN status IN ('cancelled','succeeded','failed') THEN version ELSE version+1 END WHERE id=$1 RETURNING `+jobColumns, id, now.UTC()))
 	if errors.Is(err, sql.ErrNoRows) {
 		return job.Job{}, job.ErrNotFound
