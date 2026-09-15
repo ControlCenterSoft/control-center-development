@@ -57,6 +57,7 @@ type RestoreDrillPlan struct {
 	PlanID                   string               `json:"plan_id"`
 	RestoreID                string               `json:"restore_id"`
 	ScopeID                  string               `json:"scope_id"`
+	OwnerScope               string               `json:"owner_scope"`
 	RecoveryPointID          string               `json:"recovery_point_id"`
 	BackupIDs                []string             `json:"backup_ids"`
 	Target                   ObjectReference      `json:"target"`
@@ -102,6 +103,7 @@ func BuildRestoreDrillPlan(registry *AdapterRegistry, restore RestoreMetadata, e
 		SchemaVersion:            RestoreDrillPlanSchemaVersion,
 		RestoreID:                restore.ObjectID,
 		ScopeID:                  restore.ScopeID,
+		OwnerScope:               restore.OwnerScope,
 		RecoveryPointID:          restore.RecoveryPointID,
 		BackupIDs:                backupIDs,
 		Target:                   restore.Target,
@@ -282,6 +284,7 @@ func restoreDrillPlanID(plan RestoreDrillPlan) (string, error) {
 		SchemaVersion          string               `json:"schema_version"`
 		RestoreID              string               `json:"restore_id"`
 		ScopeID                string               `json:"scope_id"`
+		OwnerScope             string               `json:"owner_scope"`
 		RecoveryPointID        string               `json:"recovery_point_id"`
 		BackupIDs              []string             `json:"backup_ids"`
 		Target                 ObjectReference      `json:"target"`
@@ -292,7 +295,7 @@ func restoreDrillPlanID(plan RestoreDrillPlan) (string, error) {
 		RequiredCapabilities   []ProviderCapability `json:"required_capabilities"`
 		Steps                  []RestoreDrillStep   `json:"steps"`
 	}{
-		SchemaVersion: plan.SchemaVersion, RestoreID: plan.RestoreID, ScopeID: plan.ScopeID,
+		SchemaVersion: plan.SchemaVersion, RestoreID: plan.RestoreID, ScopeID: plan.ScopeID, OwnerScope: plan.OwnerScope,
 		RecoveryPointID: plan.RecoveryPointID, BackupIDs: plan.BackupIDs, Target: plan.Target,
 		Provider: plan.Provider, Adapter: plan.Adapter, BasedOnResourceVersion: plan.BasedOnResourceVersion,
 		BasedOnGeneration: plan.BasedOnGeneration, RequiredCapabilities: plan.RequiredCapabilities, Steps: plan.Steps,

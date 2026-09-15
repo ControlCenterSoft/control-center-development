@@ -7,6 +7,12 @@ import (
 
 func TestBuildRestoreDrillPlanIDBindsRecoveryInputs(t *testing.T) {
 	registry := registeredRestoreDrillRegistry(t)
+	alternateAdapter := restoreDrillAdapter()
+	alternateAdapter.Version = "2.55.0"
+	if err := registry.Register(alternateAdapter); err != nil {
+		t.Fatalf("Register(alternate adapter) error = %v", err)
+	}
+
 	base := plannedRestoreDrill()
 	evaluatedAt := base.UpdatedAt.Add(time.Minute)
 
@@ -33,6 +39,12 @@ func TestBuildRestoreDrillPlanIDBindsRecoveryInputs(t *testing.T) {
 			},
 		},
 		{
+			name: "owner scope",
+			mutate: func(value *RestoreMetadata) {
+				value.OwnerScope = "global"
+			},
+		},
+		{
 			name: "recovery point",
 			mutate: func(value *RestoreMetadata) {
 				value.RecoveryPointID = "rp-20260908-002"
@@ -48,6 +60,24 @@ func TestBuildRestoreDrillPlanIDBindsRecoveryInputs(t *testing.T) {
 			name: "restore target",
 			mutate: func(value *RestoreMetadata) {
 				value.Target.ObjectID = "database-restore-target-002"
+			},
+		},
+		{
+			name: "provider identity",
+			mutate: func(value *RestoreMetadata) {
+				value.Provider.ProviderID = "pgbackrest-secondary"
+			},
+		},
+		{
+			name: "backup repository",
+			mutate: func(value *RestoreMetadata) {
+				value.Provider.RepositoryID = "backup-repository-b"
+			},
+		},
+		{
+			name: "adapter version",
+			mutate: func(value *RestoreMetadata) {
+				value.Provider.Version = "2.55.0"
 			},
 		},
 		{

@@ -57,7 +57,7 @@ func NormalizeSoftwarePlan(plan SoftwarePlan) (SoftwarePlan, error) {
 func sourceAllowed(platform Platform, source string) bool {
 	switch platform {
 	case PlatformWindows:
-		return source == "ansible" || source == "winget" || source == "msi" || source == "powershell"
+		return source == "ansible" || source == "winget" || source == "msi" || source == "powershell" || source == "dsc"
 	case PlatformLinux:
 		return source == "ansible" || source == "apt" || source == "dnf" || source == "snap"
 	default:

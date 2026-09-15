@@ -2,6 +2,7 @@ package capacity
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -79,17 +80,34 @@ func TestCapacityHorizonEscalatesCriticalAndUnsafeFleet(t *testing.T) {
 }
 
 func TestCapacityHorizonUsesUnknownForLowConfidence(t *testing.T) {
-	forecast, assessment := horizonEvidence(70, 1, 100)
-	forecast.Quality = ForecastQualityLow
 	request := CapacityHorizonRequest{ScopeID: "site-a", WorkloadUnit: WorkloadDevices, WarningHorizonDays: 40, CriticalHorizonDays: 10}
 
-	horizon, err := BuildCapacityHorizon(request, forecast, assessment)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if horizon.Risk != HorizonUnknown || horizon.Action != ActionCollectEvidence || horizon.DaysToSafeCapacity != nil {
-		t.Fatalf("low-confidence forecast was not held: %#v", horizon)
-	}
+	t.Run("forecast quality", func(t *testing.T) {
+		forecast, assessment := horizonEvidence(70, 1, 100)
+		forecast.Quality = ForecastQualityLow
+
+		horizon, err := BuildCapacityHorizon(request, forecast, assessment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if horizon.Risk != HorizonUnknown || horizon.Action != ActionCollectEvidence || horizon.DaysToSafeCapacity != nil {
+			t.Fatalf("low-confidence forecast was not held: %#v", horizon)
+		}
+	})
+
+	t.Run("assessment confidence", func(t *testing.T) {
+		forecast, assessment := horizonEvidence(70, 1, 100)
+		assessment.Confidence = Confidence{Level: ConfidenceLow, Score: .4}
+		assessment.Action = ActionCollectEvidence
+
+		horizon, err := BuildCapacityHorizon(request, forecast, assessment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if horizon.Risk != HorizonUnknown || horizon.Action != ActionCollectEvidence || horizon.DaysToSafeCapacity != nil {
+			t.Fatalf("low-confidence assessment was not held: %#v", horizon)
+		}
+	})
 }
 
 func TestCapacityHorizonRejectsMismatchedEvidence(t *testing.T) {
@@ -100,5 +118,50 @@ func TestCapacityHorizonRejectsMismatchedEvidence(t *testing.T) {
 	_, err := BuildCapacityHorizon(request, forecast, assessment)
 	if !errors.Is(err, ErrInvalidRecommendation) {
 		t.Fatalf("expected invalid recommendation, got %v", err)
+	}
+}
+
+func TestCapacityHorizonRejectsMalformedAssessmentEvidence(t *testing.T) {
+	request := CapacityHorizonRequest{ScopeID: "site-a", WorkloadUnit: WorkloadDevices, WarningHorizonDays: 40, CriticalHorizonDays: 10}
+	tests := []struct {
+		name   string
+		mutate func(*Assessment)
+	}{
+		{
+			name: "non-finite confidence score",
+			mutate: func(assessment *Assessment) {
+				assessment.Confidence.Score = math.NaN()
+			},
+		},
+		{
+			name: "out-of-range confidence score",
+			mutate: func(assessment *Assessment) {
+				assessment.Confidence.Score = 1.01
+			},
+		},
+		{
+			name: "confidence band mismatch",
+			mutate: func(assessment *Assessment) {
+				assessment.Confidence = Confidence{Level: ConfidenceHigh, Score: .4}
+			},
+		},
+		{
+			name: "unknown assessment action",
+			mutate: func(assessment *Assessment) {
+				assessment.Action = RecommendationAction("rebalance-now")
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			forecast, assessment := horizonEvidence(70, 1, 100)
+			test.mutate(&assessment)
+
+			_, err := BuildCapacityHorizon(request, forecast, assessment)
+			if !errors.Is(err, ErrInvalidRecommendation) {
+				t.Fatalf("expected invalid recommendation, got %v", err)
+			}
+		})
 	}
 }
