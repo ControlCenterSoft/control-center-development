@@ -44,10 +44,11 @@ func (r *MemoryRepository) Create(ctx context.Context, request CreateRequest) (J
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if record, ok := r.idempotency[request.IdempotencyKey]; ok {
-		if record.fingerprint != fingerprint {
+		existing := r.jobs[record.jobID]
+		if record.fingerprint != fingerprint || existing.MaxAttempts != request.MaxAttempts {
 			return Job{}, false, ErrIdempotencyConflict
 		}
-		return clone(r.jobs[record.jobID]), false, nil
+		return clone(existing), false, nil
 	}
 	if _, exists := r.jobs[request.ID]; exists {
 		return Job{}, false, fmt.Errorf("job id already exists: %s", request.ID)
@@ -87,7 +88,7 @@ func (r *MemoryRepository) List(ctx context.Context, filter Filter) ([]Job, erro
 		result = append(result, clone(candidate))
 	}
 	sort.Slice(result, func(i, j int) bool {
-		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
+		if result[i].CreatedAt.Equal(b.CreatedAt) {
 			return result[i].ID < result[j].ID
 		}
 		return result[i].CreatedAt.Before(result[j].CreatedAt)
