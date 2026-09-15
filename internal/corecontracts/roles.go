@@ -123,6 +123,10 @@ func ValidateRoleAssignment(assignment RoleAssignment, topology Topology) error 
 		if scope.Kind == ScopeSite && (assignment.SiteID == "" || site.ScopeID != assignment.ScopeID) {
 			return fmt.Errorf("%w: site controller cluster member must reference its site", ErrInvalidRoleAssignment)
 		}
+	case RoleEdgeGateway:
+		if assignment.SiteID == "" {
+			return fmt.Errorf("%w: edge gateway requires site_id", ErrInvalidRoleAssignment)
+		}
 	}
 
 	if assignment.ManagementZoneID != "" {
