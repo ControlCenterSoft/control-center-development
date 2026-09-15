@@ -19,6 +19,7 @@ type RestoreDrillEvidenceBinding struct {
 	BindingID                  string    `json:"binding_id"`
 	AssessmentID               string    `json:"assessment_id"`
 	RestoreID                  string    `json:"restore_id"`
+	ScopeID                    string    `json:"scope_id"`
 	OwnerScope                 string    `json:"owner_scope"`
 	RestoreResourceVersion     string    `json:"restore_resource_version"`
 	RestoreGeneration          uint64    `json:"restore_generation"`
@@ -61,6 +62,7 @@ func BuildRestoreDrillEvidenceBinding(restore RestoreMetadata, assessment Restor
 		SchemaVersion:              RestoreDrillEvidenceBindingSchemaVersion,
 		AssessmentID:               assessment.AssessmentID,
 		RestoreID:                  restore.ObjectID,
+		ScopeID:                    restore.ScopeID,
 		OwnerScope:                 restore.OwnerScope,
 		RestoreResourceVersion:     restore.ResourceVersion,
 		RestoreGeneration:          restore.Generation,
@@ -74,6 +76,7 @@ func BuildRestoreDrillEvidenceBinding(restore RestoreMetadata, assessment Restor
 		SchemaVersion              string    `json:"schema_version"`
 		AssessmentID               string    `json:"assessment_id"`
 		RestoreID                  string    `json:"restore_id"`
+		ScopeID                    string    `json:"scope_id"`
 		OwnerScope                 string    `json:"owner_scope"`
 		RestoreResourceVersion     string    `json:"restore_resource_version"`
 		RestoreGeneration          uint64    `json:"restore_generation"`
@@ -85,6 +88,7 @@ func BuildRestoreDrillEvidenceBinding(restore RestoreMetadata, assessment Restor
 		SchemaVersion:              binding.SchemaVersion,
 		AssessmentID:               binding.AssessmentID,
 		RestoreID:                  binding.RestoreID,
+		ScopeID:                    binding.ScopeID,
 		OwnerScope:                 binding.OwnerScope,
 		RestoreResourceVersion:     binding.RestoreResourceVersion,
 		RestoreGeneration:          binding.RestoreGeneration,

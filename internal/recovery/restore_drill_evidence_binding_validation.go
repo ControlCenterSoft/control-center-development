@@ -14,6 +14,7 @@ func ValidateRestoreDrillEvidenceBindingCurrent(
 		binding.BindingID == "" ||
 		binding.AssessmentID == "" ||
 		binding.RestoreID == "" ||
+		binding.ScopeID == "" ||
 		binding.OwnerScope == "" ||
 		binding.RestoreResourceVersion == "" ||
 		binding.VerificationEvidenceDigest == "" ||
@@ -30,6 +31,7 @@ func ValidateRestoreDrillEvidenceBindingCurrent(
 		binding.BindingID != expected.BindingID ||
 		binding.AssessmentID != expected.AssessmentID ||
 		binding.RestoreID != expected.RestoreID ||
+		binding.ScopeID != expected.ScopeID ||
 		binding.OwnerScope != expected.OwnerScope ||
 		binding.RestoreResourceVersion != expected.RestoreResourceVersion ||
 		binding.RestoreGeneration != expected.RestoreGeneration ||
