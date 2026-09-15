@@ -4,8 +4,14 @@ set -Eeuo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-candidate_version="0.32.0"
-[[ "$(tr -d '\r\n' < VERSION)" == "$candidate_version" ]] || { echo "source VERSION must be 0.32.0" >&2; exit 2; }
+candidate_version="$(tr -d '\r\n' < VERSION)"
+case "$candidate_version" in
+  0.32.0) manifest_path="third_party/manifest-0.32.json" ;;
+  0.32.1) manifest_path="third_party/manifest-0.32.1.json" ;;
+  *) echo "unsupported 0.32 release identity: $candidate_version" >&2; exit 2 ;;
+esac
+release_notes="docs/RELEASE_${candidate_version}_RU.md"
+[[ -f "$release_notes" ]] || { echo "release notes missing for $candidate_version" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required" >&2; exit 2; }
 
 commit="${CANDIDATE_SHA:-$(git rev-parse HEAD)}"
@@ -15,7 +21,7 @@ source_date_epoch="${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct "$commit")}"
 [[ "$source_date_epoch" =~ ^[0-9]+$ ]] || { echo "invalid SOURCE_DATE_EPOCH" >&2; exit 2; }
 build_time="$(date -u -d "@$source_date_epoch" +%Y-%m-%dT%H:%M:%SZ)"
 
-dist_dir="${DIST_DIR:-$repo_root/dist/candidate-0.32.0}"
+dist_dir="${DIST_DIR:-$repo_root/dist/candidate-$candidate_version}"
 rm -rf "$dist_dir"
 mkdir -p "$dist_dir"
 stage="$(mktemp -d)"
@@ -33,14 +39,12 @@ cp config/control-center.env.example "$stage/$bundle/config/"
 cp deploy/systemd/control-center.service "$stage/$bundle/deploy/systemd/"
 find migrations -maxdepth 1 -type f \( -name '*.sql' -o -name 'README.md' \) -exec cp {} "$stage/$bundle/migrations/" \;
 cp scripts/migrate.sh "$stage/$bundle/scripts/"
-for doc in docs/RELEASE_0.32.0_RU.md; do
-  [[ -f "$doc" ]] && cp "$doc" "$stage/$bundle/docs/"
-done
+cp "$release_notes" "$stage/$bundle/docs/"
 
 cp -a third_party "$stage/$bundle/third_party"
 cp THIRD_PARTY_NOTICES.md "$stage/$bundle/THIRD_PARTY_NOTICES.md"
 sbom="$dist_dir/control-center-$candidate_version.sbom.cdx.json"
-python3 scripts/generate-sbom-032.py third_party/manifest-0.32.json "$sbom" "$commit"
+python3 scripts/generate-sbom-032.py "$manifest_path" "$sbom" "$commit"
 cp "$sbom" "$stage/$bundle/docs/SBOM.cdx.json"
 cp THIRD_PARTY_NOTICES.md "$dist_dir/THIRD_PARTY_NOTICES.md"
 
