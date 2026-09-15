@@ -1,0 +1,121 @@
+name: Qualify Control Center 0.32.1 exact SHA
+
+on:
+  workflow_run:
+    workflows:
+      - Public CI
+    types:
+      - completed
+    branches:
+      - 'release/0.32.1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualify-cc-0321-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    if: >-
+      github.repository == 'ControlCenterSoft/control-center-development' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'release/0.32.1'
+    name: Exact-SHA 0.32.1 package and upgrade qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
+      PUBLIC_CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout exact Public CI revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require exact fixed 0.32.1 release identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA" || { echo EXACT_HEAD_MISMATCH >&2; exit 66; }
+          release_record="$(git ls-remote --exit-code origin refs/heads/release/0.32.1)" || { echo RELEASE_BRANCH_IDENTITY_CHECK_FAILED >&2; exit 66; }
+          [[ "$release_record" == "$CANDIDATE_SHA"$'\trefs/heads/release/0.32.1' ]] || { echo QUALIFICATION_STALE_RELEASE_BRANCH >&2; exit 66; }
+          test "$(tr -d '[:space:]' < VERSION)" = "0.32.1" || { echo QUALIFICATION_VERSION_MISMATCH >&2; exit 66; }
+          test -f docs/RELEASE_0.32.1_RU.md || { echo RELEASE_NOTES_MISSING >&2; exit 66; }
+          grep -Eq '^Status: official release\.?$' docs/RELEASE_0.32.1_RU.md || { echo RELEASE_NOT_AUTHORIZED >&2; exit 66; }
+          test -z "$(git status --porcelain=v1 --untracked-files=all)" || { echo SOURCE_TREE_DIRTY >&2; exit 66; }
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Qualify exact 0.32.1 package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash scripts/qualify-candidate-032.sh
+
+      - name: Verify immutable 0.32.1 qualification evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - "$CANDIDATE_SHA" "$PUBLIC_CI_RUN_ID" <<'PY'
+          import json, pathlib, re, sys
+          sha, run_id = sys.argv[1:]
+          version = '0.32.1'
+          root = pathlib.Path(f'dist/candidate-{version}')
+          q = json.loads((root/f'control-center-{version}.qualification.json').read_text(encoding='utf-8'))
+          m = json.loads((root/f'control-center-{version}.release-manifest.json').read_text(encoding='utf-8'))
+          p = json.loads((root/f'control-center-{version}.provenance.json').read_text(encoding='utf-8'))
+          assert q['schema'] == 'control-center.candidate-qualification.v2'
+          assert q['status'] == 'PASS' and q['candidate_sha'] == sha and q['candidate_version'] == version
+          assert q['public_ci'] == {'run_id': int(run_id), 'status': 'PASS', 'candidate_sha': sha}
+          assert q['stable_base']['version'] == '0.31.1'
+          assert all(value == 'PASS' for value in q['gates'].values())
+          assert q['publication_authority'] is False
+          assert m['status'] == 'qualified-not-yet-published' and m['revision'] == sha and m['version'] == version
+          assert m['publication_authority'] is False
+          assert p['candidate_version'] == version and p['candidate_sha'] == sha
+          assert p['public_ci_run_id'] == int(run_id) and p['publication_authority'] is False
+          for digest in list(m['artifacts'].values()):
+              assert re.fullmatch(r'sha256:[0-9a-f]{64}', digest)
+          print(f'CC_0321_QUALIFICATION_EVIDENCE=PASS sha={sha} public_ci_run_id={run_id}')
+          PY
+          test -z "$(git status --porcelain=v1 --untracked-files=all -- . ':!dist')" || { echo SOURCE_TREE_MUTATED >&2; exit 66; }
+
+      - name: Preserve exact-SHA 0.32.1 qualification bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: control-center-0.32.1-release-evidence-${{ env.CANDIDATE_SHA }}
+          path: dist/candidate-0.32.1/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report gate result
+        shell: bash
+        run: |
+          printf 'CC_0321_EXACT_SHA_GATE=PASS sha=%s public_ci_run_id=%s stable_base=0.31.1\n' "$CANDIDATE_SHA" "$PUBLIC_CI_RUN_ID" | tee -a "$GITHUB_STEP_SUMMARY"
