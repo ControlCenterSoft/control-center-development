@@ -1,0 +1,203 @@
+name: Publish Control Center 0.32.1 source release
+
+on:
+  workflow_run:
+    workflows:
+      - Qualify Control Center 0.32.1 exact SHA
+    types:
+      - completed
+    branches:
+      - 'release/0.32.1'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: official-source-release-0.32.1-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'ControlCenterSoft/control-center-development' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'release/0.32.1'
+    name: Verify and publish immutable 0.32.1 source release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_VERSION: 0.32.1
+      RELEASE_TAG: v0.32.1
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      QUALIFICATION_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Checkout exact qualified revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require exact authorized release identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA" || { echo EXACT_HEAD_MISMATCH >&2; exit 66; }
+          release_record="$(git ls-remote --exit-code origin refs/heads/release/0.32.1)" || { echo RELEASE_BRANCH_IDENTITY_CHECK_FAILED >&2; exit 66; }
+          [[ "$release_record" == "$RELEASE_SHA"$'\trefs/heads/release/0.32.1' ]] || { echo PUBLISH_STALE_RELEASE_BRANCH >&2; exit 66; }
+          test "$(tr -d '[:space:]' < VERSION)" = "$RELEASE_VERSION" || { echo SOURCE_VERSION_MISMATCH >&2; exit 66; }
+          notes="docs/RELEASE_${RELEASE_VERSION}_RU.md"
+          test -f "$notes" || { echo RELEASE_NOTES_MISSING >&2; exit 66; }
+          grep -Eq '^Status: official release\.?$' "$notes" || { echo RELEASE_NOT_AUTHORIZED >&2; exit 66; }
+
+      - name: Detect immutable publication state
+        id: existing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          tag_sha=""
+          if existing_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha' 2>/dev/null)"; then
+            tag_sha="$existing_tag_sha"
+          fi
+          if [[ -n "$tag_sha" && "$tag_sha" != "$RELEASE_SHA" ]]; then
+            echo "SOURCE_TAG_SHA_DRIFT tag=${RELEASE_TAG} actual=${tag_sha} expected=${RELEASE_SHA}" >&2
+            exit 66
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            [[ -n "$tag_sha" ]] || { echo PUBLISHED_RELEASE_WITHOUT_TAG >&2; exit 66; }
+            echo 'published=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'published=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download exact 0.32.1 qualification evidence
+        if: steps.existing.outputs.published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist/public-stable-evidence
+          gh run download "$QUALIFICATION_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "control-center-${RELEASE_VERSION}-release-evidence-${RELEASE_SHA}" \
+            --dir dist/public-stable-evidence
+          required=(
+            "control-center-${RELEASE_VERSION}-linux-amd64.tar.gz"
+            "control-center-${RELEASE_VERSION}-linux-amd64.tar.gz.sha256"
+            "control-center-${RELEASE_VERSION}-source.tar.gz"
+            "control-center-${RELEASE_VERSION}.sbom.cdx.json"
+            "THIRD_PARTY_NOTICES.md"
+            "control-center-${RELEASE_VERSION}.qualification.json"
+            "control-center-${RELEASE_VERSION}.provenance.json"
+            "control-center-${RELEASE_VERSION}.release-manifest.json"
+            "SHA256SUMS"
+          )
+          for name in "${required[@]}"; do
+            test -s "dist/public-stable-evidence/$name" || { echo "qualification asset missing: $name" >&2; exit 66; }
+          done
+          (cd dist/public-stable-evidence && sha256sum -c SHA256SUMS)
+
+      - name: Verify exact qualification, provenance and Public CI identity
+        if: steps.existing.outputs.published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          public_ci_run_id="$(python3 - "$RELEASE_VERSION" "$RELEASE_SHA" <<'PY'
+          import json, pathlib, sys
+          version, sha = sys.argv[1:]
+          root = pathlib.Path('dist/public-stable-evidence')
+          q = json.loads((root/f'control-center-{version}.qualification.json').read_text(encoding='utf-8'))
+          p = json.loads((root/f'control-center-{version}.provenance.json').read_text(encoding='utf-8'))
+          m = json.loads((root/f'control-center-{version}.release-manifest.json').read_text(encoding='utf-8'))
+          if q.get('schema') != 'control-center.candidate-qualification.v2' or q.get('status') != 'PASS': raise SystemExit('QUALIFICATION_NOT_PASS')
+          if q.get('candidate_version') != version or q.get('candidate_sha') != sha: raise SystemExit('QUALIFICATION_IDENTITY_MISMATCH')
+          if q.get('stable_base', {}).get('version') != '0.31.1': raise SystemExit('QUALIFICATION_STABLE_BASE_MISMATCH')
+          if q.get('publication_authority') is not False: raise SystemExit('QUALIFICATION_AUTHORITY_INVALID')
+          if any(value != 'PASS' for value in q.get('gates', {}).values()): raise SystemExit('QUALIFICATION_GATE_NOT_PASS')
+          if p.get('candidate_version') != version or p.get('candidate_sha') != sha or p.get('publication_authority') is not False: raise SystemExit('PROVENANCE_IDENTITY_MISMATCH')
+          if m.get('version') != version or m.get('revision') != sha or m.get('status') != 'qualified-not-yet-published': raise SystemExit('RELEASE_MANIFEST_IDENTITY_MISMATCH')
+          if m.get('publication_authority') is not False: raise SystemExit('RELEASE_MANIFEST_AUTHORITY_INVALID')
+          run_id = q.get('public_ci', {}).get('run_id')
+          if not isinstance(run_id, int) or run_id < 1: raise SystemExit('PUBLIC_CI_EVIDENCE_MISSING')
+          if q.get('public_ci', {}).get('candidate_sha') != sha or q.get('public_ci', {}).get('status') != 'PASS': raise SystemExit('PUBLIC_CI_EVIDENCE_IDENTITY_MISMATCH')
+          print(run_id)
+          PY
+          )"
+          public_ci_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${public_ci_run_id}")"
+          python3 - "$RELEASE_SHA" "$public_ci_json" <<'PY'
+          import json, sys
+          sha, raw = sys.argv[1:]
+          run = json.loads(raw)
+          if run.get('name') != 'Public CI' or run.get('head_sha') != sha or run.get('head_branch') != 'release/0.32.1' or run.get('conclusion') != 'success':
+              raise SystemExit('PUBLIC_CI_RUN_NOT_EXACT_RELEASE_BRANCH_PASS')
+          print(f"CC_0321_EXACT_SHA_PUBLIC_CI=PASS run_id={run['id']} sha={sha}")
+          PY
+
+      - name: Publish exact qualified immutable source release
+        if: steps.existing.outputs.published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          tag_sha=""
+          if existing_tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha' 2>/dev/null)"; then
+            tag_sha="$existing_tag_sha"
+          fi
+          if [[ -n "$tag_sha" && "$tag_sha" != "$RELEASE_SHA" ]]; then
+            echo "SOURCE_TAG_SHA_DRIFT tag=${RELEASE_TAG} actual=${tag_sha} expected=${RELEASE_SHA}" >&2
+            exit 66
+          fi
+          if [[ -z "$tag_sha" ]]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${RELEASE_TAG}" \
+              -f sha="$RELEASE_SHA" >/dev/null
+          fi
+          gh release create "$RELEASE_TAG" dist/public-stable-evidence/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Control Center ${RELEASE_VERSION}" \
+            --notes-file "docs/RELEASE_${RELEASE_VERSION}_RU.md" \
+            --verify-tag
+          echo "QUALIFIED_SOURCE_RELEASE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'Public Stable promotion remains a separate PR-based gate in ControlCenterSoft/control-center-stable.' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify published release identity and evidence completeness
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
+          python3 - "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_SHA" "$tag_sha" "$release_json" <<'PY'
+          import json, sys
+          tag, version, expected, actual, raw = sys.argv[1:]
+          data = json.loads(raw)
+          if actual != expected: raise SystemExit('SOURCE_TAG_SHA_DRIFT')
+          if data.get('tag_name') != tag or data.get('draft') is not False or data.get('prerelease') is not False:
+              raise SystemExit('PUBLISHED_RELEASE_STATE_INVALID')
+          expected_assets = {
+              f'control-center-{version}-linux-amd64.tar.gz',
+              f'control-center-{version}-linux-amd64.tar.gz.sha256',
+              f'control-center-{version}-source.tar.gz',
+              f'control-center-{version}.sbom.cdx.json',
+              'THIRD_PARTY_NOTICES.md',
+              f'control-center-{version}.qualification.json',
+              f'control-center-{version}.provenance.json',
+              f'control-center-{version}.release-manifest.json',
+              'SHA256SUMS',
+          }
+          assets = data.get('assets') or []
+          actual_assets = {a.get('name') for a in assets if a.get('state') == 'uploaded' and int(a.get('size') or 0) > 0}
+          missing = sorted(expected_assets - actual_assets)
+          if missing:
+              raise SystemExit('PUBLISHED_RELEASE_EVIDENCE_INCOMPLETE:' + ','.join(missing))
+          print(f'PUBLISHED_RELEASE_IMMUTABLE_COMPLETE={tag}@{actual} assets={len(expected_assets)}')
+          PY
