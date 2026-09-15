@@ -197,9 +197,12 @@ func rejectUnknownQuery(r *http.Request, allowed ...string) error {
 	for _, key := range allowed {
 		allowedKeys[key] = true
 	}
-	for key := range r.URL.Query() {
+	for key, values := range r.URL.Query() {
 		if !allowedKeys[key] {
 			return errors.New("unsupported query parameter: " + key)
+		}
+		if len(values) != 1 {
+			return errors.New("repeated query parameter: " + key)
 		}
 	}
 	return nil
