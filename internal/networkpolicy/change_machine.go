@@ -255,19 +255,19 @@ func (machine *ChangeMachine) copySnapshot() ChangeSnapshot {
 }
 
 func validateAndDigestEvent(event ChangeEvent) (string, error) {
-	if _, err := normalizeIdentifier("event.id", event.ID); err != nil {
+	if err := validateCanonicalEventIdentifier("event.id", event.ID); err != nil {
 		return "", err
 	}
 	if event.At.IsZero() {
 		return "", errors.New("network change event time is required")
 	}
 	if event.ReasonCode != "" {
-		if _, err := normalizeIdentifier("event.reason_code", event.ReasonCode); err != nil {
+		if err := validateCanonicalEventIdentifier("event.reason_code", event.ReasonCode); err != nil {
 			return "", err
 		}
 	}
 	if event.ProbeID != "" {
-		if _, err := normalizeIdentifier("event.probe_id", event.ProbeID); err != nil {
+		if err := validateCanonicalEventIdentifier("event.probe_id", event.ProbeID); err != nil {
 			return "", err
 		}
 	}
@@ -275,7 +275,7 @@ func validateAndDigestEvent(event ChangeEvent) (string, error) {
 		return "", errors.New("probe events require probe_id and other events forbid it")
 	}
 	if event.Type == EventSnapshotCaptured {
-		if _, err := normalizeIdentifier("event.snapshot_id", event.SnapshotID); err != nil {
+		if err := validateCanonicalEventIdentifier("event.snapshot_id", event.SnapshotID); err != nil {
 			return "", err
 		}
 	} else if event.SnapshotID != "" {
@@ -300,6 +300,17 @@ func validateAndDigestEvent(event ChangeEvent) (string, error) {
 	}
 	digest := sha256.Sum256(document)
 	return hex.EncodeToString(digest[:]), nil
+}
+
+func validateCanonicalEventIdentifier(name, value string) error {
+	normalized, err := normalizeIdentifier(name, value)
+	if err != nil {
+		return err
+	}
+	if normalized != value {
+		return fmt.Errorf("%w: %s must be canonical without surrounding whitespace", ErrInvalidChangePlan, name)
+	}
+	return nil
 }
 
 func eventDetail(event ChangeEvent, fallback string) string {
