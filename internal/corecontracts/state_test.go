@@ -56,6 +56,12 @@ func TestValidateDesiredStateRejectsBottomUpOwnershipAndUnsafePayloads(t *testin
 		{name: "invalid json", mutate: func(s *DesiredState) { s.Spec = json.RawMessage(`{"broken"`) }},
 		{name: "scalar payload", mutate: func(s *DesiredState) { s.Spec = json.RawMessage(`"shell command"`) }},
 		{name: "null payload", mutate: func(s *DesiredState) { s.Spec = json.RawMessage(`null`) }},
+		{name: "duplicate top-level key", mutate: func(s *DesiredState) {
+			s.Spec = json.RawMessage(`{"mode":"safe","mode":"unsafe"}`)
+		}},
+		{name: "duplicate nested key", mutate: func(s *DesiredState) {
+			s.Spec = json.RawMessage(`{"config":{"mode":"safe","mode":"unsafe"}}`)
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -85,6 +91,12 @@ func TestValidateActualStateRejectsTopDownOwnershipAndInvalidObservations(t *tes
 		{name: "unknown status", mutate: func(s *ActualState) { s.Status = "successful" }},
 		{name: "missing observed time", mutate: func(s *ActualState) { s.ObservedAt = time.Time{} }},
 		{name: "array payload", mutate: func(s *ActualState) { s.State = json.RawMessage(`[]`) }},
+		{name: "duplicate top-level key", mutate: func(s *ActualState) {
+			s.State = json.RawMessage(`{"healthy":true,"healthy":false}`)
+		}},
+		{name: "duplicate nested key", mutate: func(s *ActualState) {
+			s.State = json.RawMessage(`{"details":{"healthy":true,"healthy":false}}`)
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
