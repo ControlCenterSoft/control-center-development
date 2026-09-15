@@ -44,6 +44,7 @@ func TestValidateRestoreDrillEvidenceBindingCurrentRejectsPersistedBindingTamper
 			binding.SchemaVersion = "recovery.restore-drill-evidence-binding/v999"
 		}},
 		{name: "binding id", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.BindingID += "-tampered" }},
+		{name: "owner scope", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.OwnerScope = "global" }},
 		{name: "restore resource version", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.RestoreResourceVersion += ":tampered" }},
 		{name: "assessment id", mutate: func(binding *RestoreDrillEvidenceBinding) { binding.AssessmentID += "-tampered" }},
 		{name: "evidence digest", mutate: func(binding *RestoreDrillEvidenceBinding) {
@@ -62,6 +63,26 @@ func TestValidateRestoreDrillEvidenceBindingCurrentRejectsPersistedBindingTamper
 				t.Fatal("tampered persisted binding accepted")
 			}
 		})
+	}
+}
+
+func TestRestoreDrillEvidenceBindingBindsOwnerScope(t *testing.T) {
+	restore, assessment, binding := currentRestoreDrillEvidenceBindingFixture(t)
+
+	otherOwner := restore
+	otherOwner.OwnerScope = "global"
+	otherBinding, err := BuildRestoreDrillEvidenceBinding(otherOwner, assessment)
+	if err != nil {
+		t.Fatalf("BuildRestoreDrillEvidenceBinding(other owner) error = %v", err)
+	}
+	if otherBinding.OwnerScope != otherOwner.OwnerScope {
+		t.Fatalf("owner scope = %q, want %q", otherBinding.OwnerScope, otherOwner.OwnerScope)
+	}
+	if otherBinding.BindingID == binding.BindingID {
+		t.Fatalf("owner-scope drift did not change binding identity: %s", binding.BindingID)
+	}
+	if err := ValidateRestoreDrillEvidenceBindingCurrent(otherOwner, assessment, binding); err == nil {
+		t.Fatal("binding accepted across restore ownership boundary")
 	}
 }
 
