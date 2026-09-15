@@ -83,12 +83,18 @@ func parseAuditQuery(values url.Values) (audit.Query, error) {
 		}
 		query.Limit = limit
 	}
-	if rawCursor := strings.TrimSpace(values.Get("cursor")); rawCursor != "" {
-		sequenceID, err := decodeAuditCursor(rawCursor)
-		if err != nil {
-			return audit.Query{}, err
+	if cursorValues, ok := values["cursor"]; ok {
+		rawCursor := cursorValues[0]
+		if rawCursor != "" {
+			if strings.TrimSpace(rawCursor) != rawCursor {
+				return audit.Query{}, fmt.Errorf("audit cursor must use canonical text")
+			}
+			sequenceID, err := decodeAuditCursor(rawCursor)
+			if err != nil {
+				return audit.Query{}, err
+			}
+			query.BeforeSequenceID = sequenceID
 		}
-		query.BeforeSequenceID = sequenceID
 	}
 	return audit.NormalizeQuery(query)
 }
@@ -98,7 +104,7 @@ func encodeAuditCursor(sequenceID int64) string {
 }
 
 func decodeAuditCursor(cursor string) (int64, error) {
-	payload, err := base64.RawURLEncoding.DecodeString(cursor)
+	payload, err := base64.RawURLEncoding.Strict().DecodeString(cursor)
 	if err != nil {
 		return 0, fmt.Errorf("decode audit cursor: %w", err)
 	}
@@ -109,6 +115,9 @@ func decodeAuditCursor(cursor string) (int64, error) {
 	sequenceID, err := strconv.ParseInt(strings.TrimPrefix(text, auditCursorVersion), 10, 64)
 	if err != nil || sequenceID <= 0 {
 		return 0, fmt.Errorf("invalid audit cursor sequence")
+	}
+	if encodeAuditCursor(sequenceID) != cursor {
+		return 0, fmt.Errorf("audit cursor is not canonical")
 	}
 	return sequenceID, nil
 }
