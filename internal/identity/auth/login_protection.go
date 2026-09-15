@@ -117,7 +117,9 @@ func (p *LoginProtector) recordFailureLocked(key string, limit int, now time.Tim
 	bucket := p.normalizeBucket(p.buckets[key], now)
 	if !bucket.BlockedUntil.IsZero() && now.Before(bucket.BlockedUntil) {
 		bucket.TouchedAt = now
-		p.putBucketLocked(key, bucket)
+		if !p.putBucketLocked(key, bucket, now) {
+			return true
+		}
 		return true
 	}
 	if bucket.WindowStartedAt.IsZero() {
@@ -128,7 +130,9 @@ func (p *LoginProtector) recordFailureLocked(key string, limit int, now time.Tim
 		bucket.BlockedUntil = now.Add(p.policy.BlockDuration)
 	}
 	bucket.TouchedAt = now
-	p.putBucketLocked(key, bucket)
+	if !p.putBucketLocked(key, bucket, now) {
+		return true
+	}
 	return !bucket.BlockedUntil.IsZero() && now.Before(bucket.BlockedUntil)
 }
 
@@ -142,25 +146,42 @@ func (p *LoginProtector) normalizeBucket(bucket loginAttemptBucket, now time.Tim
 	return bucket
 }
 
-func (p *LoginProtector) putBucketLocked(key string, bucket loginAttemptBucket) {
-	if _, exists := p.buckets[key]; !exists && len(p.buckets) >= p.policy.MaxTrackedKeys {
-		p.evictOldestLocked()
+func (p *LoginProtector) putBucketLocked(key string, bucket loginAttemptBucket, now time.Time) bool {
+	if _, exists := p.buckets[key]; exists {
+		p.buckets[key] = bucket
+		return true
+	}
+	if len(p.buckets) >= p.policy.MaxTrackedKeys {
+		p.evictOldestEvictableLocked(now)
+	}
+	if len(p.buckets) >= p.policy.MaxTrackedKeys {
+		return false
 	}
 	p.buckets[key] = bucket
+	return true
 }
 
-func (p *LoginProtector) evictOldestLocked() {
+func (p *LoginProtector) evictOldestEvictableLocked(now time.Time) {
 	var oldestKey string
 	var oldest time.Time
-	first := true
+	found := false
+
 	for key, bucket := range p.buckets {
-		if first || bucket.TouchedAt.Before(oldest) {
+		normalized := p.normalizeBucket(bucket, now)
+		if normalized.Failures == 0 && normalized.BlockedUntil.IsZero() {
+			delete(p.buckets, key)
+			return
+		}
+		if !normalized.BlockedUntil.IsZero() && now.Before(normalized.BlockedUntil) {
+			continue
+		}
+		if !found || normalized.TouchedAt.Before(oldest) {
 			oldestKey = key
-			oldest = bucket.TouchedAt
-			first = false
+			oldest = normalized.TouchedAt
+			found = true
 		}
 	}
-	if !first {
+	if found {
 		delete(p.buckets, oldestKey)
 	}
 }
