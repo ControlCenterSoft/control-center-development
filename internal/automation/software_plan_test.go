@@ -21,6 +21,22 @@ func TestNormalizeSoftwarePlanWindows(t *testing.T) {
 	}
 }
 
+func TestNormalizeSoftwarePlanCanonicalizesPlatformBeforeSourceValidation(t *testing.T) {
+	plan, err := NormalizeSoftwarePlan(SoftwarePlan{
+		Platform: Platform(" WINDOWS "),
+		Packages: []PackageSpec{{Name: "Agent", Source: " WINGET "}},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeSoftwarePlan() error = %v", err)
+	}
+	if got, want := plan.Platform, PlatformWindows; got != want {
+		t.Fatalf("platform = %q, want %q", got, want)
+	}
+	if got, want := plan.Packages[0].Source, "winget"; got != want {
+		t.Fatalf("source = %q, want %q", got, want)
+	}
+}
+
 func TestNormalizeSoftwarePlanWindowsSupportsDSC(t *testing.T) {
 	plan, err := NormalizeSoftwarePlan(SoftwarePlan{
 		Platform: PlatformWindows,
