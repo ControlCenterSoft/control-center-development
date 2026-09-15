@@ -218,7 +218,7 @@ func (r *MemoryRepository) Fail(ctx context.Context, id, token, message string, 
 		found.Status = StatusCancelled
 	} else if found.Attempt < found.MaxAttempts {
 		found.Status = StatusRetryWait
-		found.NextAttemptAt = now.UTC().Add(retryDelay(found.Attempt, policy))
+		found.NextAttemptAt = now.UTC().Add(RetryDelay(found.Attempt, policy))
 	} else {
 		found.Status = StatusFailed
 		found.NextAttemptAt = time.Time{}
@@ -281,23 +281,6 @@ func leaseToken(candidate Job, workerID string, now time.Time) string {
 	value := fmt.Sprintf("%s:%s:%d:%d", candidate.ID, workerID, candidate.Version, now.UnixNano())
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
-}
-func retryDelay(attempt int, policy RetryPolicy) time.Duration {
-	base := policy.BaseDelay
-	if base <= 0 {
-		base = time.Second
-	}
-	delay := base
-	for i := 1; i < attempt; i++ {
-		if delay > (1 << 62) {
-			break
-		}
-		delay *= 2
-	}
-	if policy.MaxDelay > 0 && delay > policy.MaxDelay {
-		return policy.MaxDelay
-	}
-	return delay
 }
 func clone(source Job) Job {
 	copy := source
