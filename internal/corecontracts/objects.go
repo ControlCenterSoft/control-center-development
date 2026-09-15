@@ -538,6 +538,11 @@ func validateTypedSuccessor(current, next StoredObject, snapshot []StoredObject)
 		if after.ObservedAt.Before(before.ObservedAt) {
 			return fmt.Errorf("%w: Actual State observed_at moved backwards", ErrInvalidTransition)
 		}
+		if after.ObservedGeneration == before.ObservedGeneration &&
+			after.ObservedAt.Equal(before.ObservedAt) &&
+			(after.Status != before.Status || !jsonDocumentsEqual(before.State, after.State)) {
+			return fmt.Errorf("%w: Actual State observation changed without advancing observed_generation or observed_at", ErrInvalidTransition)
+		}
 	}
 	return nil
 }
