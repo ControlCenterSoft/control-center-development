@@ -17,17 +17,17 @@ func TestRestoreDrillTransitionRequestJSONRejectsDuplicateFields(t *testing.T) {
 	}{
 		{
 			name: "duplicate transition state",
-			raw:  `{"to":"RUNNING","to":"FAILED","precondition":{"object_id":"restore-001","resource_version":"rv:1"},"occurred_at":"2026-09-15T00:00:00Z"}`,
+			raw:  `{"to":"RUNNING","to":"FAILED"}`,
 			want: `duplicate field "to"`,
 		},
 		{
 			name: "duplicate nested precondition resource version",
-			raw:  `{"to":"RUNNING","precondition":{"object_id":"restore-001","resource_version":"rv:1","resource_version":"rv:2"},"occurred_at":"2026-09-15T00:00:00Z"}`,
+			raw:  `{"to":"RUNNING","precondition":{"object_id":"restore-001","resource_version":"rv:1","resource_version":"rv:2"}}`,
 			want: `duplicate field "resource_version"`,
 		},
 		{
 			name: "duplicate evidence identity",
-			raw:  `{"to":"SUCCEEDED","precondition":{"object_id":"restore-001","resource_version":"rv:1"},"occurred_at":"2026-09-15T00:00:00Z","verification_evidence":[{"id":"evidence-1","id":"evidence-2"}]}`,
+			raw:  `{"to":"SUCCEEDED","verification_evidence":[{"id":"evidence-1","id":"evidence-2"}]}`,
 			want: `duplicate field "id"`,
 		},
 		{
