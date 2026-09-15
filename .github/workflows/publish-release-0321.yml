@@ -160,17 +160,15 @@ jobs:
               -f ref="refs/tags/${RELEASE_TAG}" \
               -f sha="$RELEASE_SHA" >/dev/null
           fi
-          gh release create "$RELEASE_TAG" \
+          gh release create "$RELEASE_TAG" dist/public-stable-evidence/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "Control Center ${RELEASE_VERSION}" \
             --notes-file "docs/RELEASE_${RELEASE_VERSION}_RU.md" \
             --verify-tag
-          gh release upload "$RELEASE_TAG" dist/public-stable-evidence/* --repo "$GITHUB_REPOSITORY"
           echo "QUALIFIED_SOURCE_RELEASE=PUBLISHED version=${RELEASE_VERSION} sha=${RELEASE_SHA}" | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'Public Stable promotion remains a separate PR-based gate in ControlCenterSoft/control-center-stable.' | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify already-published release remains exact and immutable
-        if: steps.existing.outputs.published == 'true'
+      - name: Verify published release identity and evidence completeness
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -178,12 +176,28 @@ jobs:
           set -Eeuo pipefail
           release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
           tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
-          python3 - "$RELEASE_TAG" "$RELEASE_SHA" "$tag_sha" "$release_json" <<'PY'
+          python3 - "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_SHA" "$tag_sha" "$release_json" <<'PY'
           import json, sys
-          tag, expected, actual, raw = sys.argv[1:]
+          tag, version, expected, actual, raw = sys.argv[1:]
           data = json.loads(raw)
           if actual != expected: raise SystemExit('SOURCE_TAG_SHA_DRIFT')
           if data.get('tag_name') != tag or data.get('draft') is not False or data.get('prerelease') is not False:
               raise SystemExit('PUBLISHED_RELEASE_STATE_INVALID')
-          print(f'PUBLISHED_RELEASE_IMMUTABLE={tag}@{actual}')
+          expected_assets = {
+              f'control-center-{version}-linux-amd64.tar.gz',
+              f'control-center-{version}-linux-amd64.tar.gz.sha256',
+              f'control-center-{version}-source.tar.gz',
+              f'control-center-{version}.sbom.cdx.json',
+              'THIRD_PARTY_NOTICES.md',
+              f'control-center-{version}.qualification.json',
+              f'control-center-{version}.provenance.json',
+              f'control-center-{version}.release-manifest.json',
+              'SHA256SUMS',
+          }
+          assets = data.get('assets') or []
+          actual_assets = {a.get('name') for a in assets if a.get('state') == 'uploaded' and int(a.get('size') or 0) > 0}
+          missing = sorted(expected_assets - actual_assets)
+          if missing:
+              raise SystemExit('PUBLISHED_RELEASE_EVIDENCE_INCOMPLETE:' + ','.join(missing))
+          print(f'PUBLISHED_RELEASE_IMMUTABLE_COMPLETE={tag}@{actual} assets={len(expected_assets)}')
           PY
