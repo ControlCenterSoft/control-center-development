@@ -45,6 +45,40 @@ func TestAssessmentIsDeterministicAndReportsUnsafeCapacity(t *testing.T) {
 	}
 }
 
+func TestAssessmentLowConfidenceAlwaysCollectsEvidence(t *testing.T) {
+	tests := []struct {
+		name             string
+		expectedWorkload float64
+		wantSafe         bool
+	}{
+		{name: "safe", expectedWorkload: 80, wantSafe: true},
+		{name: "unsafe", expectedWorkload: 120, wantSafe: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			node := projection("node-a", 100, 50, 20)
+			node.Confidence = Confidence{Level: ConfidenceLow, Score: .4}
+
+			a, err := BuildAssessment(AssessmentRequest{
+				ScopeID:          "site-a",
+				RequiredRole:     corecontracts.RoleWorkerNode,
+				WorkloadUnit:     WorkloadDevices,
+				ExpectedWorkload: test.expectedWorkload,
+			}, []NodeProjection{node})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if a.Safe != test.wantSafe || a.Action != ActionCollectEvidence {
+				t.Fatalf("low-confidence assessment crossed evidence gate: %#v", a)
+			}
+			if !a.AdvisoryOnly || a.ProductionMutation {
+				t.Fatalf("low-confidence assessment became authoritative: %#v", a)
+			}
+		})
+	}
+}
+
 func TestAssessmentFailsClosedWhenReserveConsumesFleet(t *testing.T) {
 	_, err := BuildAssessment(AssessmentRequest{ScopeID: "site-a", RequiredRole: corecontracts.RoleWorkerNode, WorkloadUnit: WorkloadDevices, FailureReserveNodes: 1, ExpectedWorkload: 1}, []NodeProjection{projection("node-a", 100, 1, 50)})
 	if !errors.Is(err, ErrInvalidRecommendation) {
