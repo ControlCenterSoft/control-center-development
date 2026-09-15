@@ -149,7 +149,9 @@ func BuildPlacementAdvice(request PlacementRequest, nodes []NodeProjection) (Pla
 
 	recommended := ""
 	action := ActionNone
-	if !fleetAssessment.Safe {
+	if fleetAssessment.Action != ActionNone {
+		action = fleetAssessment.Action
+	} else if !fleetAssessment.Safe {
 		action = ActionAddRoleCapacity
 	} else if candidates[0].Eligible {
 		recommended = candidates[0].NodeID
