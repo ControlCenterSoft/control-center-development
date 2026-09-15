@@ -30,6 +30,8 @@ test -f .github/workflows/publish-release-0321.yml
 grep -Fq 'name: Publish Control Center 0.32.1 source release' .github/workflows/publish-release-0321.yml
 grep -Fq 'RELEASE_TAG: v0.32.1' .github/workflows/publish-release-0321.yml
 grep -Fq 'SOURCE_TAG_SHA_DRIFT' .github/workflows/publish-release-0321.yml
+grep -Fq 'PUBLISHED_RELEASE_EVIDENCE_INCOMPLETE' .github/workflows/publish-release-0321.yml
+grep -Fq 'gh release create "$RELEASE_TAG" dist/public-stable-evidence/*' .github/workflows/publish-release-0321.yml
 grep -Fq 'Public Stable promotion remains a separate PR-based gate' .github/workflows/publish-release-0321.yml
 
 echo RELEASE_032_CONTRACT=PASS
