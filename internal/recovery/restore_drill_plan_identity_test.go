@@ -39,6 +39,12 @@ func TestBuildRestoreDrillPlanIDBindsRecoveryInputs(t *testing.T) {
 			},
 		},
 		{
+			name: "owner scope",
+			mutate: func(value *RestoreMetadata) {
+				value.OwnerScope = "global"
+			},
+		},
+		{
 			name: "recovery point",
 			mutate: func(value *RestoreMetadata) {
 				value.RecoveryPointID = "rp-20260908-002"
