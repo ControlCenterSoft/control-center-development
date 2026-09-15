@@ -125,6 +125,9 @@ func (r *Registry) List() []Definition {
 func NewTyped[T any](name, permission string, risk policy.Risk, inputSchema json.RawMessage, execute func(context.Context, T) (events.Output, error), verify func(context.Context, T, events.Output) error) Definition {
 	decode := func(raw json.RawMessage) (T, error) {
 		var input T
+		if err := validateUniqueJSONFields(raw); err != nil {
+			return input, err
+		}
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&input); err != nil {
@@ -153,4 +156,74 @@ func NewTyped[T any](name, permission string, risk policy.Risk, inputSchema json
 			return verify(ctx, input, output)
 		},
 	}
+}
+
+func validateUniqueJSONFields(raw json.RawMessage) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := walkUniqueJSONValue(decoder); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+		return fmt.Errorf("%w: trailing JSON value", ErrInvalidInput)
+	}
+	return nil
+}
+
+func walkUniqueJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delimiter, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delimiter {
+	case '{':
+		seen := make(map[string]struct{})
+		for decoder.More() {
+			fieldToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			field, ok := fieldToken.(string)
+			if !ok {
+				return errors.New("JSON object field name must be a string")
+			}
+			if _, exists := seen[field]; exists {
+				return fmt.Errorf("duplicate JSON field %q", field)
+			}
+			seen[field] = struct{}{}
+			if err := walkUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim('}') {
+			return errors.New("invalid JSON object terminator")
+		}
+	case '[':
+		for decoder.More() {
+			if err := walkUniqueJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim(']') {
+			return errors.New("invalid JSON array terminator")
+		}
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
+	}
+	return nil
 }
