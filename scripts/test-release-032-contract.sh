@@ -21,8 +21,8 @@ grep -Fq 'RELEASE_STALLED: Control Center 0.32.0 requires the dedicated exact-SH
 
 test -f .github/workflows/qualify-release-0321.yml
 grep -Fq 'name: Qualify Control Center 0.32.1 exact SHA' .github/workflows/qualify-release-0321.yml
-grep -Fq "branches:" .github/workflows/qualify-release-0321.yml
-grep -Fq "- 'release/0.32.1'" .github/workflows/qualify-release-0321.yml
+grep -Fq 'branches:' .github/workflows/qualify-release-0321.yml
+grep -Fq -- "- 'release/0.32.1'" .github/workflows/qualify-release-0321.yml
 grep -Fq 'QUALIFICATION_STALE_RELEASE_BRANCH' .github/workflows/qualify-release-0321.yml
 grep -Fq 'control-center-0.32.1-release-evidence-' .github/workflows/qualify-release-0321.yml
 
