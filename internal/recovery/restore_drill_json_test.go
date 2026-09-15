@@ -17,22 +17,22 @@ func TestRestoreDrillTransitionRequestJSONRejectsDuplicateFields(t *testing.T) {
 	}{
 		{
 			name: "duplicate transition state",
-			raw:  `{"to":"RUNNING","to":"FAILED"}`,
-			want: `duplicate field "to"`,
+			raw:  "{\"to\":\"RUNNING\",\"to\":\"FAILED\"}",
+			want: "duplicate field \"to\"",
 		},
 		{
 			name: "duplicate nested precondition resource version",
-			raw:  `{"to":"RUNNING","precondition":{"object_id":"restore-001","resource_version":"rv:1","resource_version":"rv:2"}}`,
-			want: `duplicate field "resource_version"`,
+			raw:  "{\"to\":\"RUNNING\",\"precondition\":{\"object_id\":\"restore-001\",\"resource_version\":\"rv:1\",\"resource_version\":\"rv:2\"}}",
+			want: "duplicate field \"resource_version\"",
 		},
 		{
 			name: "duplicate evidence identity",
-			raw:  `{"to":"SUCCEEDED","verification_evidence":[{"id":"evidence-1","id":"evidence-2"}]}`,
-			want: `duplicate field "id"`,
+			raw:  "{\"to\":\"SUCCEEDED\",\"verification_evidence\":[{\"id\":\"evidence-1\",\"id\":\"evidence-2\"}]}",
+			want: "duplicate field \"id\"",
 		},
 		{
 			name: "multiple top-level documents",
-			raw:  `{"to":"RUNNING"} {"to":"FAILED"}`,
+			raw:  "{\"to\":\"RUNNING\"} {\"to\":\"FAILED\"}",
 			want: "multiple JSON values are not allowed",
 		},
 	}
