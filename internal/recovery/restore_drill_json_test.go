@@ -30,11 +30,6 @@ func TestRestoreDrillTransitionRequestJSONRejectsDuplicateFields(t *testing.T) {
 			raw:  "{\"to\":\"SUCCEEDED\",\"verification_evidence\":[{\"id\":\"evidence-1\",\"id\":\"evidence-2\"}]}",
 			want: "duplicate field \"id\"",
 		},
-		{
-			name: "multiple top-level documents",
-			raw:  "{\"to\":\"RUNNING\"} {\"to\":\"FAILED\"}",
-			want: "multiple JSON values are not allowed",
-		},
 	}
 
 	for _, test := range tests {
@@ -48,6 +43,18 @@ func TestRestoreDrillTransitionRequestJSONRejectsDuplicateFields(t *testing.T) {
 				t.Fatalf("error = %v, want detail %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestRestoreDrillTransitionRequestJSONRejectsMultipleTopLevelValues(t *testing.T) {
+	var request RestoreDrillTransitionRequest
+	err := json.Unmarshal([]byte("{\"to\":\"RUNNING\"} {\"to\":\"FAILED\"}"), &request)
+	if err == nil {
+		t.Fatal("multiple top-level JSON values unexpectedly accepted")
+	}
+	var syntaxError *json.SyntaxError
+	if !errors.As(err, &syntaxError) {
+		t.Fatalf("error = %T %v, want encoding/json syntax rejection", err, err)
 	}
 }
 
