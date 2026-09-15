@@ -198,7 +198,7 @@ func (r *JobRepository) Fail(ctx context.Context, id, token, message string, out
 		status = job.StatusCancelled
 	} else if current.Attempt < current.MaxAttempts {
 		status = job.StatusRetryWait
-		next = now.UTC().Add(retryDelay(current.Attempt, retry))
+		next = now.UTC().Add(job.RetryDelay(current.Attempt, retry))
 	}
 	result, err := scanJob(tx.QueryRowContext(ctx, `UPDATE cc_jobs SET status=$3,next_attempt_at=$4,last_error=$5,output=$6::jsonb,lease_token=NULL,lease_worker_id=NULL,lease_expires_at=NULL,updated_at=$7,version=version+1 WHERE id=$1 AND lease_token=$2 RETURNING `+jobColumns, id, token, string(status), next, message, string(payload), now.UTC()))
 	if err != nil {
@@ -281,20 +281,6 @@ func jobFingerprint(request job.CreateRequest) string {
 	h.Write([]byte{0})
 	h.Write(request.Input)
 	return hex.EncodeToString(h.Sum(nil))
-}
-func retryDelay(attempt int, retry job.RetryPolicy) time.Duration {
-	base := retry.BaseDelay
-	if base <= 0 {
-		base = time.Second
-	}
-	delay := base
-	for i := 1; i < attempt; i++ {
-		delay *= 2
-	}
-	if retry.MaxDelay > 0 && delay > retry.MaxDelay {
-		return retry.MaxDelay
-	}
-	return delay
 }
 func randomHex(size int) string {
 	value := make([]byte, size)
