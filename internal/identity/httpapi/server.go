@@ -242,8 +242,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	_ = s.auth.Logout(r.Context(), s.tokenFromRequest(r), remoteIP(r))
+	err := s.auth.Logout(r.Context(), s.tokenFromRequest(r), remoteIP(r))
 	s.clearSessionCookie(w)
+	if err != nil {
+		writeError(w, r, http.StatusServiceUnavailable, "logout_unavailable", "Logout is temporarily unavailable")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -591,8 +595,12 @@ func (s *Server) webOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) webLogout(w http.ResponseWriter, r *http.Request) {
-	_ = s.auth.Logout(r.Context(), s.tokenFromRequest(r), remoteIP(r))
+	err := s.auth.Logout(r.Context(), s.tokenFromRequest(r), remoteIP(r))
 	s.clearSessionCookie(w)
+	if err != nil {
+		http.Error(w, "Не удалось завершить выход", http.StatusServiceUnavailable)
+		return
+	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
