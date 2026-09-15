@@ -171,6 +171,10 @@ func (s *Server) RequireWeb(permission rbac.Permission, scope rbac.Scope) func(h
 				return
 			}
 			if principal.PasswordChangeRequired {
+				_ = s.audit.Append(r.Context(), audit.Event{
+					Action: "authorization.check", Outcome: "denied", ActorID: principal.Identity.ID,
+					SourceIP: remoteIP(r), Details: map[string]any{"reason": "password_change_required"},
+				})
 				http.Redirect(w, r, "/password/change", http.StatusSeeOther)
 				return
 			}
