@@ -42,3 +42,31 @@ func TestNormalizeHandlerRejectsUnknownField(t *testing.T) {
 		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
 	}
 }
+
+func TestNormalizeHandlerRejectsDuplicateFields(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "machine identity",
+			body: `{"hostname":"node-01","platform":"linux","machine_id":"abc","machine_id":"def"}`,
+		},
+		{
+			name: "platform classification",
+			body: `{"hostname":"node-01","platform":"linux","platform":"windows","machine_id":"abc"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/inventory/normalize", strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+			res := httptest.NewRecorder()
+			NormalizeHandler().ServeHTTP(res, req)
+			if res.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
+			}
+		})
+	}
+}

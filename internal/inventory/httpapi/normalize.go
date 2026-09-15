@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -33,7 +34,17 @@ func NormalizeHandler() http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, maxInventoryRequestBytes)
-		decoder := json.NewDecoder(r.Body)
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if err := rejectDuplicateInventoryJSONKeys(payload); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		decoder := json.NewDecoder(bytes.NewReader(payload))
 		decoder.DisallowUnknownFields()
 		var input devicePayload
 		if err := decoder.Decode(&input); err != nil {
@@ -62,6 +73,70 @@ func NormalizeHandler() http.Handler {
 			Serial: device.Serial, Addresses: device.Addresses, Tags: device.Tags,
 		})
 	})
+}
+
+func rejectDuplicateInventoryJSONKeys(payload []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	if err := scanInventoryJSONValue(decoder); err != nil {
+		return err
+	}
+	return inventoryEOF(decoder)
+}
+
+func scanInventoryJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+
+	switch delim {
+	case '{':
+		seen := map[string]struct{}{}
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return errors.New("invalid JSON object key")
+			}
+			if _, exists := seen[key]; exists {
+				return errors.New("duplicate JSON object key")
+			}
+			seen[key] = struct{}{}
+			if err := scanInventoryJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim('}') {
+			return errors.New("invalid JSON object terminator")
+		}
+	case '[':
+		for decoder.More() {
+			if err := scanInventoryJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		if end != json.Delim(']') {
+			return errors.New("invalid JSON array terminator")
+		}
+	default:
+		return errors.New("invalid JSON delimiter")
+	}
+	return nil
 }
 
 func inventoryEOF(decoder *json.Decoder) error {
