@@ -38,6 +38,7 @@ func (r *MemoryRepository) RequestCancelIfVersion(ctx context.Context, id string
 		found.Status = StatusCancelRequested
 	} else {
 		found.Status = StatusCancelled
+		found.NextAttemptAt = time.Time{}
 		found.Lease = nil
 	}
 	found.UpdatedAt = now.UTC()
